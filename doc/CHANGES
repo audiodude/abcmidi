@@ -1045,14 +1045,40 @@ only if gotkeysig is equal to zero. Otherwise, header_keysig
 can be changed to the wrong (last value of keysig) value
 if multiple key signatures exist.
 
-November 12
+November 12 2003
 
 Midi2abc sometimes places a backslash line continuation
 after the last bar or note on a track. This confuses
 yaps. A check for remaining data in the track is made
 prior to sending a backslash.
 
-~
+
+
+December 7 2003
+
+Triplets containing chords are not handled correctly. In the
+following example.
+
+X: 1
+T: triplet chords
+M: 2/4
+L: 1/8
+K: C
+(3[CEG] [DFA] [ceg] G2|
+
+The second and third notes in the third chord [ceg] are not
+adjusted for a triplet. The problem occurs in event_note,
+in store.c. The function decrements the tuplecount counter
+for the first note in each chord. Therefore when it handles
+the last chord, tuplecount is already zero when it encounters
+notes e and g. The fix is not to decrement tuplecount inside
+a chord in event_note and event_rest. Instead tuplecount is
+decremented in the function event_chordoff.
+
+I am grateful to Jim Russell who identified this bug and
+found the fix.
+
+
 ~
 ~
 ~

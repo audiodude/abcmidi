@@ -431,7 +431,7 @@ char **filename;
   atext = (char**) checkmalloc(maxtexts*sizeof(char*));
   words = (char**) checkmalloc(maxwords*sizeof(char*));
   if ((getarg("-h", argc, argv) != -1) || (argc < 2)) {
-    printf("abc2midi version 1.36\n");
+    printf("abc2midi version 1.37\n");
     printf("Usage : abc2midi <abc file> [reference number] [-c] [-v] ");
     printf("[-o filename]\n");
     printf("        [-t] [-n <value>] [-RS]\n");
@@ -1894,8 +1894,7 @@ int decorators[DECSIZE];
         };
       };
     };
-    if ((!gracenotes) &&
-        ((!v->inchord) || ((v->inchord) && (v->chordcount == 1)))) {
+    if ((!gracenotes) && (!v->inchord)) {
       tuplecount = tuplecount - 1;
     };
   };
@@ -1956,6 +1955,7 @@ void event_chordoff()
     v->inchord = 0;
     v->chordcount = 0;
     marknoteend();
+    if (tuplecount > 0) --tuplecount;
   };
 }
 
@@ -2120,8 +2120,7 @@ int xoctave, n, m;
         };
       };
     };
-    if ((!gracenotes) &&
-        ((!v->inchord) || ((v->inchord) && (v->chordcount == 1)))) {
+    if ((!gracenotes) && (!v->inchord)) {
       tuplecount = tuplecount - 1;
     };
   };
