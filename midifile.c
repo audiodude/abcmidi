@@ -41,10 +41,21 @@
  * 17 Jan 1999 added 0.5 in mf_sec2ticks to avoid rounding errors.
  * 15 Mar 1999 added some fixes suggested by Seymour Shlien to solve
  * portability problems caused by expression evaluation order.
+ *
+ *
+ * Changes by Seymour Shlien
+ *
+ * 1 Jan 2000 Mf_toberead is no longer static, (to link with mftext2.c)
+ *
+ * 5 Mar 2000
+ * ntrks is a global variable (number of tracks in midi file)
+ * mfread now keeps track of number of tracks read and stops when
+ * it reads ntrks. (To solve expecting MTrk error for some midi files).
+ *
  */
 #include "midifile.h"
 #define NULLFUNC 0
-#define NULL 0
+/*#define NULL 0 */
 
 #include <stdio.h>
 #ifdef ANSILIBS
@@ -60,28 +71,28 @@ char *strcpy(), *strcat();
 
 /* Functions to be called while processing the MIDI file. */
 int (*Mf_getc)() = NULLFUNC;
-int (*Mf_error)() = NULLFUNC;
-int (*Mf_header)() = NULLFUNC;
-int (*Mf_trackstart)() = NULLFUNC;
-int (*Mf_trackend)() = NULLFUNC;
-int (*Mf_noteon)() = NULLFUNC;
-int (*Mf_noteoff)() = NULLFUNC;
-int (*Mf_pressure)() = NULLFUNC;
-int (*Mf_parameter)() = NULLFUNC;
-int (*Mf_pitchbend)() = NULLFUNC;
-int (*Mf_program)() = NULLFUNC;
-int (*Mf_chanpressure)() = NULLFUNC;
-int (*Mf_sysex)() = NULLFUNC;
-int (*Mf_arbitrary)() = NULLFUNC;
-int (*Mf_metamisc)() = NULLFUNC;
-int (*Mf_seqnum)() = NULLFUNC;
-int (*Mf_eot)() = NULLFUNC;
-int (*Mf_smpte)() = NULLFUNC;
-int (*Mf_tempo)() = NULLFUNC;
-int (*Mf_timesig)() = NULLFUNC;
-int (*Mf_keysig)() = NULLFUNC;
-int (*Mf_seqspecific)() = NULLFUNC;
-int (*Mf_text)() = NULLFUNC;
+void (*Mf_error)() = NULLFUNC;
+void (*Mf_header)() = NULLFUNC;
+void (*Mf_trackstart)() = NULLFUNC;
+void (*Mf_trackend)() = NULLFUNC;
+void (*Mf_noteon)() = NULLFUNC;
+void (*Mf_noteoff)() = NULLFUNC;
+void (*Mf_pressure)() = NULLFUNC;
+void (*Mf_parameter)() = NULLFUNC;
+void (*Mf_pitchbend)() = NULLFUNC;
+void (*Mf_program)() = NULLFUNC;
+void (*Mf_chanpressure)() = NULLFUNC;
+void (*Mf_sysex)() = NULLFUNC;
+void (*Mf_arbitrary)() = NULLFUNC;
+void (*Mf_metamisc)() = NULLFUNC;
+void (*Mf_seqnum)() = NULLFUNC;
+void (*Mf_eot)() = NULLFUNC;
+void (*Mf_smpte)() = NULLFUNC;
+void (*Mf_tempo)() = NULLFUNC;
+void (*Mf_timesig)() = NULLFUNC;
+void (*Mf_keysig)() = NULLFUNC;
+void (*Mf_seqspecific)() = NULLFUNC;
+void (*Mf_text)() = NULLFUNC;
 
 /* Functions to implement in order to write a MIDI file */
 int (*Mf_putc)() = NULLFUNC;
@@ -102,32 +113,24 @@ static long to32bit();
 static int read16bit();
 static int to16bit();
 static char *msg();
-/* following declaration added 27/8/96 JRA */
-static void readheader();
-static int readtrack();
-static void badbyte();
-static void metaevent();
-static void sysex();
-static void chanmessage();
-static void msginit();
-static int msgleng();
-static void msgadd();
-static void biggermsg();
-static int eputc();
-static void mf_write_track_chunk();
-static void mf_write_header_chunk();
-static void write16bit(),write32bit();
-static void WriteVarLen();
-static void mferror();
+/* following declaration added 27/8/96 JRA 
+static readheader(), readtrack(), badbyte(), metaevent(), sysex(),
+       chanmessage(), msginit(), msgleng(), msgadd(), biggermsg();
+*/
+int ntrks;
 
 void mfread()     /* The only non-static function in this file. */
 {
+  int track;
   if ( Mf_getc == NULLFUNC )
     mferror("mfread() called without setting Mf_getc"); 
 
   readheader();
-  while ( readtrack() )
-    ;
+  track =1;
+  while (readtrack()) 
+    {track++;
+     if(track>ntrks) break;
+    }
 }
 
 /* for backward compatibility with the original lib */
@@ -169,7 +172,7 @@ egetc()      /* read a single character and abort on EOF */
 static void
 readheader()    /* read a header chunk */
 {
-  int format, ntrks, division;
+  int format, division;
 
   if ( readmt("MThd") == EOF )
     return;
@@ -487,8 +490,9 @@ read16bit()
   return to16bit(c1,c2);
 }
 
-static void mferror(s)
-char *s;
+/* static */
+void mferror(s)
+	char *s;
 {
   if ( Mf_error ) {
     (*Mf_error)(s);

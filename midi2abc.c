@@ -28,8 +28,18 @@
  *
  * added output file option -o
  * added summary option -sum
- *                Seymour Shlien  30/1/00
- *
+ * added option -u to enter xunit directly
+ * fixed computation of xunit using -b option
+ * added -obpl (one bar per line) option
+ * add check for carriage return embedded inside midi text line
+ *                Seymour Shlien  04/March/00
+ * made to conform as much as possible to the official version.
+ * check for drum track added
+ * when midi program channel is command encountered, we ensure that 
+ * we are using the correct channel number for the Voice by sending
+ * a %%MIDI channel message.
+ *                Seymour Shlien  9/December/00
+ * 
  * based on public domain 'midifilelib' package.
  *
  */
@@ -57,44 +67,84 @@ extern char* strchr();
 #define BUFFSIZE 200
 /* declare MIDDLE C */
 #define MIDDLE 72
-
 void initfuncs();
+void setupkey(int);
+
+
+
+/* Global variables and structures */
+
 static FILE *F;
 static FILE *outhandle; /* for producing the abc file */
-int division;    /* from the file header */
-long tempo = 500000; /* the default tempo is 120 beats/minute */
-int unitlen;
-long laston = 0;
-char textbuff[BUFFSIZE];
-int trans[256], back[256];
-char atog[256];
-int symbol[256];
+
+int division;    /* pulses per quarter note defined in MIDI header    */
+long tempo = 500000; /* the default tempo is 120 quarter notes/minute */
+int unitlen;     /* abc unit length usually defined in L: field       */
+int header_unitlen; /* first unitlen set                              */
+int unitlen_set =0; /* once unitlen is set don't allow it to change   */
+long laston = 0; /* length of MIDI track in pulses or ticks           */
+char textbuff[BUFFSIZE]; /*buffer for handling text output to abc file*/
+int trans[256], back[256]; /*translation tables for MIDI pitch to abc note*/
+char atog[256]; /* translation tables for MIDI pitch to abc note */
+int symbol[256]; /*translation tables for MIDI pitch to abc note */
 int key[12];
 int sharps;
-int xchannel;
 int trackno, maintrack;
-int format;
-int xunit;
-int extractm, extractl, extracta, guessa, summary; /* command-line options */
-int keep_short; /* -s option : do not discard very short notes */
-int swallow_rests; /* corresponds to -sr option */
-int no_triplets; /* -nt option - do not look for trplets or broken rhythm */
-int asig, bsig;
-int Qval;
+int format; /* MIDI file type                                   */
+
 int karaoke, inkaraoke;
 int midline;
+int tempocount=0;  /* number of tempo indications in MIDI file */
+int gotkeysig=0; /*set to 1 if keysignature found in MIDI file */
 
+/* global parameters that may be set by command line options    */
+int xunit;    /* pulses per abc unit length                     */
+int tsig_set; /* flag - time signature already set by user      */
+int ksig_set; /* flag - key signature already set by user       */
+int extracta; /* flag - get anacrusis from strong beat          */
+int guessu;   /* flag - estimate xunit from note durations      */
+int guessa;   /* flag - get anacrusis by minimizing tied notes  */
+int guessk;   /* flag - guess key signature                     */
+int summary;  /* flag - output summary info of MIDI file        */
+int keep_short; /*flag - preserve short notes                   */
+int swallow_rests; /* flag - absorb short rests                 */
+int no_triplets; /* flag - suppress triplets or broken rhythm   */
+int obpl = 0; /* flag to specify one bar per abc text line      */
+int bars_per_line=4;  /* number of bars per output line         */
+int bars_per_staff=4; /* number of bars per music staff         */
+int asig, bsig;  /* time signature asig/bsig                    */
+int header_asig =0; /* first time signature encountered         */
+int header_bsig =0; /* first time signature encountered         */
+int header_bb;      /* first ticks/quarter note encountered     */
+int active_asig,active_bsig;  /* last time signature declared   */
+int last_asig, last_ksig; /* last time signature printed        */
+int barsize; /* barsize in half unitlen units                   */
+int Qval;        /* tempo - quarter notes per minute            */
+int verbosity=0; /* control amount of detail messages in abcfile*/
+
+/* global arguments dependent on command line options or computed */
+
+int anacrusis=0; 
+int bars;
+int keysig;
+int header_keysig=  -50;  /* header key signature                     */
+int active_keysig = -50;  /* last key signature declared        */
+int xchannel;  /* channel number to be extracted. -1 means all  */
+
+
+/* structure for storing music notes */
 struct anote {
-  int pitch;
-  int chan;
-  int vel;
-  long time;
-  long dtnext;
-  long tplay;
-  int xnum;
+  int pitch;  /* MIDI pitch    */
+  int chan;   /* MIDI channel  */
+  int vel;    /* MIDI velocity */
+  long time;  /* MIDI onset time in pulses */
+  long dtnext; /* time increment to next note in pulses */
+  long tplay;  /* note duration in pulses */
+  int xnum;    /* note duration in number of xunits */
   int playnum;
   int denom;
 };
+
 
 /* linked list of notes */
 struct listx {
@@ -106,16 +156,18 @@ struct listx {
 struct tlistx {
   struct tlistx* next;
   char* text;
-  long when;
+  long when; 	/* time in pulses to output */
+  int type;     /* 0 - comments, other - field commands */
 };
+
 
 /* a MIDI track */
 struct atrack {
-  struct listx* head;
-  struct listx* tail;
-  struct tlistx* texthead;
-  struct tlistx* texttail;
-  int notes;
+  struct listx* head;    /* first note */
+  struct listx* tail;    /* last note */
+  struct tlistx* texthead; /* first text string */
+  struct tlistx* texttail; /* last text string */
+  int notes;             /* number of notes in track */
   long tracklen;
   long startwait;
   int startunits;
@@ -125,6 +177,9 @@ struct atrack {
 /* can cope with up to 64 track MIDI files */
 struct atrack track[64];
 int trackcount = 0;
+int maxbarcount = 0;
+/* maxbarcount  is used to return the numbers of bars created.
+/* obpl is a flag for one bar per line. */
 
 /* double linked list of notes */
 /* used for temporary list of chords while abc is being generated */
@@ -133,14 +188,31 @@ struct dlistx {
   struct dlistx* last;
   struct anote* note;
 };
-/* head and tail of list of notes still playing */
-/* used while MIDI file is being parsed */
-struct dlistx* playinghead;
-struct dlistx* playingtail; 
-/* head and tail of list of notes in current chord playing */
-/* used while abc is being generated */
-struct dlistx* chordhead;
-struct dlistx* chordtail;
+
+
+
+
+void remove_carriage_returns();
+int validnote();
+
+
+
+
+
+/*              Stage 1. Parsing MIDI file                   */
+
+/* Functions called during the reading pass of the MIDI file */
+
+/* The following C routines are required by midifilelib.  */
+/* They specify the action to be taken when various items */
+/* are encountered in the MIDI.  The mfread function scans*/
+/* the MIDI file and calls these functions when needed.   */
+
+
+int filegetc()
+{
+    return(getc(F));
+}
 
 
 void fatal_error(s)
@@ -151,6 +223,7 @@ char* s;
   exit(1);
 }
 
+
 void event_error(s)
 char *s;
 /* problem encountered but OK to continue */
@@ -160,6 +233,7 @@ char *s;
   sprintf(msg, "Error: Time=%ld Track=%d %s\n", Mf_currtime, trackno, s);
   printf(msg);
 }
+
 
 int* checkmalloc(bytes)
 /* malloc with error checking */
@@ -174,6 +248,8 @@ int bytes;
   return (p);
 }
 
+
+
 char* addstring(s)
 /* create space for string and store it in memory */
 char* s;
@@ -183,6 +259,490 @@ char* s;
   p = (char*) checkmalloc(strlen(s)+1);
   strcpy(p, s);
   return(p);
+}
+
+void addtext(s, type)
+/* add structure for text */
+/* used when parsing MIDI file */
+char* s;
+int type;
+{
+  struct tlistx* newx;
+
+  newx = (struct tlistx*) checkmalloc(sizeof(struct tlistx));
+  newx->next = NULL;
+  newx->text = addstring(s);
+  newx->type = type;
+  newx->when = Mf_currtime;
+  if (track[trackno].texthead == NULL) {
+    track[trackno].texthead = newx;
+    track[trackno].texttail = newx;
+  } else {
+    track[trackno].texttail->next = newx;
+    track[trackno].texttail = newx;
+  };
+}
+  
+
+
+/* The MIDI file has  separate commands for starting                 */
+/* and stopping a note. In order to determine the duration of        */
+/* the note it is necessary to find the note_on command associated   */
+/* with the note off command. We rely on the note's pitch and channel*/
+/* number to find the right note. While we are parsing the MIDI file */
+/* we maintain a list of all the notes that are currently on         */
+/* head and tail of list of notes still playing.                     */
+/* The following doubly linked list is used for this purpose         */
+
+struct dlistx* playinghead;
+struct dlistx* playingtail; 
+
+
+void noteplaying(p)
+/* This function adds a new note to the playinghead list. */
+struct anote* p;
+{
+  struct dlistx* newx;
+
+  newx = (struct dlistx*) checkmalloc(sizeof(struct dlistx));
+  newx->note = p;
+  newx->next = NULL;
+  newx->last = playingtail;
+  if (playinghead == NULL) {
+    playinghead = newx;
+  };
+  if (playingtail == NULL) {
+    playingtail = newx;
+  } else {
+    playingtail->next = newx;
+    playingtail = newx;
+  };
+}
+
+
+void addnote(p, ch, v)
+/* add structure for note */
+/* used when parsing MIDI file */
+int p, v;
+{
+  struct listx* newx;
+  struct anote* newnote;
+
+  track[trackno].notes = track[trackno].notes + 1;
+  newx = (struct listx*) checkmalloc(sizeof(struct listx));
+  newnote = (struct anote*) checkmalloc(sizeof(struct anote));
+  newx->next = NULL;
+  newx->note = newnote;
+  if (track[trackno].head == NULL) {
+    track[trackno].head = newx;
+    track[trackno].tail = newx;
+  } else {
+    track[trackno].tail->next = newx;
+    track[trackno].tail = newx;
+  };
+  if (ch == 9) {
+    track[trackno].drumtrack = 1;
+  };
+  newnote->pitch = p;
+  newnote->chan = ch;
+  newnote->vel = v;
+  newnote->time = Mf_currtime;
+  laston = Mf_currtime;
+  newnote->tplay = Mf_currtime;
+  noteplaying(newnote);
+}
+
+
+
+void notestop(p, ch)
+/* MIDI note stops */
+/* used when parsing MIDI file */
+int p, ch;
+{
+  struct dlistx* i;
+  int found;
+  char msg[80];
+
+  i = playinghead;
+  found = 0;
+  while ((found == 0) && (i != NULL)) {
+    if ((i->note->pitch == p)&&(i->note->chan==ch)) {
+      found = 1;
+    } else {
+      i = i->next;
+    };
+  };
+  if (found == 0) {
+    sprintf(msg, "Note terminated when not on - pitch %d", p);
+    event_error(msg);
+    return;
+  };
+  /* fill in tplay field */
+  i->note->tplay = Mf_currtime - (i->note->tplay);
+  /* remove note from list */
+  if (i->last == NULL) {
+    playinghead = i->next;
+  } else {
+    (i->last)->next = i->next;
+  };
+  if (i->next == NULL) {
+    playingtail = i->last;
+  } else {
+    (i->next)->last = i->last;
+  };
+  free(i);
+}
+
+
+
+
+FILE *
+efopen(name,mode)
+char *name;
+char *mode;
+{
+    FILE *f;
+
+    if ( (f=fopen(name,mode)) == NULL ) {
+      char msg[80];
+
+      sprintf(msg,"Error - Cannot open file %s",name);
+      fatal_error(msg);
+    }
+    return(f);
+}
+
+
+void error(s)
+char *s;
+{
+    fprintf(stderr,"Error: %s\n",s);
+}
+
+
+
+void txt_header(xformat,ntrks,ldivision)
+int xformat, ntrks, ldivision;
+{
+    division = ldivision; 
+    format = xformat;
+    if (format != 0) {
+    /*  fprintf(outhandle,"%% format %d file %d tracks\n", format, ntrks);*/
+      if(summary>0) printf("This midi file has %d tracks\n\n",ntrks);
+    } 
+    else {
+/*     fprintf(outhandle,"%% type 0 midi file\n"); */
+     if(summary>0) {
+	     printf("This is a type 0 midi file.\n");
+             printf("All the channels are in one track.\n");
+             printf("You may need to process the channels separately\n\n");
+            }
+     }
+     
+}
+
+
+void txt_trackstart()
+{
+  laston = 0L;
+  track[trackno].notes = 0;
+  track[trackno].head = NULL;
+  track[trackno].tail = NULL;
+  track[trackno].texthead = NULL;
+  track[trackno].texttail = NULL;
+  track[trackno].tracklen = Mf_currtime;
+  track[trackno].drumtrack = 0;
+}
+
+void txt_trackend()
+{
+  /* check for unfinished notes */
+  if (playinghead != NULL) {
+    printf("Error in MIDI file - notes still on at end of track!\n");
+  };
+  track[trackno].tracklen = Mf_currtime - track[trackno].tracklen;
+  trackno = trackno + 1;
+  trackcount = trackcount + 1;
+}
+
+void txt_noteon(chan,pitch,vol)
+int chan, pitch, vol;
+{
+  if ((xchannel == -1) || (chan == xchannel)) {
+    if (vol != 0) {
+      addnote(pitch, chan, vol);
+    } else {
+      notestop(pitch, chan);
+    };
+  };
+}
+
+void txt_noteoff(chan,pitch,vol)
+int chan, pitch, vol;
+{
+  if ((xchannel == -1) || (chan == xchannel)) {
+    notestop(pitch, chan);
+  };
+}
+
+void txt_pressure(chan,pitch,press)
+int chan, pitch, press;
+{
+}
+
+void txt_parameter(chan,control,value)
+int chan, control, value;
+{
+}
+
+void txt_pitchbend(chan,msb,lsb)
+int chan, msb, lsb;
+{
+}
+
+void txt_program(chan,program)
+int chan, program;
+{
+/*
+  sprintf(textbuff, "%%%%MIDI program %d %d",
+         chan+1, program);
+*/
+  sprintf(textbuff, "%%%%MIDI program %d", program);
+  addtext(textbuff,0);
+/* abc2midi does not use the same channel number as specified in 
+  the original midi file, so we should not specify that channel
+  number in the %%MIDI program. If we leave it out the program
+  will refer to the current channel assigned to this voice.
+*/
+}
+
+void txt_chanpressure(chan,press)
+int chan, press;
+{
+}
+
+void txt_sysex(leng,mess)
+int leng;
+char *mess;
+{
+}
+
+void txt_metamisc(type,leng,mess)
+int type, leng;
+char *mess;
+{
+}
+
+void txt_metaspecial(type,leng,mess)
+int type, leng;
+char *mess;
+{
+}
+
+void txt_metatext(type,leng,mess)
+int type, leng;
+char *mess;
+{ 
+  static char *ttype[] = {
+    NULL,
+    "Text Event",        /* type=0x01 */
+    "Copyright Notice",    /* type=0x02 */
+    "Sequence/Track Name",
+    "Instrument Name",    /* ...     */
+    "Lyric",
+    "Marker",
+    "Cue Point",        /* type=0x07 */
+    "Unrecognized"
+  };
+  int unrecognized = (sizeof(ttype)/sizeof(char *)) - 1;
+  unsigned char c;
+  int n;
+  char *p = mess;
+  char *buff;
+  char buffer2[BUFFSIZE];
+
+  if ((type < 1)||(type > unrecognized))
+      type = unrecognized;
+  buff = textbuff;
+  for (n=0; n<leng; n++) {
+    c = *p++;
+    if (buff - textbuff < BUFFSIZE - 6) {
+      sprintf(buff, 
+           (isprint(c)||isspace(c)) ? "%c" : "\\0x%02x" , c);
+      buff = buff + strlen(buff);
+    };
+  }
+  if (strncmp(textbuff, "@KMIDI KARAOKE FILE", 14) == 0) {
+    karaoke = 1;
+  } else {
+    if ((karaoke == 1) && (*textbuff != '@')) {
+      addtext(textbuff,0);
+    } else {
+      if (leng < BUFFSIZE - 3) {
+        sprintf(buffer2, "%%%s", textbuff);
+        addtext(buffer2,0);
+      };
+    };
+  };
+}
+
+void txt_metaseq(num)
+int num;
+{  
+  sprintf(textbuff, "%%Meta event, sequence number = %d",num);
+  addtext(textbuff,0);
+}
+
+void txt_metaeot()
+/* Meta event, end of track */
+{
+}
+
+void txt_keysig(sf,mi)
+char sf, mi;
+{
+  int accidentals;
+  gotkeysig =1;
+  sprintf(textbuff, 
+         "%% MIDI Key signature, sharp/flats=%d  minor=%d",
+          (int) sf, (int) mi);
+  if(verbosity) addtext(textbuff,0);
+  sprintf(textbuff,"%d %d\n",sf,mi);
+  if (!ksig_set) {addtext(textbuff,1); keysig=sf;}
+  if (header_keysig == -50) header_keysig = keysig;
+  if (summary <= 0) return;
+  /* There may be several key signature changes in the midi
+     file so that key signature in the mid file does not conform
+     with the abc file. Show all key signature changes. 
+  */   
+  accidentals = (int) sf;
+  if (accidentals <0 )
+    {accidentals = -accidentals;
+     printf("Key signature: %d flats", accidentals);
+    }
+  else
+     printf("Key signature : %d sharps", accidentals);
+  if (ksig_set) printf(" suppressed\n");
+  else printf("\n");
+}
+
+void txt_tempo(ltempo)
+long ltempo;
+{
+    if(tempocount>0) return; /* ignore other tempo indications */
+    tempo = ltempo;
+    tempocount++;
+}
+
+
+void txt_timesig(nn,dd,cc,bb)
+int nn, dd, cc, bb;
+{
+  int denom = 1;
+  while ( dd-- > 0 )
+    denom *= 2;
+  sprintf(textbuff, 
+          "%% Time signature=%d/%d  MIDI-clocks/click=%d  32nd-notes/24-MIDI-clocks=%d", 
+    nn,denom,cc,bb);
+  if (verbosity) addtext(textbuff,0);
+  sprintf(textbuff,"%d %d %d\n",nn,denom,bb);
+  if (!tsig_set) {addtext(textbuff,2);
+                  setup_timesig(nn, denom,bb);}
+  if (summary>0) {
+    if(tsig_set) printf("Time signature = %d/%d suppressed\n",nn,denom);
+    else printf("Time signature = %d/%d\n",nn,denom);
+    }
+}
+
+
+setup_timesig(int nn, int denom, int bb)
+{
+  asig = nn;
+  bsig = denom;
+/* we must keep unitlen and xunit fixed for the entire tune */
+  if (unitlen_set == 0) {
+    unitlen_set = 1; 
+    if ((asig*4)/bsig >= 3) {
+      unitlen =8;
+      } else {
+      unitlen = 16;
+      };
+/* set xunit for this unitlen */
+  xunit = (division*bb*4)/(8*unitlen);
+    }
+  barsize = 2*asig*unitlen/bsig;
+/*  printf("setup_timesig: unitlen=%d xunit=%d barsize=%d\n",unitlen,xunit,barsize); */
+  if (header_asig ==0) {header_asig = asig;
+	                header_bsig = bsig;
+			header_unitlen = unitlen;
+			header_bb = bb;
+                       }
+}
+
+
+
+void txt_smpte(hr,mn,se,fr,ff)
+int hr, mn, se, fr, ff;
+{
+}
+
+void txt_arbitrary(leng,mess)
+char *mess;
+int leng;
+{
+}
+
+void initfuncs()
+{
+    Mf_error = error;
+    Mf_header =  txt_header;
+    Mf_trackstart =  txt_trackstart;
+    Mf_trackend =  txt_trackend;
+    Mf_noteon =  txt_noteon;
+    Mf_noteoff =  txt_noteoff;
+    Mf_pressure =  txt_pressure;
+    Mf_parameter =  txt_parameter;
+    Mf_pitchbend =  txt_pitchbend;
+    Mf_program =  txt_program;
+    Mf_chanpressure =  txt_chanpressure;
+    Mf_sysex =  txt_sysex;
+    Mf_metamisc =  txt_metamisc;
+    Mf_seqnum =  txt_metaseq;
+    Mf_eot =  txt_metaeot;
+    Mf_timesig =  txt_timesig;
+    Mf_smpte =  txt_smpte;
+    Mf_tempo =  txt_tempo;
+    Mf_keysig =  txt_keysig;
+    Mf_seqspecific =  txt_metaspecial;
+    Mf_text =  txt_metatext;
+    Mf_arbitrary =  txt_arbitrary;
+}
+
+
+/*  Stage 2 Quantize MIDI tracks. Get key signature, time signature...   */ 
+
+
+void postprocess(trackno)
+/* This routine calculates the time interval before the next note */
+/* called after the MIDI file has been read in */
+int trackno;
+{
+  struct listx* i;
+
+  i = track[trackno].head;
+  if (i != NULL) {
+    track[trackno].startwait = i->note->time;
+  } else {
+    track[trackno].startwait = 0;
+  };
+  while (i != NULL) {
+    if (i->next != NULL) {
+      i->note->dtnext = i->next->note->time - i->note->time;
+    } else {
+      i->note->dtnext = i->note->tplay;
+    };
+    i = i->next;
+  };
 }
 
 void scannotes(trackno)
@@ -200,6 +760,246 @@ int trackno;
     i = i->next;
   };
 }
+
+
+
+int quantize(trackno, xunit)
+/* work out how long each note is in musical time units */
+int trackno, xunit;
+{
+  struct listx* j;
+  struct anote* this;
+  int spare;
+  int toterror;
+
+  /* fix to avoid division by zero errors in strange MIDI */
+  if (xunit == 0) {
+    return(10000);
+  };
+  track[trackno].startunits = (2*(track[trackno].startwait + (xunit/4)))/xunit;
+  spare = 0;
+  toterror = 0;
+  j = track[trackno].head;
+  while (j != NULL) {
+    this = j->note;
+    this->xnum = (2*(this->dtnext + spare + (xunit/4)))/xunit;
+    this->playnum = (2*(this->tplay + (xunit/4)))/xunit;
+    if ((this->playnum == 0) && (keep_short)) {
+      this->playnum = 1;
+    };
+    if ((swallow_rests) && (this->xnum - this->playnum < 2)) {
+      this->playnum = this->xnum;
+    };
+    this->denom = 2;
+    spare = spare + this->dtnext - (this->xnum*xunit/this->denom);
+    if (spare > 0) {
+      toterror = toterror + spare;
+    } else {
+      toterror = toterror - spare;
+    };
+    /* gradually forget old errors so that if xunit is slightly off,
+       errors don't accumulate over several bars */
+    spare = (spare * 96)/100;
+    j = j->next;
+  };
+  return(toterror);
+}
+
+
+void guesslengths(trackno)
+/* work out most appropriate value for a unit of musical time */
+int trackno;
+{
+  int i;
+  int trial[100];
+  float avlen, factor, tryx;
+  long min;
+
+  min = track[trackno].tracklen;
+  if (track[trackno].notes == 0) {
+    return;
+  };
+  avlen = ((float)(min))/((float)(track[trackno].notes));
+  tryx = avlen * 0.75;
+  factor = tryx/100;
+  for (i=0; i<100; i++) {
+    trial[i] = quantize(trackno, (int) tryx);
+    if ((long) trial[i] < min) {
+      min = (long) trial[i];
+      xunit = (int) tryx;
+    };
+    tryx = tryx + factor;
+  };
+}
+
+
+int findana(maintrack, barsize)
+/* work out anacrusis from MIDI */
+/* look for a strong beat marking the start of a bar */
+int maintrack;
+int barsize;
+{
+  int min, mincount;
+  int place;
+  struct listx* p;
+
+  min = 0;
+  mincount = 0;
+  place = 0;
+  p = track[maintrack].head;
+  while ((p != NULL) && (place < barsize)) {
+    if ((p->note->vel > min) && (place > 0)) {
+      min = p->note->vel;
+      mincount = place;
+    };
+    place = place + (p->note->xnum);
+    p = p->next;
+  };
+  return(mincount);
+}
+
+
+
+int guessana(barbeats)
+int barbeats;
+/* try to guess length of anacrusis */
+{
+  int score[64];
+  int min, minplace;
+  int i,j;
+
+  if (barbeats > 64) {
+    fatal_error("Bar size exceeds static limit of 64 units!");
+  };
+  for (j=0; j<barbeats; j++) {
+    score[j] = 0;
+    for (i=0; i<trackcount; i++) {
+      score[j] = score[j] + testtrack(i, barbeats, j);
+      /* restore values to num */
+      quantize(i, xunit);
+    };
+  };
+  min = score[0];
+  minplace = 0;
+  for (i=0; i<barbeats; i++) {
+    if (score[i] < min) {
+      min = score[i];
+      minplace = i;
+    };
+  };
+  return(minplace);
+}
+
+
+int findkey(maintrack)
+int maintrack;
+/* work out what key MIDI file is in */
+/* algorithm is simply to minimize the number of accidentals needed. */
+{
+  int j;
+  int max, min, n[12], key_score[12];
+  int minkey, minblacks;
+  static int keysharps[12] = {0, -5, 2, -3, 4, -1, 6, 1, -4, 3, -2, 5};
+  struct listx* p;
+  int thispitch;
+  int lastpitch;
+  int totalnotes;
+
+  /* analyse pitches */
+  /* find key */
+  for (j=0; j<12; j++) {
+    n[j] = 0;
+  };
+  min = track[maintrack].tail->note->pitch;
+  max = min;
+  totalnotes = 0;
+  for (j=0; j<trackcount; j++) {
+    totalnotes = totalnotes + track[j].notes;
+    p = track[j].head;
+    while (p != NULL) {
+      thispitch = p->note->pitch;
+      if (thispitch > max) {
+        max = thispitch;
+      } else {
+        if (thispitch < min) {
+          min = thispitch;
+        };
+      };
+      n[thispitch % 12] = n[thispitch % 12] + 1;
+      p = p->next;
+    };
+  };
+  /* count black notes for each key */
+  /* assume pitch = 0 is C */
+  minkey = 0;
+  minblacks = totalnotes;
+  for (j=0; j<12; j++) {
+    key_score[j] = n[(j+1)%12] + n[(j+3)%12] + n[(j+6)%12] +
+                   n[(j+8)%12] + n[(j+10)%12];
+    /* printf("Score for key %d is %d\n", j, key_score[j]); */
+    if (key_score[j] < minblacks) {
+      minkey = j;
+      minblacks = key_score[j];
+    };
+  };
+  /* do conversion to abc pitches */
+  /* Code changed to use absolute rather than */
+  /* relative choice of pitch for 'c' */
+  /* MIDDLE = (min + (max - min)/2 + 6)/12 * 12; */
+  /* Do last note analysis */
+  lastpitch = track[maintrack].tail->note->pitch;
+  if (minkey != (lastpitch%12)) {
+    fprintf(outhandle,"%% Last note suggests ");
+    switch((lastpitch+12-minkey)%12) {
+    case(2):
+      fprintf(outhandle,"Dorian ");
+      break;
+    case(4):
+      fprintf(outhandle,"Phrygian ");
+      break;
+    case(5):
+      fprintf(outhandle,"Lydian ");
+      break;
+    case(7):
+      fprintf(outhandle,"Mixolydian ");
+      break;
+    case(9):
+      fprintf(outhandle,"minor ");
+      break;
+    case(11):
+      fprintf(outhandle,"Locrian ");
+      break;
+    default:
+      fprintf(outhandle,"unknown ");
+      break;
+    };
+    fprintf(outhandle,"mode tune\n");
+  };
+  /* switch to minor mode if it gives same number of accidentals */
+  if ((minkey != ((lastpitch+3)%12)) && 
+      (key_score[minkey] == key_score[(lastpitch+3)%12])) {
+         minkey = (lastpitch+3)%12;
+  };
+  /* switch to major mode if it gives same number of accidentals */
+  if ((minkey != (lastpitch%12)) && 
+      (key_score[minkey] == key_score[lastpitch%12])) {
+         minkey = lastpitch%12;
+  };
+  sharps = keysharps[minkey];
+  return(sharps);
+}
+
+
+
+
+/* Stage 3  output MIDI tracks in abc format                        */
+
+
+/* head and tail of list of notes in current chord playing */
+/* used while abc is being generated */
+struct dlistx* chordhead;
+struct dlistx* chordtail;
+
 
 void printchordlist()
 /* diagnostic routine */
@@ -339,31 +1139,6 @@ int gap;
   return(min);
 }
 
-int findana(maintrack, barsize)
-/* work out anacrusis from MIDI */
-/* look for a strong beat marking the start of a bar */
-int maintrack;
-int barsize;
-{
-  int min, mincount;
-  int place;
-  struct listx* p;
-
-  min = 0;
-  mincount = 0;
-  place = 0;
-  p = track[maintrack].head;
-  while ((p != NULL) && (place < barsize)) {
-    if ((p->note->vel > min) && (place > 0)) {
-      min = p->note->vel;
-      mincount = place;
-    };
-    place = place + (p->note->xnum);
-    p = p->next;
-  };
-  return(mincount);
-}
-
 void advancechord(len)
 /* adjust note lengths for all notes in the chord */
 int len;
@@ -441,7 +1216,8 @@ int trackno, barbeats, anacrusis;
         };
         barnotes = barbeats;
         barcount = barcount + 1;
-        if (barcount == 4) {
+        if (barcount>0  && barcount%4 ==0) {
+        /* can't zero barcount because I use it for computing maxbarcount */
           freshline();
           barcount = 0;
         };
@@ -563,7 +1339,7 @@ int* featurecount;
   t2 = i->next->note->dtnext;
   v2 = i->next->note->xnum;
   pnum = i->next->note->playnum;
-  if ((v2 < pnum) || (v2 > 1 + pnum) || (pnum == 0) || (v1+v2 > *barnotes)) {
+  if (/*(v2 < pnum) ||*/ (v2 > 1 + pnum) || (pnum == 0) || (v1+v2 > *barnotes)) {
     return(' ');
   };
   /* look for broken rhythm */
@@ -652,18 +1428,24 @@ int n;
   return(v);
 }
 
-void handletext(t, textplace)
+void handletext(t, textplace, trackno)
 /* print out text occuring in the body of the track */
 /* The text is printed out at the appropriate place within the track */
+/* In addition the function handles key signature and time
+/* signature changes that can occur in the middle of the tune. */
 long t;
 struct tlistx** textplace;
+int trackno;
 {
   char* str;
   char ch;
+  int type,sf,mi,nn,denom,bb;
 
   while (((*textplace) != NULL) && ((*textplace)->when <= t)) {
     str = (*textplace)->text;
     ch = *str;
+    type = (*textplace)->type;
+    remove_carriage_returns(str);
     if (((int)ch == '\\') || ((int)ch == '/')) {
       inkaraoke = 1;
     };
@@ -693,28 +1475,56 @@ struct tlistx** textplace;
       };
     } else {
       freshline();
-      if (ch != '%') {
-        fprintf(outhandle,"%%%s\n", str);
-      } else {
-        fprintf(outhandle,"%s\n", str);
-      };
-    };
-    *textplace = (*textplace)->next;
-  };
+      ch=*(str+1);
+      switch (type) {
+      case 0:
+      if (ch != '%') 
+      fprintf(outhandle,"%%%s\n", str);
+      else 
+      fprintf(outhandle,"%s\n", str);
+      break;
+      case 1: /* key signature change */
+      sscanf(str,"%d %d",&sf,&mi);
+      if((trackno != 0 || trackcount==1) &&
+	 (active_keysig != sf)) {
+	      setupkey(sf);
+	      active_keysig=sf;
+              }
+      break;
+      case 2: /* time signature change */
+      sscanf(str,"%d %d %d",&nn,&denom,&bb);
+      if ((trackno != 0 || trackcount ==1) &&
+	  (active_asig != nn || active_bsig != denom))
+        {setup_timesig(nn,denom,bb);
+	 fprintf(outhandle,"M: %d/%d\n",nn,denom);
+         fprintf(outhandle,"L: 1/%d\n",unitlen);
+	 active_asig=nn;
+	 active_bsig=denom;
+	}
+      break;
+      default:
+      break;
+      }
+  }
+  *textplace = (*textplace)->next;
+ }
 }
 
-void printtrack(trackno, barsize, anacrusis)
+void printtrack(trackno, anacrusis)
 /* print out one track as abc */
-int trackno, barsize, anacrusis;
+int trackno,  anacrusis;
 {
   struct listx* i;
   struct tlistx* textplace;
+  struct tlistx* textplace0; /* track 0 text storage */
   int step, gap;
   int barnotes;
   int barcount;
+  int bars_on_line;
   long now;
   char broken;
   int featurecount;
+  int last_barsize,barnotes_correction;
 
   midline = 0;
   featurecount = 0;
@@ -725,7 +1535,7 @@ int trackno, barsize, anacrusis;
   chordtail = NULL;
   i = track[trackno].head;
   textplace = track[trackno].texthead;
-  handletext(now, &textplace);
+  textplace0 = track[0].texthead;
   gap = track[trackno].startunits;
   if (anacrusis > 0) {
     barnotes = anacrusis;
@@ -734,6 +1544,14 @@ int trackno, barsize, anacrusis;
     barnotes = barsize;
     barcount = 0;
   };
+  bars_on_line = 0;
+  last_barsize = barsize;
+  active_asig = header_asig;
+  active_bsig = header_bsig;
+  setup_timesig(header_asig,header_bsig,header_bb);
+  active_keysig = header_keysig;
+  handletext(now, &textplace, trackno);
+
   while((i != NULL)||(gap != 0)) {
     if (gap == 0) {
       /* do triplet here */
@@ -748,7 +1566,12 @@ int trackno, barsize, anacrusis;
       now = i->note->time;
       i = i->next;
       advancechord(0); /* get rid of any zero length notes */
-      handletext(now, &textplace);
+      if (trackcount > 1 && trackno !=0)
+	      handletext(now, &textplace0, trackno);
+      handletext(now, &textplace,trackno);
+      barnotes_correction = barsize - last_barsize;
+      barnotes += barnotes_correction;
+      last_barsize = barsize;
     } else {
       step = findshortest(gap);
       if (step > barnotes) {
@@ -775,10 +1598,15 @@ int trackno, barsize, anacrusis;
         fprintf(outhandle,"|");
         barnotes = barsize;
         barcount = barcount + 1;
-        if (barcount == 4) {
-          freshline();
-          barcount = 0;
-        };
+	bars_on_line++;
+        if (barcount >0 && barcount%bars_per_staff == 0)  {
+		freshline();
+		bars_on_line=0;
+	}
+     /* can't zero barcount because I use it for computing maxbarcount */
+        else if(bars_on_line >= bars_per_line && i != NULL) {
+		fprintf(outhandle," \\"); freshline();
+	        bars_on_line=0;}
       } else {
         if (featurecount == 0) {
           /* note grouping algorithm */
@@ -797,200 +1625,27 @@ int trackno, barsize, anacrusis;
   };
   /* print out all extra text */
   while (textplace != NULL) {
-    handletext(textplace->when, &textplace);
+    handletext(textplace->when, &textplace, trackno);
   };
   freshline();
+  if (barcount > maxbarcount) maxbarcount = barcount;
 }
 
-void noteplaying(p)
-/* MIDI note starts */
-/*used when parsing MIDI file */
-struct anote* p;
+
+
+
+void remove_carriage_returns(char *str)
 {
-  struct dlistx* newx;
-
-  newx = (struct dlistx*) checkmalloc(sizeof(struct dlistx));
-  newx->note = p;
-  newx->next = NULL;
-  newx->last = playingtail;
-  if (playinghead == NULL) {
-    playinghead = newx;
-  };
-  if (playingtail == NULL) {
-    playingtail = newx;
-  } else {
-    playingtail->next = newx;
-    playingtail = newx;
-  };
+/* a carriage return might be embedded in a midi text meta-event.
+   do not output this in the abc file or this would make a nonsyntactic
+   abc file.
+*/
+char * loc;
+while (loc  = (char *) strchr(str,'\r')) *loc = ' ';
+while (loc  = (char *) strchr(str,'\n')) *loc = ' ';
 }
 
-void addnote(p, ch, v)
-/* add structure for note */
-/* used when parsing MIDI file */
-int p, v;
-{
-  struct listx* newx;
-  struct anote* newnote;
 
-  track[trackno].notes = track[trackno].notes + 1;
-  newx = (struct listx*) checkmalloc(sizeof(struct listx));
-  newnote = (struct anote*) checkmalloc(sizeof(struct anote));
-  newx->next = NULL;
-  newx->note = newnote;
-  if (track[trackno].head == NULL) {
-    track[trackno].head = newx;
-    track[trackno].tail = newx;
-  } else {
-    track[trackno].tail->next = newx;
-    track[trackno].tail = newx;
-  };
-  if (ch == 9) {
-    track[trackno].drumtrack = 1;
-  };
-  newnote->pitch = p;
-  newnote->chan = ch;
-  newnote->vel = v;
-  newnote->time = Mf_currtime;
-  laston = Mf_currtime;
-  newnote->tplay = Mf_currtime;
-  noteplaying(newnote);
-}
-
-void addtext(s)
-/* add structure for text */
-/* used when parsing MIDI file */
-char* s;
-{
-  struct tlistx* newx;
-
-  newx = (struct tlistx*) checkmalloc(sizeof(struct tlistx));
-  newx->next = NULL;
-  newx->text = addstring(s);
-  newx->when = Mf_currtime;
-  if (track[trackno].texthead == NULL) {
-    track[trackno].texthead = newx;
-    track[trackno].texttail = newx;
-  } else {
-    track[trackno].texttail->next = newx;
-    track[trackno].texttail = newx;
-  };
-}
-  
-void notestop(p, ch)
-/* MIDI note stops */
-/* used when parsing MIDI file */
-int p, ch;
-{
-  struct dlistx* i;
-  int found;
-  char msg[80];
-
-  i = playinghead;
-  found = 0;
-  while ((found == 0) && (i != NULL)) {
-    if ((i->note->pitch == p)&&(i->note->chan==ch)) {
-      found = 1;
-    } else {
-      i = i->next;
-    };
-  };
-  if (found == 0) {
-    sprintf(msg, "Note terminated when not on - pitch %d", p);
-    event_error(msg);
-    return;
-  };
-  /* fill in tplay field */
-  i->note->tplay = Mf_currtime - (i->note->tplay);
-  /* remove note from list */
-  if (i->last == NULL) {
-    playinghead = i->next;
-  } else {
-    (i->last)->next = i->next;
-  };
-  if (i->next == NULL) {
-    playingtail = i->last;
-  } else {
-    (i->next)->last = i->last;
-  };
-  free(i);
-}
-
-int filegetc()
-{
-    return(getc(F));
-}
-
-int quantize(trackno, xunit)
-/* work out how long each note is in musical time units */
-int trackno, xunit;
-{
-  struct listx* j;
-  struct anote* this;
-  int spare;
-  int toterror;
-
-  /* fix to avoid division by zero errors in strange MIDI */
-  if (xunit == 0) {
-    return(10000);
-  };
-  track[trackno].startunits = (2*(track[trackno].startwait + (xunit/4)))/xunit;
-  spare = 0;
-  toterror = 0;
-  j = track[trackno].head;
-  while (j != NULL) {
-    this = j->note;
-    this->xnum = (2*(this->dtnext + spare + (xunit/4)))/xunit;
-    this->playnum = (2*(this->tplay + (xunit/4)))/xunit;
-    if ((this->playnum == 0) && (keep_short)) {
-      this->playnum = 1;
-    };
-    if ((swallow_rests) && (this->xnum - this->playnum < 2)) {
-      this->playnum = this->xnum;
-    };
-    this->denom = 2;
-    spare = spare + this->dtnext - (this->xnum*xunit/this->denom);
-    if (spare > 0) {
-      toterror = toterror + spare;
-    } else {
-      toterror = toterror - spare;
-    };
-    /* gradually forget old errors so that if xunit is slightly off,
-       errors don't accumulate over several bars */
-    spare = (spare * 96)/100;
-    j = j->next;
-  };
-  return(toterror);
-}
-
-int guessana(barbeats)
-int barbeats;
-/* try to guess length of anacrusis */
-{
-  int score[64];
-  int min, minplace;
-  int i,j;
-
-  if (barbeats > 64) {
-    fatal_error("Bar size exceeds static limit of 64 units!");
-  };
-  for (j=0; j<barbeats; j++) {
-    score[j] = 0;
-    for (i=0; i<trackcount; i++) {
-      score[j] = score[j] + testtrack(i, barbeats, j);
-      /* restore values to num */
-      quantize(i, xunit);
-    };
-  };
-  min = score[0];
-  minplace = 0;
-  for (i=0; i<barbeats; i++) {
-    if (score[i] < min) {
-      min = score[i];
-      minplace = i;
-    };
-  };
-  return(minplace);
-}
 
 void printQ()
 /* print out tempo for abc */
@@ -1004,231 +1659,8 @@ void printQ()
     (int) (freq + 0.5));
 }
 
-void guesslengths(trackno)
-/* work out most appropriate value for a unit of musical time */
-int trackno;
-{
-  int i;
-  int trial[100];
-  float avlen, factor, tryx;
-  long min;
 
-  min = track[trackno].tracklen;
-  if (track[trackno].notes == 0) {
-    return;
-  };
-  avlen = ((float)(min))/((float)(track[trackno].notes));
-  tryx = avlen * 0.75;
-  factor = tryx/100;
-  for (i=0; i<100; i++) {
-    trial[i] = quantize(trackno, (int) tryx);
-    if ((long) trial[i] < min) {
-      min = (long) trial[i];
-      xunit = (int) tryx;
-    };
-    tryx = tryx + factor;
-  };
-}
 
-void postprocess(trackno)
-/* This routine calculates the time interval before the next note */
-/* called after the MIDI file has been read in */
-int trackno;
-{
-  struct listx* i;
-
-  i = track[trackno].head;
-  if (i != NULL) {
-    track[trackno].startwait = i->note->time;
-  } else {
-    track[trackno].startwait = 0;
-  };
-  while (i != NULL) {
-    if (i->next != NULL) {
-      i->note->dtnext = i->next->note->time - i->note->time;
-    } else {
-      i->note->dtnext = i->note->tplay;
-    };
-    i = i->next;
-  };
-}
-
-int readnum(num) 
-/* read a number from a string */
-/* used for processing command line */
-char *num;
-{
-  int t;
-  char *p;
-  int neg;
-  
-  t = 0;
-  neg = 1;
-  p = num;
-  if (*p == '-') {
-    p = p + 1;
-    neg = -1;
-  };
-  while (((int)*p >= '0') && ((int)*p <= '9')) {
-    t = t * 10 + (int) *p - '0';
-    p = p + 1;
-  };
-  return neg*t;
-}
-
-int readnump(p) 
-/* read a number from a string (subtly different) */
-/* used for processing command line */
-char **p;
-{
-  int t;
-  
-  t = 0;
-  while (((int)**p >= '0') && ((int)**p <= '9')) {
-    t = t * 10 + (int) **p - '0';
-    *p = *p + 1;
-  };
-  return t;
-}
-
-void readsig(a, b, sig)
-/* read time signature */
-/* used for processing command line */
-int *a, *b;
-char *sig;
-{
-  char *p;
-  int t;
-
-  p = sig;
-  if ((int)*p == 'C') {
-    *a = 4;
-    *b = 4;
-    return;
-  };
-  *a = readnump(&p);
-  if ((int)*p != '/') {
-    char msg[80];
-
-    sprintf(msg, "Expecting / in time signature found %c!", *p);
-    fatal_error(msg);
-  };
-  p = p + 1;
-  *b = readnump(&p);
-  if ((*a == 0) || (*b == 0)) {
-    char msg[80];
-
-    sprintf(msg, "%d/%d is not a valid time signature!", *a, *b);
-    fatal_error(msg);
-  };
-  t = *b;
-  while (t > 1) {
-    if (t%2 != 0) {
-      fatal_error("Bad key signature, divisor must be a power of 2!");
-    } else {
-      t = t/2;
-    };
-  };
-}
-
-int findkey(maintrack)
-int maintrack;
-/* work out what key MIDI file is in */
-/* algorithm is simply to minimize the number of accidentals needed. */
-{
-  int j;
-  int max, min, n[12], key_score[12];
-  int minkey, minblacks;
-  static int keysharps[12] = {0, -5, 2, -3, 4, -1, 6, 1, -4, 3, -2, 5};
-  struct listx* p;
-  int thispitch;
-  int lastpitch;
-  int totalnotes;
-
-  /* analyse pitches */
-  /* find key */
-  for (j=0; j<12; j++) {
-    n[j] = 0;
-  };
-  min = track[maintrack].tail->note->pitch;
-  max = min;
-  totalnotes = 0;
-  for (j=0; j<trackcount; j++) {
-    totalnotes = totalnotes + track[j].notes;
-    p = track[j].head;
-    while (p != NULL) {
-      thispitch = p->note->pitch;
-      if (thispitch > max) {
-        max = thispitch;
-      } else {
-        if (thispitch < min) {
-          min = thispitch;
-        };
-      };
-      n[thispitch % 12] = n[thispitch % 12] + 1;
-      p = p->next;
-    };
-  };
-  /* count black notes for each key */
-  /* assume pitch = 0 is C */
-  minkey = 0;
-  minblacks = totalnotes;
-  for (j=0; j<12; j++) {
-    key[j] = 0;
-    key_score[j] = n[(j+1)%12] + n[(j+3)%12] + n[(j+6)%12] +
-                   n[(j+8)%12] + n[(j+10)%12];
-    /* printf("Score for key %d is %d\n", j, key_score[j]); */
-    if (key_score[j] < minblacks) {
-      minkey = j;
-      minblacks = key_score[j];
-    };
-  };
-  /* do conversion to abc pitches */
-  /* Code changed to use absolute rather than */
-  /* relative choice of pitch for 'c' */
-  /* MIDDLE = (min + (max - min)/2 + 6)/12 * 12; */
-  /* Do last note analysis */
-  lastpitch = track[maintrack].tail->note->pitch;
-  if (minkey != (lastpitch%12)) {
-    fprintf(outhandle,"%% Last note suggests ");
-    switch((lastpitch+12-minkey)%12) {
-    case(2):
-      fprintf(outhandle,"Dorian ");
-      break;
-    case(4):
-      fprintf(outhandle,"Phrygian ");
-      break;
-    case(5):
-      fprintf(outhandle,"Lydian ");
-      break;
-    case(7):
-      fprintf(outhandle,"Mixolydian ");
-      break;
-    case(9):
-      fprintf(outhandle,"minor ");
-      break;
-    case(11):
-      fprintf(outhandle,"Locrian ");
-      break;
-    default:
-      fprintf(outhandle,"unknown ");
-      break;
-    };
-    fprintf(outhandle,"mode tune\n");
-  };
-  /* switch to minor mode if it gives same number of accidentals */
-  if ((minkey != ((lastpitch+3)%12)) && 
-      (key_score[minkey] == key_score[(lastpitch+3)%12])) {
-         minkey = (lastpitch+3)%12;
-  };
-  /* switch to major mode if it gives same number of accidentals */
-  if ((minkey != (lastpitch%12)) && 
-      (key_score[minkey] == key_score[lastpitch%12])) {
-         minkey = lastpitch%12;
-  };
-  sharps = keysharps[minkey];
-  return(sharps);
-}
 
 void setupkey(sharps)
 int sharps;
@@ -1238,6 +1670,8 @@ int sharps;
   int j, t, issharp;
   int minkey;
 
+  for (j=0; j<12; j++) 
+    key[j] = 0;
   minkey = (sharps+12)%12;
   if (minkey%2 != 0) {
     minkey = (minkey+6)%12;
@@ -1296,6 +1730,93 @@ int sharps;
   };
 }
 
+
+
+
+/*  Functions for supporting the command line user interface to midi2abc.     */
+
+
+int readnum(num) 
+/* read a number from a string */
+/* used for processing command line */
+char *num;
+{
+  int t;
+  char *p;
+  int neg;
+  
+  t = 0;
+  neg = 1;
+  p = num;
+  if (*p == '-') {
+    p = p + 1;
+    neg = -1;
+  };
+  while (((int)*p >= '0') && ((int)*p <= '9')) {
+    t = t * 10 + (int) *p - '0';
+    p = p + 1;
+  };
+  return neg*t;
+}
+
+
+int readnump(p) 
+/* read a number from a string (subtly different) */
+/* used for processing command line */
+char **p;
+{
+  int t;
+  
+  t = 0;
+  while (((int)**p >= '0') && ((int)**p <= '9')) {
+    t = t * 10 + (int) **p - '0';
+    *p = *p + 1;
+  };
+  return t;
+}
+
+
+void readsig(a, b, sig)
+/* read time signature */
+/* used for processing command line */
+int *a, *b;
+char *sig;
+{
+  char *p;
+  int t;
+
+  p = sig;
+  if ((int)*p == 'C') {
+    *a = 4;
+    *b = 4;
+    return;
+  };
+  *a = readnump(&p);
+  if ((int)*p != '/') {
+    char msg[80];
+
+    sprintf(msg, "Expecting / in time signature found %c!", *p);
+    fatal_error(msg);
+  };
+  p = p + 1;
+  *b = readnump(&p);
+  if ((*a == 0) || (*b == 0)) {
+    char msg[80];
+
+    sprintf(msg, "%d/%d is not a valid time signature!", *a, *b);
+    fatal_error(msg);
+  };
+  t = *b;
+  while (t > 1) {
+    if (t%2 != 0) {
+      fatal_error("Bad key signature, divisor must be a power of 2!");
+    } else {
+      t = t/2;
+    };
+  };
+}
+
+
 int getarg(option, argc, argv)
 /* extract arguments from command line */
 char *option;
@@ -1337,17 +1858,11 @@ int argc;
   return(place);
 }
 
-int main(argc,argv)
+int process_command_line_arguments(argc,argv)
 char *argv[];
 int argc;
 {
-  FILE *efopen();
-  int j;
-  int barsize, anacrusis, bars;
-  int keysig;
   int arg;
-  int voiceno;
-
   arg = getarg("-a", argc, argv);
   if ((arg != -1) && (arg < argc)) {
     anacrusis = readnum(argv[arg]);
@@ -1357,9 +1872,11 @@ int argc;
   arg = getarg("-m", argc, argv);
   if ((arg != -1) && (arg < argc)) {
     readsig(&asig, &bsig, argv[arg]);
+    tsig_set = 1;
   } else {
     asig = 4;
     bsig = 4;
+    tsig_set = 0;
   };
   arg = getarg("-Q", argc, argv);
   if (arg != -1) {
@@ -1367,13 +1884,35 @@ int argc;
   } else {
     Qval = 0;
   };
-  extractm = (getarg("-xm", argc, argv) != -1);
-  extractl = (getarg("-xl", argc, argv) != -1);
+  arg = getarg("-u", argc,argv);
+  if (arg != -1) 
+    xunit = readnum(argv[arg]);
+  else {
+	xunit = 0;
+  };
+  arg = getarg("-bps",argc,argv);
+  if (arg != -1)
+   bars_per_staff = readnum(argv[arg]);
+  else {
+       bars_per_staff=4;
+   };
+  arg = getarg("-bpl",argc,argv);
+  if (arg != -1)
+   bars_per_line = readnum(argv[arg]);
+  else {
+       bars_per_line=1;
+   };
+
+
   extracta = (getarg("-xa", argc, argv) != -1);
   guessa = (getarg("-ga", argc, argv) != -1);
+  guessu = (getarg("-gu", argc, argv) != -1);
+  guessk = (getarg("-gk", argc, argv) != -1);
   keep_short = (getarg("-s", argc, argv) != -1);
   summary = getarg("-sum",argc,argv); 
-  swallow_rests = (getarg("-sr", argc, argv) != -1);
+  swallow_rests = (getarg("-sr",argc,argv) != -1);
+  obpl = getarg("-obpl",argc,argv);
+  if (obpl>= 0) bars_per_line=1;
   if ((asig*4)/bsig >= 3) {
     unitlen =8;
   } else {
@@ -1397,9 +1936,13 @@ int argc;
     if (keysig<-6) keysig = 12 - ((-keysig)%12);
     if (keysig>6)  keysig = keysig%12;
     if (keysig>6)  keysig = keysig - 12;
+    ksig_set = 1;
   } else {
     keysig = -50;
+    ksig_set = 0;
   };
+
+  if(guessk) ksig_set=1;
 
   arg = getarg("-o",argc,argv);
   if ((arg != -1) && (arg < argc))  {
@@ -1419,44 +1962,72 @@ int argc;
   };
   if ((arg != -1) && (arg < argc)) {
     F = efopen(argv[arg],"rb");
-    fprintf(outhandle,"%% input file %s\n", argv[arg]);  
+/*    fprintf(outhandle,"%% input file %s\n", argv[arg]); */
   } else {
-    printf("midi2abc version 2.4\n  usage :\n");
-    printf("midi2abc <options>\n");
+    printf("midi2abc version 2.69\n  usage :\n");
+    printf("midi2abc filename <options>\n");
     printf("         -a <beats in anacrusis>\n");
     printf("         -xa  extract anacrusis from file ");
     printf("(find first strong note)\n");
     printf("         -ga  guess anacrusis (minimize ties across bars)\n");
+    printf("         -gk  guess key signature \n");
+    printf("         -gu  guess xunit from note duration statistics\n");
     printf("         -m <time signature>\n");
-    printf("         -xm  extract time signature from file\n");
-    printf("         -xl  extract absolute note lengths from file\n");
     printf("         -b <bars wanted in output>\n");
     printf("         -Q <tempo in quarter-notes per minute>\n");
     printf("         -k <key signature> -6 to 6 sharps\n");
     printf("         -c <channel>\n");
+    printf("         -u <number of midi pulses in abc time unit>\n");
     printf("         [-f] <input file>\n");
     printf("         -o <output file>\n");
     printf("         -s do not discard very short notes\n");
     printf("         -sr do not notate a short rest after a note\n");
     printf("         -sum summary\n");
     printf("         -nt do not look for triplets or broken rhythm\n");
-    printf(" Use only one of -xl, -b and -Q.\n");
-    printf("If none of these is present, the");
-    printf(" program attempts to guess a \n");
-    printf("suitable note length.\n");
+    printf("         -bpl <number> of bars printed on one line\n");
+    printf("         -bps <number> of bars to be printed on staff\n");
+    printf("         -obpl one bar per line\n");
+    printf(" None or only one of the options -gu, -b, -Q -u should\n");
+    printf(" be specified. If none are present, midi2abc will uses the\n");
+    printf(" the PPQN information in the MIDI file header to determine\n");
+    printf(" the suitable note length. This is the recommended method.\n");
+    printf(" The input filename is assumed to be any string not\n");
+    printf(" beginning with a - (hyphen). It may be placed anywhere.\n");
+
     exit(0);
   };
+  return arg;
+}
+
+
+int main(argc,argv)
+char *argv[];
+int argc;
+{
+  FILE *efopen();
+  int j;
+  int arg;
+  int voiceno;
+  int accidentals; /* used for printing summary */
+
+  arg = process_command_line_arguments(argc,argv);
+
+/* initialization */
   trackno = 0;
   track[trackno].texthead = NULL;
   track[trackno].texttail = NULL;
   initfuncs();
   playinghead = NULL;
   playingtail = NULL;
-  xunit = 0;
   karaoke = 0;
   Mf_getc = filegetc;
+
+/* parse MIDI file */
   mfread();
+
   fclose(F);
+
+/* count MIDI tracks with notes */
   maintrack = 0;
   while ((track[maintrack].notes == 0) && (maintrack < trackcount)) {
     maintrack = maintrack + 1;
@@ -1464,60 +2035,97 @@ int argc;
   if (track[maintrack].notes == 0) {
     fatal_error("MIDI file has no notes!");
   };
-  /* compute dtnext for each note */
+
+/* compute dtnext for each note */
   for (j=0; j<trackcount; j++) {
     postprocess(j);
   };
+
+/* print abc header block */
   fprintf(outhandle,"X: 1\n"); 
-  fprintf(outhandle,"T: \n"); 
-  fprintf(outhandle,"M: %d/%d\n", asig, bsig);
-  fprintf(outhandle,"L: 1/%d\n", unitlen); 
-  barsize = asig*unitlen/bsig;
+  fprintf(outhandle,"T: from %s\n",argv[arg]); 
+  fprintf(outhandle,"M: %d/%d\n", header_asig, header_bsig);
+  fprintf(outhandle,"L: 1/%d\n", header_unitlen); 
+  barsize = 2*header_asig*header_unitlen/header_bsig;
+
+/* compute xunit size for -Q -b options */
   if (Qval != 0) {
     xunit = mf_sec2ticks((60.0*4.0)/((float)(Qval*unitlen)), division, tempo);
   };
   if (bars > 0) {
-    xunit = (int) (track[maintrack].notes/(bars*barsize));
+    xunit = (int) ((float) track[maintrack].tracklen*2/(float) (bars*barsize));
+    /* we multiply by 2 because barsize is in half unitlen. */
   };
-  if (xunit == 0) {
+
+/* estimate xunit if not set or if -gu runtime option */
+  if (xunit == 0 || guessu) {
     guesslengths(maintrack);
   };
+
+/* output Q: (tempo) to abc file */
   printQ();
-  if(summary > 0) printf("xunit is set to %d clock ticks\n",xunit);
+
+/* Quantize note lengths of all tracks */
   for (j=0; j<trackcount; j++) {
     quantize(j, xunit);
   };
+
+/* Estimate anacrusis if requested. Otherwise it is set by       */
+/* user or set to 0.                                             */
   if (extracta) {
-    anacrusis = findana(maintrack, barsize*2);
+    anacrusis = findana(maintrack, barsize);
     fprintf(outhandle,"%%beats in anacrusis = %d\n", anacrusis);
   };
   if (guessa) {
-    anacrusis = guessana(barsize*2);
+    anacrusis = guessana(barsize);
     fprintf(outhandle,"%%beats in anacrusis = %d\n", anacrusis);
   };
-  if (keysig == -50) {
-    keysig = findkey(maintrack);
-  };
-  setupkey(keysig);
-  /* scannotes(maintrack); */
+
+/* If key signature is not known find the best one.              */
+  if (keysig == -50 && gotkeysig ==0 || guessk) {
+       keysig = findkey(maintrack);
+       if (summary>0) printf("Best key signature = %d flats/sharps\n",keysig);
+       }
+       if (gotkeysig == 0) header_keysig = keysig;
+       setupkey(header_keysig);
+
+/* scannotes(maintrack); For debugging */
+
+/* Convert each track to abc format and print */
   if (trackcount > 1) {
     voiceno = 1;
     for (j=0; j<trackcount; j++) {
       freshline();
       if (track[j].notes > 0) {
         fprintf(outhandle,"V:%d\n", voiceno);
+	if (track[j].drumtrack) fprintf(outhandle,"%%%%MIDI channel 10\n");
         voiceno = voiceno + 1;
-        if (track[j].drumtrack) {
-          fprintf(outhandle, "%%%%MIDI channel 10\n");
-        };
       };
-      printtrack(j, barsize*2, anacrusis);
+      printtrack(j,anacrusis);
     };
   } else {
-    printtrack(maintrack, barsize*2, anacrusis);
+    printtrack(maintrack, anacrusis);
   };
-  /* scannotes(maintrack); */
-  /* free up data structures */
+
+  /* scannotes(maintrack); for debugging */
+
+/* output report if requested */
+  if(summary>0) {
+   accidentals = keysig;
+   if (accidentals <0 )
+     {accidentals = -accidentals;
+     printf("Using key signature: %d flats\n", accidentals);
+     }
+   else
+     printf("Using key signature : %d sharps\n", accidentals);
+   printf("Using an anacrusis of %d beats\n",anacrusis);
+   printf("Using unit length : 1/%d\n",unitlen);
+   printf("Using %d pulses per unit length (xunit).\n",xunit);
+   printf("Producing %d bars of output.\n",maxbarcount);
+   }
+
+
+/* free up data structures */
   for (j=0; j< trackcount; j++) {
     struct listx* this;
     struct listx* x;
@@ -1543,276 +2151,4 @@ int argc;
   return(0);
 }
 
-FILE *
-efopen(name,mode)
-char *name;
-char *mode;
-{
-    FILE *f;
 
-    if ( (f=fopen(name,mode)) == NULL ) {
-      char msg[80];
-
-      sprintf(msg,"Error - Cannot open file %s",name);
-      fatal_error(msg);
-    }
-    return(f);
-}
-
-int error(s)
-char *s;
-{
-    fprintf(stderr,"Error: %s\n",s);
-}
-
-/* The following C routines are required by midifilelib.  */
-/* They specify the action to be taken when various items */
-/* are encountered in the MIDI.                           */
-
-int txt_header(xformat,ntrks,ldivision)
-int xformat, ntrks, ldivision;
-{
-    division = ldivision; 
-    format = xformat;
-    if (format != 0) {
-      fprintf(outhandle,"%% format %d file %d tracks\n", format, ntrks);
-    };
-}
-
-int txt_trackstart()
-{
-  laston = 0L;
-  track[trackno].notes = 0;
-  track[trackno].head = NULL;
-  track[trackno].tail = NULL;
-  track[trackno].texthead = NULL;
-  track[trackno].texttail = NULL;
-  track[trackno].tracklen = Mf_currtime;
-  track[trackno].drumtrack = 0;
-}
-
-int txt_trackend()
-{
-  /* check for unfinished notes */
-  if (playinghead != NULL) {
-    printf("Error in MIDI file - notes still on at end of track!\n");
-  };
-  track[trackno].tracklen = Mf_currtime - track[trackno].tracklen;
-  trackno = trackno + 1;
-  trackcount = trackcount + 1;
-}
-
-int txt_noteon(chan,pitch,vol)
-int chan, pitch, vol;
-{
-  if ((xchannel == -1) || (chan == xchannel)) {
-    if (vol != 0) {
-      addnote(pitch, chan, vol);
-    } else {
-      notestop(pitch, chan);
-    };
-  };
-}
-
-int txt_noteoff(chan,pitch,vol)
-int chan, pitch, vol;
-{
-  if ((xchannel == -1) || (chan == xchannel)) {
-    notestop(pitch, chan);
-  };
-}
-
-int txt_pressure(chan,pitch,press)
-int chan, pitch, press;
-{
-}
-
-int txt_parameter(chan,control,value)
-int chan, control, value;
-{
-}
-
-int txt_pitchbend(chan,msb,lsb)
-int chan, msb, lsb;
-{
-}
-
-int txt_program(chan,program)
-int chan, program;
-{
-/*
-  sprintf(textbuff, "%%%%MIDI program %d %d",
-         chan+1, program);
-*/
-  sprintf(textbuff, "%%%%MIDI program %d", program);
-  addtext(textbuff);
-}
-
-int txt_chanpressure(chan,press)
-int chan, press;
-{
-}
-
-int txt_sysex(leng,mess)
-int leng;
-char *mess;
-{
-}
-
-int txt_metamisc(type,leng,mess)
-int type, leng;
-char *mess;
-{
-}
-
-int txt_metaspecial(type,leng,mess)
-int type, leng;
-char *mess;
-{
-}
-
-int txt_metatext(type,leng,mess)
-int type, leng;
-char *mess;
-{ 
-  static char *ttype[] = {
-    NULL,
-    "Text Event",        /* type=0x01 */
-    "Copyright Notice",    /* type=0x02 */
-    "Sequence/Track Name",
-    "Instrument Name",    /* ...     */
-    "Lyric",
-    "Marker",
-    "Cue Point",        /* type=0x07 */
-    "Unrecognized"
-  };
-  int unrecognized = (sizeof(ttype)/sizeof(char *)) - 1;
-  unsigned char c;
-  int n;
-  char *p = mess;
-  char *buff;
-  char buffer2[BUFFSIZE];
-
-  if ((type < 1)||(type > unrecognized))
-      type = unrecognized;
-  buff = textbuff;
-  for (n=0; n<leng; n++) {
-    c = *p++;
-    if (buff - textbuff < BUFFSIZE - 6) {
-      sprintf(buff, 
-           (isprint(c)||isspace(c)) ? "%c" : "\\0x%02x" , c);
-      buff = buff + strlen(buff);
-    };
-  }
-  if (strncmp(textbuff, "@KMIDI KARAOKE FILE", 14) == 0) {
-    karaoke = 1;
-  } else {
-    if ((karaoke == 1) && (*textbuff != '@')) {
-      addtext(textbuff);
-    } else {
-      if (leng < BUFFSIZE - 3) {
-        sprintf(buffer2, "%%%s", textbuff);
-        addtext(buffer2);
-      };
-    };
-  };
-}
-
-int txt_metaseq(num)
-int num;
-{  
-  sprintf(textbuff, "%%Meta event, sequence number = %d",num);
-  addtext(textbuff);
-}
-
-int txt_metaeot()
-/* Meta event, end of track */
-{
-}
-
-int txt_keysig(sf,mi)
-char sf, mi;
-{
-  int accidentals;
-  sprintf(textbuff, 
-         "%% MIDI Key signature, sharp/flats=%d  minor=%d",
-          (int) sf, (int) mi);
-  addtext(textbuff);
-  if (summary <= 0) return;
-  accidentals = (int) sf;
-  if (accidentals <0 )
-    {accidentals = -accidentals;
-     printf("key signature: %d flats\n", accidentals);
-    }
-  else
-     printf("key signature : %d sharps\n", accidentals);
-}
-
-int txt_tempo(ltempo)
-long ltempo;
-{
-    tempo = ltempo;
-}
-
-int txt_timesig(nn,dd,cc,bb)
-int nn, dd, cc, bb;
-{
-  int denom = 1;
-  while ( dd-- > 0 )
-    denom *= 2;
-  sprintf(textbuff, 
-          "%% Time signature=%d/%d  MIDI-clocks/click=%d  32nd-notes/24-MIDI-clocks=%d", 
-    nn,denom,cc,bb);
-  addtext(textbuff);
-  if (summary>0) printf("Time signature = %d/%d\n",nn,denom);
-  if (extractm) {
-    asig = nn;
-    bsig = denom;
-    if ((asig*4)/bsig >= 3) {
-      unitlen =8;
-    } else {
-      unitlen = 16;
-    };
-  };
-  if (extractl) {
-    xunit = (division*bb*4)/(8*unitlen);
-  };
-}
-
-
-int txt_smpte(hr,mn,se,fr,ff)
-int hr, mn, se, fr, ff;
-{
-}
-
-int txt_arbitrary(leng,mess)
-char *mess;
-int leng;
-{
-}
-
-void initfuncs()
-{
-    Mf_error = error;
-    Mf_header =  txt_header;
-    Mf_trackstart =  txt_trackstart;
-    Mf_trackend =  txt_trackend;
-    Mf_noteon =  txt_noteon;
-    Mf_noteoff =  txt_noteoff;
-    Mf_pressure =  txt_pressure;
-    Mf_parameter =  txt_parameter;
-    Mf_pitchbend =  txt_pitchbend;
-    Mf_program =  txt_program;
-    Mf_chanpressure =  txt_chanpressure;
-    Mf_sysex =  txt_sysex;
-    Mf_metamisc =  txt_metamisc;
-    Mf_seqnum =  txt_metaseq;
-    Mf_eot =  txt_metaeot;
-    Mf_timesig =  txt_timesig;
-    Mf_smpte =  txt_smpte;
-    Mf_tempo =  txt_tempo;
-    Mf_keysig =  txt_keysig;
-    Mf_seqspecific =  txt_metaspecial;
-    Mf_text =  txt_metatext;
-    Mf_arbitrary =  txt_arbitrary;
-}

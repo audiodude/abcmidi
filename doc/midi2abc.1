@@ -1,0 +1,172 @@
+.TH MIDI2ABC 1 "26 October 2003"
+.SH NAME
+\fBmidi2abc\fP \- program to convert MIDI format files to abc notation
+.SH SYNOPSIS
+midi2abc -f \fIinfile\fP [-xa] [-ga]
+[-a \fIacbeats\fP] [-m \fItime signature\fP] 
+[-gu] [-b \fIbars\fP] [-Q \fItempo\fP] [-u \fipulses\fp]
+[-k \fIkey\fP] [-c \fIchannel\fP] [-obpl] [-bpl \fibars\fp] [-bps \fpbars\fp]
+[-o \fIfilename\fP] [-s] [-sr] [-sum] [-nt] 
+.SH DESCRIPTION
+\fImidi2abc\fP takes a MIDI format file and converts it to something as close
+as possible to abc text format. The user then has to add text fields not
+present in the MIDI header and possibly tidy up the abc note output.
+.PP
+The output of midi2abc is printed to the screen. To save it to a file, use
+the redirection operator, (e.g. \fImidi2abc -f file.mid > file.abc\fP) or
+specify the output file using the -o option.
+.PP
+Use only one or none of the options -u -gu, -b and -Q.  If none 
+of these is present, the program will use the PPQN information 
+in the MIDI header to compute the suitable note length.
+For most MIDI files on the web, it is recommended to rely on the MIDI
+header information and not use any of the options other than
+the formatting options.
+.PP
+The program will extract the time signature infromation from the MIDI file
+if it is present. Otherwise it will assume 4/4 or you could specify it with
+-m. option. 
+.PP
+If the tune has an anacrusis, you can use either the -ga or -xa option to estimate the its length. Alternatively, you can specify its value using the -a
+option. The anacrusis is specified in half unit lengths, where the unit
+length is defined by the L: field. For example if L: 1/8, then a
+quarter note would be indicated by the value 4, (4 1/16 units). 
+.SS OPTIONS
+.TP
+.B -a \fIacbeats\fp
+where acbeats specifies the anacrusis in half unit lengths. 
+.TP
+.B -xa
+extract the anacrusis from file by finding the first strong note
+.TP
+.B -ga
+guess the anacrusis by minimizing the number of ties across bars
+.TP
+.B -m \fItime signature\fP
+time signature
+.TP
+.B -b \fIbars\fP
+number of bars wanted in output 
+.TP
+.B -Q \fItempo\fP
+tempo in quarter-notes per minute
+.TP
+.B -u \fipulses\fP
+Allows you to specify directly the number of midi pulses per
+abc time unit.
+.TP
+.B -gu
+Tells midi2abc to estimate the number of midi pulses per abc
+time unit from the note duration or spacing in the MIDI file.
+.TP
+.B -gk
+Tells midi2abc to guess the key signature by minimizing
+the number of accidentals even if the key signature is
+already specified in the MIDI file. By default the key
+signature is the one specified in the MIDI file.
+If it is not specified, then the program guesses the
+key signature by minimizing accidentals.
+.TP
+.B -k \fIkey\fP
+key signature: -6 to 6 sharps.
+.TP
+.B -c \fIchannel\fP
+select only this midi channel.
+.TP
+.B -f \fIinfile\fP
+input file in midi format
+.TP
+.B -o \fIoutput file\fP
+specifies the output abc file name.
+.TP
+.B -s
+do not discard very short notes.
+.TP
+.B -sr
+do not notate a short rest after a note.
+.TP
+.B -sum
+print a short summary of the input midi file.
+.TP
+.B -nt
+do not look for triplets or broken rhythm
+.TP
+.B -obpl
+Print only one bar per line instead of 4. For complex music this
+improves the readability and avoids some problems with some abc
+to postscript converters. This option is deprecated.
+.TP
+.B -bpl \finbars\fP
+Print nbars of music on every line followed by a backslash.
+.TP
+.B -bps \finbars\fP
+When nbars have been printed (including those lines joined by
+a backslash continuation) go to a new line (with no backslash).
+
+
+.SS FEATURES
+* The key is chosen so as to minimize the number of accidentals. 
+Alternatively, the user can specify the key numerically (a positive number
+is the number of sharps, a negative number is minus the number of flats).
+.PP
+* Note length can be set by specifiying the total number of bars or the 
+tempo of the piece. Alternatively the note length can be read from the file.
+However, by default it is deduced in a heuristic manner from the inter-note 
+distances.  This means that you do not have to use the MIDI clock as a 
+metronome when playing in a tune from a keyboard. 
+.PP
+* Barlines are automatically inserted. The user specifies the number of
+measures in the anacrusis before the first barline and the time signature.
+.PP
+* The program can guess how the length of the anacrusis,
+either by looking for the first strong note or minimizing the number of
+notes split by a tie across a barline.
+.PP
+* Where a note extends beyond a bar break, it is split into two tied notes.
+.PP
+* The output has 4 bars per line.
+.PP
+* Enough accidental signs are put in the music to ensure that no pitch
+errors occur if a barline is added or deleted.
+.PP
+* The program attempts to group notes sensibly in each bar.
+.PP
+* Triplets and broken rhythm (a>b) are supported.
+.PP
+* Chords are identified.
+.PP
+* Text information from the original MIDI file is included as comments.
+.PP
+* The -c option can be used to select only 1 MIDI channel. Events on 
+other channels are ignored.
+.SS LIMITATIONS
+midi2abc does not ...
+.PP
+* Supply tune title, composer or any other field apart from X: , K:, Q:, M:
+and L: - these must be added by hand afterwards, though they may have been
+included in the text of the MIDI file.
+.PP
+* Support duplets, quadruplets, other esoteric features.
+.PP
+* Support mid-tune key or time signature changes.
+.PP
+* Deduce repeats. The output is just the notes in the input file.
+.PP
+* Recover an abc tune as supplied to abc2midi. However, if you want to
+do this, "midi2abc  -xa -f file.mid" comes close.
+.SH "SEE ALSO"
+abc2ps(1), abc2midi(1), abc2abc(1)
+.SH AUTHOR
+James Allwright <J.R.Allwright@westminster.ac.uk>
+.SH SUPPORTED
+Seymour Shlien <seymour.shlien@crc.ca>
+.SH VERSION
+This man page describes midi2abc version 2.69 from November 12 2003.
+.SH COPYRIGHT
+Copyright 1999 James Allwright
+.PP
+midi2abc is supplied "as is" without any warranty. It
+is free software and can be used, copied, modified and
+distributed without fee under the terms of the GNU General 
+Public License. 
+

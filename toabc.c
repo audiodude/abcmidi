@@ -434,7 +434,7 @@ char** filename;
   int targ, narg;
 
   if ((getarg("-h", argc, argv) != -1) || (argc < 2)) {
-    printf("abc2abc version 1.19\n");
+    printf("abc2abc version 1.24\n");
     printf("Usage: abc2abc <filename> [-s] [-n X] [-b] [-r] [-e] [-t X]\n");
     printf("       [-u] [-d] [-v] [-V X] [-X n]\n");
     printf("  -s for new spacing\n");
@@ -1024,10 +1024,15 @@ int num;
   return(voice_index);
 }
 
-void event_voice(n, s)
+void event_voice(n, s, gotclef, gotoctave, gottranspose,
+	       	clefname, octave, transpose)
 int n;
 char *s;
+int gotclef, gotoctave, gottranspose;
+char *clefname;
+int octave, transpose;
 {
+  char output[32];
   if (xinbody) {
     next_voice = setvoice(n);
   };
@@ -1046,8 +1051,20 @@ char *s;
   }; 
   if (strlen(s) == 0) {
     emit_int_sprintf("V:%d", n);
+    if (gotclef) {sprintf(output," clef=%s",clefname);
+	    emit_string(output);}
+    if (gotoctave) {sprintf(output," octave=%d",octave);
+	    emit_string(output);}
+    if (gottranspose) {sprintf(output," transpose=%d",transpose);
+	    emit_string(transpose);}
   } else {
     emit_int_sprintf("V:%d ", n);
+    if (gotclef) {sprintf(output," clef=%s",clefname);
+	    emit_string(output);}
+    if (gotoctave) {sprintf(output," octave=%d",octave);
+	    emit_string(output);}
+    if (gottranspose) {sprintf(output," transpose=%d",transpose);
+	    emit_string(transpose);}
     emit_string(s);
   };
   inmusic = 0;
@@ -1275,13 +1292,15 @@ int a, b;
   };
 }
 
-void event_rest(n,m)
-int n, m;
+void event_rest(decorators,n,m,type)
+int n, m, type;
+int decorators[DECSIZE];
 {
   struct fract newlen;
 
   inmusic = 1;
-  emit_string("z");
+  if( type == 1) emit_string("x");
+  else emit_string("z");
   newlen.num = n * lenfactor.num;
   newlen.denom = m * lenfactor.denom;
   reduce(&newlen.num, &newlen.denom);

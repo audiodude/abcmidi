@@ -62,10 +62,15 @@ int pagenumbering;
 int separate_voices;
 int print_xref;
 int landscape;
+int barnums,nnbars;
 extern int gchords_above;
+extern int decorators_passback[DECSIZE]; /* a kludge for passing
+information from the event_handle_instruction to parsenote
+in parseabc.c */
 
 enum linestattype {fresh, midmusic, endmusicline, postfield};
 enum linestattype linestat;
+
 
 void setfract(f, a, b)
 struct fract* f;
@@ -369,7 +374,7 @@ static void closegracebeam(struct voice* v)
 }
 
 static void insertnote(struct feature* chordplace, struct feature* newfeature)
-/* place NOTE in pitch order within chord */
+/* place NOTE in decreasing pitch order within chord */
 {
   struct note* n;
   struct note* newnote;
@@ -381,6 +386,7 @@ static void insertnote(struct feature* chordplace, struct feature* newfeature)
   previous = chordplace;
   f = chordplace->next;
   foundplace = 0;
+  n = NULL;
   while ((f != NULL)&&(f->type==NOTE)&&(foundplace == 0)) {
     n = f->item;
     if (newnote->y > n->y) {
@@ -390,6 +396,19 @@ static void insertnote(struct feature* chordplace, struct feature* newfeature)
       f = f->next;
     };
   };
+  /* printvoiceline in drawtune.c expects the gchord or
+   * instructions to be associated with the first note in
+   * chord. If the notes are reordered then we need
+   * to move these fields.
+   * if previous == chordplace then move n->gchords and
+   * n->instructions to newnote->gchords and newnote->instructions
+   */
+  if (previous == chordplace && n != NULL) {
+	  newnote->gchords = n->gchords;
+	  newnote->instructions = n->instructions;
+	  n->gchords = NULL;
+	  n->instructions = NULL;
+  }
   newfeature->next = previous->next;
   previous->next = newfeature;
   if (newfeature->next == NULL) {
@@ -1046,6 +1065,7 @@ char** filename;
   int filearg;
   int refmatch;
   int papsize, margins, newscale;
+  int ier;
 
   if (getarg("-d", argc, argv) != -1) {
     debugging = 1;
@@ -1095,6 +1115,11 @@ char** filename;
   } else {
     setpagesize("");
   };
+  barnums = getarg("-k",argc,argv);
+  ier = 0;
+  if ((barnums != -1) && (argc > barnums)) ier = sscanf(argv[barnums],"%d",&nnbars);
+  if ((barnums != -1) && (ier <1)) nnbars = 1;
+
   refmatch = getarg("-e", argc, argv);
   if (refmatch == -1) {
     *matchstring = '\0';
@@ -1107,7 +1132,7 @@ char** filename;
     };
   };
   if ((getarg("-h", argc, argv) != -1) || (argc < 2)) {
-    printf("yaps version 1.12\n");
+    printf("yaps version 1.20\n");
     printf("Usage:  yaps <abc file> [<options>]\n");
     printf("  possible options are -\n");
     printf("  -d            : debug - display data structure\n");
@@ -1119,6 +1144,7 @@ char** filename;
     printf("  -M XXXxYYY    : set margin sizes in points\n");
     printf("     28.3 points = 1cm, 72 points = 1 inch\n");
     printf("  -N            : add page numbering\n");
+    printf("  -k [nn]       : number every nn bars\n");
     printf("  -o <filename> : specify output file\n");
     printf("  -P ss         : paper size; 0 is A4, 1 is US Letter\n");
     printf("     or XXXxYYY to set size in points\n");
@@ -1677,9 +1703,13 @@ char* s;
   };
 }
 
-void event_voice(n, s)
+void event_voice(n, s, gotclef, gotoctave,gottranspose,
+	       	clefname, octave, transpose)
 int n;
 char *s;
+int gotclef,gotoctave,gottranspose;
+char *clefname;
+int transpose,octave;
 /* A voice field (V: ) has been encountered */
 {
   if (xinbody) {
@@ -1986,12 +2016,12 @@ int modmul[7];
     };
     xinbody = 1;
     xinhead = 0;
-    start_body();
     setvoice(1);
+    start_body();
   };
 }
 
-void event_octave(int num)
+void event_octave(int num, int local)
 /* deals with the special command I:octave=N */
 {
   if (xinhead) {
@@ -2023,7 +2053,7 @@ int octave, transpose, gotoctave, gottranspose;
     };
   };
   if (gotoctave) {
-    event_octave(octave);
+    event_octave(octave,0);
   };
 }
 
@@ -2073,7 +2103,8 @@ char* playonrep_list;
     event_warning("Bar line not permitted within chord");
     return;
   };
-  addfeature(type, NULL);
+  checkbar(type); /* increment bar number if bar complete */
+  addfeature(type, (void*)cv->barno); /* save bar number */
   switch(type) {
   case SINGLE_BAR:
     break;
@@ -2113,7 +2144,6 @@ char* playonrep_list;
     cv->expect_repeat = 1;
     break;
   };
-  checkbar(type);
   if ((playonrep_list != NULL) && (strlen(playonrep_list) > 0)) {
     event_playonrep(playonrep_list);
   };
@@ -2249,7 +2279,10 @@ char* s;
     cv->gchords_pending = newlist();
   };
   if (*s == '_') {
-    addtolist(cv->instructions_pending, addstring(s+1));
+  if (cv->instructions_pending == NULL) {
+    cv->instructions_pending = newlist();
+    };
+  addtolist(cv->instructions_pending, addstring(s+1));
   } else {
     addtolist(cv->gchords_pending, addstring(s));
   };
@@ -2264,6 +2297,20 @@ char* s;
   static char coda[3] = ":c";
  
   inst = s;
+  if (strcmp(s, "fermata") == 0)
+     {
+     decorators_passback[4] =1;
+/*   don't show !fermata!. Treat it like H in music line */
+     return;
+     }
+
+  if (strcmp(s, "trill") == 0)
+     {
+     decorators_passback[6] =1;
+/*   don't show !trill!. Treat it like T in music line */
+     return;
+     }
+
   if (strcmp(s, "segno") == 0) {
     inst = segno;
   };
@@ -2693,8 +2740,9 @@ int n, m, multi;
   };
 }
 
-void event_rest(n,m)
-int n, m;
+void event_rest(decorators,n,m,type)
+int n, m,type;
+int decorators[DECSIZE];
 /* A rest has been encountered in the abc */
 {
   xevent_rest(n, m, 0);
@@ -2721,6 +2769,7 @@ int xoctave, n, m;
 
   nt = newnote(decorators, xaccidental, xmult, xnote, xoctave+cv->octaveshift, 
                n * cv->unitlen.num, m * cv->unitlen.denom);
+  nt->tuplenotes = cv->tuplenotes;
   noteplace = addfeature(NOTE, nt);
   cv->lastnote = noteplace;
   resolve_ties(noteplace);
@@ -2778,7 +2827,7 @@ char* value;
   };
   if (strcmp(key, "octave")==0) {
     num = readsnumf(value);
-    event_octave(num);
+    event_octave(num,0);
   };
 }
 

@@ -40,6 +40,7 @@
 extern struct tune thetune;
 extern int debugging;
 extern int pagenumbering;
+extern int barnums, nnbars;
 extern char outputname[256];
 extern char outputroot[256];
 extern int make_open();
@@ -2080,17 +2081,17 @@ static void notetext(struct note* n, int* tupleno, double x, struct feature* ft,
     };
   };
   fprintf(f, "\n");
-  if (n->instructions != NULL) {
+  if (n->instructions != NULL && spacing != NULL) {
     setfontstruct(&partsfont);
     showtext(n->instructions, x - ft->xleft, spacing->yinstruct, 
                (double)(partsfont.pointsize+partsfont.space));
   };
-  if (n->gchords != NULL) {
+  if (n->gchords != NULL && spacing != NULL) {
     setfontstruct(&gchordfont);
     showtext(n->gchords, x - ft->xleft, spacing->ygchord, 
               (double)(gchordfont.pointsize+gchordfont.space));
   };
-  if (n->syllables != NULL) {
+  if (n->syllables != NULL && spacing != NULL) {
     setfontstruct(&vocalfont);    
     showtext(n->syllables, x - ft->xleft, spacing->ywords, 
               (double)(vocalfont.pointsize + vocalfont.space));
@@ -2886,6 +2887,13 @@ static void blockline(struct voice* v, struct vertspacing** spacing)
   };
 }
 
+static void printbarnumber(double x, int n)
+{
+if (barnums <0 ) return;
+if (x + 15.0 > scaledwidth) return;
+fprintf(f, " %.1f %.1f (%d) bnum\n", x, 28.0, n); 
+}
+
 static void underbar(struct feature* ft)
 /* This is never normally called, but is useful as a debugging routine */
 /* shows width of a graphical element */
@@ -2969,17 +2977,21 @@ static int printvoiceline(struct voice* v)
     switch (ft->type) {
     case SINGLE_BAR: 
       fprintf(f, "%.1f bar\n", ft->x);
+      printbarnumber(ft->x, (int)ft->item);
       break;
     case DOUBLE_BAR: 
       fprintf(f, "%.1f dbar\n", ft->x);
+      printbarnumber(ft->x, (int)ft->item);
       inend = endrep(inend, endstr, xend, ft->x, spacing->yend);
       break;
     case BAR_REP: 
       fprintf(f, "%.1f fbar1 %.1f rdots\n", ft->x, ft->x+10);
+      printbarnumber(ft->x, (int)ft->item);
       inend = endrep(inend, endstr, xend, ft->x, spacing->yend);
       break;
     case REP_BAR: 
       fprintf(f, "%.1f rdots %.1f fbar2\n", ft->x, ft->x+10);
+      printbarnumber(ft->x, (int)ft->item);
       inend = endrep(inend, endstr, xend, ft->x, spacing->yend);
       break;
     case REP1: 
@@ -3002,6 +3014,7 @@ static int printvoiceline(struct voice* v)
       break;
     case BAR1: 
       fprintf(f, "%.1f bar\n", ft->x);
+      printbarnumber(ft->x, (int)ft->item);
       inend = endrep(inend, endstr, xend, ft->x - ft->xleft, spacing->yend);
       inend = 1;
       strcpy(endstr, "1");
@@ -3009,6 +3022,7 @@ static int printvoiceline(struct voice* v)
       break;
     case REP_BAR2: 
       fprintf(f, "%.1f rdots %.1f fbar2\n", ft->x, ft->x+10);
+      printbarnumber(ft->x, (int)ft->item);
       inend = endrep(inend, endstr, xend, ft->x - ft->xleft, spacing->yend);
       inend = 2;
       strcpy(endstr, "2");

@@ -1,27 +1,28 @@
 /* definitions for MIDI file parsing code */
+#include <stdio.h>
 extern int (*Mf_getc)();
-extern int (*Mf_header)();
-extern int (*Mf_trackstart)();
-extern int (*Mf_trackend)();
-extern int (*Mf_noteon)();
-extern int (*Mf_noteoff)();
-extern int (*Mf_pressure)();
-extern int (*Mf_parameter)();
-extern int (*Mf_pitchbend)();
-extern int (*Mf_program)();
-extern int (*Mf_chanpressure)();
-extern int (*Mf_sysex)();
-extern int (*Mf_metamisc)();
-extern int (*Mf_seqspecific)();
-extern int (*Mf_seqnum)();
-extern int (*Mf_text)();
-extern int (*Mf_eot)();
-extern int (*Mf_timesig)();
-extern int (*Mf_smpte)();
-extern int (*Mf_tempo)();
-extern int (*Mf_keysig)();
-extern int (*Mf_arbitrary)();
-extern int (*Mf_error)();
+extern void (*Mf_header)();
+extern void (*Mf_trackstart)();
+extern void (*Mf_trackend)();
+extern void (*Mf_noteon)();
+extern void (*Mf_noteoff)();
+extern void (*Mf_pressure)();
+extern void (*Mf_parameter)();
+extern void (*Mf_pitchbend)();
+extern void (*Mf_program)();
+extern void (*Mf_chanpressure)();
+extern void (*Mf_sysex)();
+extern void (*Mf_metamisc)();
+extern void (*Mf_seqspecific)();
+extern void (*Mf_seqnum)();
+extern void (*Mf_text)();
+extern void (*Mf_eot)();
+extern void (*Mf_timesig)();
+extern void (*Mf_smpte)();
+extern void (*Mf_tempo)();
+extern void (*Mf_keysig)();
+extern void (*Mf_arbitrary)();
+extern void (*Mf_error)();
 extern long Mf_currtime;
 extern int Mf_nomerge;
 
@@ -33,9 +34,26 @@ float mf_ticks2sec();
 long mf_sec2ticks();
 void mfwrite();
 void mfread();
+static int readtrack();
 int mf_write_meta_event();
 int mf_write_midi_event();
 void mf_write_tempo();
+static void readheader();
+void mferror();
+static void badbyte();
+static void metaevent();
+static void sysex();
+static void chanmessage();
+static void msginit();
+static void msgadd();
+static void biggermsg();
+static void mf_write_track_chunk();
+static void mf_write_header_chunk();
+static void WriteVarLen();
+static void write32bit();
+static void write16bit();
+static int msgleng();
+static int eputc();
 
 /* MIDI status commands most significant bit is 1 */
 #define note_off         	0x80

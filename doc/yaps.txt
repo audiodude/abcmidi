@@ -48,6 +48,7 @@ Usage:  yaps <abc file> [<options>]
   -M XXXxYYY    : set margin sizes in points
      28.3 points = 1cm, 72 points = 1 inch
   -N            : add page numbering
+  -k [NN]       : number every bar or every NN th bar
   -o <filename> : specify output file
   -P ss         : paper size; 0 is A4, 1 is US Letter
      or XXXxYYY to set size in points

@@ -60,12 +60,23 @@ extern char* strchr();
 #endif
 
 int lineno;
+static int parsing_started =0;
 static int parsing, slur;
 static int inhead, inbody;
 static int parserinchord;
 int chorddecorators[DECSIZE];
 char decorations[] = ".MLRH~Tuv";
 static char *abbreviation[SIZE_ABBREVIATIONS];
+
+static int voicecodes = 0;
+static char voicecode[16][30]; /*for interpreting V: string */
+
+int decorators_passback[DECSIZE];
+/* this global array is linked as an external to store.c and 
+ * yaps.tree.c and is used to pass back decorator information
+ * from event_instruction to parsenote.
+*/
+ 
 
 int* checkmalloc(bytes)
 /* malloc with error checking */
@@ -172,6 +183,7 @@ void parseron()
 {
   parsing = 1;
   slur = 0;
+  parsing_started = 1;
 }
 
 void parseroff()
@@ -202,6 +214,12 @@ char **p;
 {
   /* skip space and tab */
   while(((int)**p == ' ') || ((int)**p == TAB)) *p = *p + 1;
+}
+
+void skiptospace(p)
+char **p;
+{
+ while(((int)**p != ' ') && ((int)**p != TAB) && (int)**p != '\0') *p = *p +1;
 }
 
 int readnumf(num)
@@ -336,8 +354,9 @@ char **p;
 }
 
 
-int isclef(s)
+int isclef(s, gotoctave, octave)
 char* s;
+int *gotoctave, *octave;
 /* part of K: parsing - looks for a clef in K: field                 */
 /* format is K:string where string is treble, bass, baritone, tenor, */
 /* alto, mezzo, soprano or K:clef=arbitrary                          */
@@ -352,11 +371,26 @@ char* s;
   if (strncmp(s, "treble", 6) == 0) {
     gotclef= 1;
   };
+  if (strncmp(s, "treble+8", 8) == 0) {
+    gotclef= 1;
+    *gotoctave=1;
+    *octave =1;
+  };
+  if (strncmp(s, "treble-8", 8) == 0) {
+    gotclef= 1;
+    *gotoctave=1;
+    *octave = -1;
+  };
   if (strncmp(s, "baritone", 8) == 0) {
     gotclef= 1;
   };
   if (strncmp(s, "tenor", 5) == 0) {
     gotclef= 1;
+  };
+  if (strncmp(s, "tenor-8", 7) == 0) {
+    gotclef= 1;
+    *gotoctave=1;
+    *octave= -1;
   };
   if (strncmp(s, "alto", 4) == 0) {
     gotclef= 1;
@@ -442,6 +476,175 @@ char s2[];
   return(val);
 }
 
+static int stringcmp(s1, s2)
+/* case sensitive compare 2 strings */
+/* return 0 if equal   */
+/*        1 if s1 > s2 */
+/*       -1 if s1 > s2 */
+char s1[];
+char s2[];
+{
+  int i, val, done;
+
+  i = 0;
+  done = 0;
+  while (done == 0) {
+    if (s1[i] > s2[i]) {
+      val = 1;
+      done = 1;
+    } else {
+      if (s1[i] < s2[i]) {
+        val = -1;
+        done = 1;
+      } else {
+        if (s1[i] == '\0') {
+          val = 0;
+          done = 1;
+        } else {
+          i = i + 1;
+        };
+      };
+    };
+  };
+  return(val);
+}
+
+
+void init_voicecode()
+{
+int i;
+for (i=0;i<16;i++) voicecode[i][0] = 0;
+voicecodes =0;
+}
+
+void print_voicecodes()
+{
+int i;
+if (voicecodes == 0) return;
+printf("voice mapping:\n");
+for (i=0;i<voicecodes;i++)
+  {
+	if(i%4 == 3) printf("\n");
+	printf("%s  %d   ",voicecode[i],i+1);
+  }
+  printf("\n");
+}
+
+int interpret_voicestring(char *s)
+{
+/* if V: is followed  by a string instead of a number
+ * we check to see if we have encountered this string
+ * before. We assign the number associated with this
+ * string and add it to voicecode if it was not encountered
+ * before. If more than 16 distinct strings were encountered
+ * we report an error -1.
+*/
+int i;
+char code[32];
+char *c;
+c =readword(code,s);
+if (code[0] == '\0') return 0;
+if (voicecodes == 0) {strcpy(voicecode[voicecodes],code);
+	              voicecodes++;
+		      return voicecodes;
+                     }
+for (i=0;i<voicecodes;i++)
+  if(stringcmp(code,voicecode[i]) == 0) return (i+1);
+if ((voicecodes +1) > 15) return -1; 
+strcpy(voicecode[voicecodes],code);
+voicecodes++;	
+return voicecodes;
+}
+    
+/* The following three functions parseclefs, parsetranspose,
+ * parseoctave are used to parse the K: field which not
+ * only specifies the key signature but also other descriptors
+ * used for producing a midi file or postscript file.
+ *
+ * The char* word contains the particular token that
+ * is being interpreted. If the token can be understood,
+ * other parameters are extracted from char ** s and
+ * s is advanced to point to the next token.
+ */
+
+int parseclef(s,word,gotclef,clefstr,gotoctave,octave)
+char** s;
+char* word;
+int *gotclef;
+char *clefstr;
+int *gotoctave,*octave;
+/* extracts string clef= something */
+{
+int successful;
+skipspace(s);
+*s = readword(word, *s);
+successful = 0;
+if (casecmp(word, "clef") == 0) {
+     skipspace(s);
+     if (**s != '=') {
+        event_error("clef must be followed by '='");
+      } else {
+        *s = *s + 1;
+        skipspace(s);
+        *s = readword(clefstr, *s);
+        if (isclef(clefstr,gotoctave,octave)) {
+          *gotclef = 1;
+        };
+      };
+      successful = 1;
+    }
+else if (isclef(word,gotoctave,octave)) {
+      *gotclef = 1;
+      strcpy(clefstr, word);
+      successful = 1;
+    };
+return successful;
+} 
+
+
+int parsetranspose(s,word,gottranspose,transpose)
+/* parses string transpose= number */
+char** s;
+char* word;
+int *gottranspose;
+int *transpose;
+{
+if  (casecmp(word, "transpose") != 0) return 0;
+skipspace(s);
+if (**s != '=') {
+   event_error("transpose must be followed by '='");
+   } else {
+      *s = *s + 1;
+      skipspace(s);
+      *transpose = readsnump(s);
+      *gottranspose = 1;
+      };
+  return  1;
+};
+
+
+int parseoctave(s,word,gotoctave,octave)
+/* parses string octave= number */
+char** s;
+char* word;
+int *gotoctave;
+int *octave;
+{
+if  (casecmp(word, "octave") != 0) return 0;
+skipspace(s);
+if (**s != '=') {
+   event_error("octave must be followed by '='");
+   } else {
+       *s = *s + 1;
+       skipspace(s);
+       *octave = readsnump(s);
+       *gotoctave = 1;
+       };
+  return 1;
+};
+
+
+
 int parsekey(str)
 /* parse contents of K: field */
 /* this works by picking up a strings and trying to parse them */
@@ -462,6 +665,7 @@ char* str;
   char modmap[7];
   int modmul[7];
   int i, j;
+  int cgotoctave,coctave;
   static char *key = "FCGDAEB";
   static char *mode[10] = {"maj", "min", "m", 
                        "aeo", "loc", "ion", "dor", "phr", "lyd", "mix"};
@@ -471,71 +675,33 @@ char* str;
                           1, 0, 0, 0, 0, 0, 0};
 
   s = str;
-  octave = 0;
   transpose = 0;
-  gotkey = 0;
-  gotclef = 0;
-  gotoctave = 0;
   gottranspose = 0;
+  octave = 0;
+  gotkey = 0;
+  gotoctave = 0;
+  gotclef=0;
+  cgotoctave=0;
+  coctave=0;
   for (i=0; i<7; i++) {
     modmap[i] = ' ';
     modmul[i] = 1;
   };
   while (*s != '\0') {
-    skipspace(&s);
-    s = readword(word, s);
-    parsed = 0;
-    if (casecmp(word, "clef") == 0) {
-      skipspace(&s);
-      if (*s != '=') {
-        event_error("clef must be followed by '='");
-      } else {
-        s = s + 1;
-        skipspace(&s);
-        s = readword(clefstr, s);
-        if (strlen(clefstr) > 0) {
-          gotclef = 1;
-        };
-      };
-      parsed = 1;
-    };
-    if ((parsed == 0) && (casecmp(word, "transpose") == 0)) {
-      skipspace(&s);
-      if (*s != '=') {
-        event_error("transpose must be followed by '='");
-      } else {
-        s = s + 1;
-        skipspace(&s);
-        transpose = readsnump(&s);
-        gottranspose = 1;
-      };
-      parsed = 1;
-    };
-    if ((parsed == 0) && (casecmp(word, "octave") == 0)) {
-      skipspace(&s);
-      if (*s != '=') {
-        event_error("octave must be followed by '='");
-      } else {
-        s = s + 1;
-        skipspace(&s);
-        octave = readsnump(&s);
-        gotoctave = 1;
-      };
-      parsed = 1;
-    };
-    if ((parsed == 0) && (isclef(word))) {
-      gotclef = 1;
-      strcpy(clefstr, word);
-      parsed = 1;
-    };
+    parsed = parseclef(&s,word,&gotclef,clefstr,&cgotoctave,&coctave);
+
+    if (!parsed) parsed = parsetranspose(&s,word,&gottranspose,&transpose);
+
+    if (!parsed) parsed = parseoctave(&s,word,&gotoctave,&octave);
+
     if ((parsed == 0) && (casecmp(word, "Hp") == 0)) {
       sf = 2;
       minor = 0;
       gotkey = 1;
       parsed = 1;
     };
-    if ((parsed == 0) && ((word[0] >= 'A') && (word[0] <= 'G'))) {
 
+    if ((parsed == 0) && ((word[0] >= 'A') && (word[0] <= 'G'))) {
       gotkey = 1;
       parsed = 1;
       /* parse key itself */
@@ -615,10 +781,56 @@ char* str;
       event_warning(msg);
     };
   };
+  if (cgotoctave) {gotoctave=1; octave=coctave;}
   event_key(sf, str, minor, modmap, modmul, gotkey, gotclef, clefstr,
             octave, transpose, gotoctave, gottranspose);
   return(gotkey);
 }
+
+
+static void parsevoice(s)
+char *s;
+{
+int num;
+int gotclef, gotkey, gotoctave, gottranspose;
+int transpose, octave;
+char clefstr[30];
+char word[30];
+int parsed;
+int coctave,cgotoctave;
+transpose = 0;
+gottranspose = 0;
+octave = 0;
+gotkey = 0;
+gotoctave = 0;
+gotclef = 0;
+cgotoctave=0;
+coctave=0;
+skipspace(&s);
+if ((*s >= '0') && (*s <= '9')) {
+  num = readnump(&s);
+  } else {
+  num = interpret_voicestring(s);
+  if(num == 0) event_error("No voice number or string in V: field");
+  if(num == -1) {event_error("More than 16 voices encountered in V: fields");
+    num ==0;}
+   skiptospace(&s);
+  };
+skipspace(&s);
+while (*s != '\0') {
+  parsed = parseclef(&s,word,&gotclef,clefstr,&cgotoctave,&coctave);
+  if (!parsed) parsed = parsetranspose(&s,word,&gottranspose,&transpose);
+  if (!parsed) parsed = parseoctave(&s,word,&gotoctave,&octave);
+  }
+if (cgotoctave) {gotoctave=1; octave=coctave;}
+event_voice(num, s,gotclef,gotoctave,gottranspose,clefstr,octave,transpose);
+/*
+if (gottranspose) printf("transpose = %d\n",transpose);
+ if (gotoctave) printf("octave= %d\n",octave);
+ if (gotclef) printf("clef= %s\n",clefstr);
+*/
+}
+
 
 static void parsenote(s)
 char **s;
@@ -634,7 +846,10 @@ char **s;
   mult = 1;
   accidental = ' ';
   note = ' ';
-  for (i = 0; i<DECSIZE; i++) decorators[i] = 0;
+  for (i = 0; i<DECSIZE; i++) {
+	  decorators[i] = decorators_passback[i];
+	  decorators_passback[i] = 0;
+          }
   while (strchr(decorations, **s) != NULL) {
     t = (int) strchr(decorations, **s) -  (int) decorations;
     decorators[t] = 1;
@@ -963,10 +1178,30 @@ char* field;
 {
   char* comment;
   char* place;
+  char* xplace;
   int iscomment;
   int foundkey;
 
-  if ((inbody) && (strchr("EIKLMPQTVwW", key) == NULL)) {
+  if (key == 'X')
+    {
+      int x;
+    
+      xplace =field;
+      skipspace(&xplace);
+      x = readnumf(xplace);
+      if (inhead) {
+        event_error("second X: field in header");
+      };
+      event_refno(x);
+      inhead = 1;
+      inbody = 0;
+      parserinchord = 0;
+      return;
+    };
+
+  if (parsing == 0) return;
+
+  if ((inbody) && (strchr("EIKLMPQTVdwW", key) == NULL)) {
     event_error("Field not allowed in tune body");
   };
   comment = field;
@@ -982,20 +1217,6 @@ char* field;
   place =field;
   skipspace(&place);
   switch (key) {
-  case 'X':
-    {
-      int x;
-    
-      x = readnumf(place);
-      if (inhead) {
-        event_error("second X: field in header");
-      };
-      event_refno(x);
-      inhead = 1;
-      inbody = 0;
-      parserinchord = 0;
-      break;
-    };
   case 'K':
     foundkey = parsekey(place);
     if (inhead || inbody) {
@@ -1051,20 +1272,8 @@ char* field;
     event_info(place);
     break;
   case 'V':
-    {
-      int num;
-
-      skipspace(&place);
-      if ((*place >= '0') && (*place <= '9')) {
-        num = readnump(&place);
-      } else {
-        num = 0;
-        event_error("No voice number in V: field");
-      };
-      skipspace(&place);
-      event_voice(num, place);
-      break;
-    };
+    parsevoice(place);
+    break;
   case 'Q':
     parse_tempo(place);
     break;
@@ -1118,6 +1327,9 @@ char* field;
   case 'w':
     preparse_words(place);
     break;
+  case 'd':
+    /* decoration line in abcm2ps */
+    break;
   default:
     event_field(key, place);
   };
@@ -1160,6 +1372,7 @@ char* field;
   int starcount;
   int i;
   char playonrep_list[80];
+  int decorators[DECSIZE];
 
   event_startmusicline();
   endchar = ' ';
@@ -1337,15 +1550,43 @@ char* field;
         parserinchord = 0;
         for (i = 0; i<DECSIZE; i++) chorddecorators[i] = 0;
         break;
+/*  hidden rest  */
+      case 'x':
+        {
+          int n, m;
+
+          p = p + 1;
+          readlen(&n, &m, &p);
+/* in order to handle a fermata applied to a rest we must
+ * pass decorators to event_rest.
+ */
+          for (i = 0; i<DECSIZE; i++) {
+  	    decorators[i] = decorators_passback[i];
+	    decorators_passback[i] = 0;
+            }
+          event_rest(decorators,n, m, 1);
+          break;
+        };
+/*  regular rest */
       case 'z':
         {
           int n, m;
 
           p = p + 1;
           readlen(&n, &m, &p);
-          event_rest(n, m);
+/* in order to handle a fermata applied to a rest we must
+ * pass decorators to event_rest.
+ */
+          for (i = 0; i<DECSIZE; i++) {
+  	    decorators[i] = decorators_passback[i];
+	    decorators_passback[i] = 0;
+            }
+          event_rest(decorators,n, m, 0);
           break;
         };
+      case 'y': /* used by Barfly to put space */
+        p = p + 1;
+        break;
       case 'Z':
         {
           int n, m;
@@ -1480,7 +1721,7 @@ char* line;
 {
   char *p, *q;
 
-  /* printf("%d parsing : %s\n", lineno, line); */
+/*  printf("%d parsing : %s\n", lineno, line);  */
   p = line;
   skipspace(&p);
   if (strlen(p) == 0) {
@@ -1499,7 +1740,7 @@ char* line;
     parse_precomment(p+1);
     return;
   };
-  if (strchr("ABCDEFGHIKLMNOPQRSTUVwWXZ", *p) != NULL) {
+  if (strchr("ABCDEFGHIKLMNOPQRSTUVdwWXZ", *p) != NULL) {
     q = p + 1;
     skipspace(&q);
     if ((int)*q == ':') {
@@ -1514,14 +1755,14 @@ char* line;
       if (inbody) {
         if (parsing) parsemusic(p);
       } else {
-        event_text(p);
+        if (parsing) event_text(p);
       };
     };
   } else {
     if (inbody) {
       if (parsing) parsemusic(p);
     } else {
-      event_text(p);
+      if (parsing) event_text(p);
     };
   };
 }
@@ -1566,7 +1807,7 @@ char* name;
         parseline(line.st);
         fileline = fileline + 1;
         lineno = fileline;
-        event_linebreak();
+        if (parsing) event_linebreak();
       };
     } else {
       /* recognize  \n  or  \r  or  \r\n  or  \n\r  as end of line */
@@ -1585,7 +1826,7 @@ char* name;
           clearvstring(&line);
           fileline = fileline + 1;
           lineno = fileline;
-          event_linebreak();
+          if (parsing) event_linebreak();
           done_eol = 1;
         };
       };
@@ -1595,6 +1836,7 @@ char* name;
   fclose(fp);
   event_eof();
   freevstring(&line);
+  if (parsing_started == 0) event_error("No tune processed. Possible missing X: field");
 }    
 
 int main(argc,argv)
@@ -1602,6 +1844,9 @@ int argc;
 char *argv[];
 {
   char *filename;
+  int i;
+
+  for (i=0;i<DECSIZE;i++) decorators_passback[i]=0;
 
   event_init(argc, argv, &filename);
   if (argc < 2) {

@@ -77,6 +77,7 @@ struct note {
   int mult;
   int octave;
   char pitch;
+  int tuplenotes;
   int y;
   int base_exp;
   int base;

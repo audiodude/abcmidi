@@ -31,6 +31,10 @@
  * Wil Macaulay (wil@syndesis.com)
  */
 
+/* enables reading V: indication in header */
+#define XTEN1 1
+#define INFO_OCTAVE_DISABLED 1
+
 #include "abc.h"
 #include "parseabc.h"
 #include "parser2.h"
@@ -84,6 +88,7 @@ struct voicecontext {
   /* maps of accidentals for each stave line */
   char basemap[7], workmap[7];
   int  basemul[7], workmul[7];
+  int  keyset; /* flag to indicate whether key signature set */
   int default_length;
   int voiceno;
   int indexno;
@@ -132,6 +137,10 @@ int xmatch;
 int sf, mi;
 int gchordvoice, wordvoice, drumvoice;
 int gchordtrack, drumtrack;
+int ratio_standard = -1; /* flag corresponding to -RS parameter */
+/* when ratio_standard != -1 the ratio for a>b is 3:1 instead of 2:1 */
+int assume_repeat_warning = -1; /* if not -1 Assuming rest warning is */
+                              /* suppressed.                        */
 
 /* Part handling */
 struct vstring part;
@@ -163,7 +172,6 @@ int barchecking;
 /* generating MIDI output */
 int middle_c;
 extern int channels[MAXCHANS + 3];
-extern int global_transpose;
 extern int additive;
 int gfact_num, gfact_denom;
 
@@ -171,6 +179,13 @@ int gfact_num, gfact_denom;
 int karaoke, wcount;
 char** words;
 int maxwords = INITWORDS;
+
+extern int decorators_passback[DECSIZE]; /* a kludge for passing
+information from the event_handle_instruction to parsenote
+in parseabc.c */
+
+/* time signature after header processed */
+int header_time_num,header_time_denom;
 
 extern long writetrack();
 
@@ -203,7 +218,8 @@ int n;
     s->basemul[i] = global.basemul[i];
     s->workmap[i] = global.workmap[i];
     s->workmul[i] = global.workmul[i];
-  };
+    };
+  s->keyset = global.keyset;
   s->octaveshift = global.octaveshift;
   return(s);
 }
@@ -214,6 +230,7 @@ int n;
 {
   struct voicecontext *p;
   struct voicecontext *q;
+  int i;
 
   p = head;
   q = NULL;
@@ -230,6 +247,18 @@ int n;
   if (head == NULL) {
     head = p;
   };
+/* check that key signature mapping is set if global
+ * key signature set.                             */
+  if (p->keyset == 0 && global.keyset)
+    {
+    p->keyset = 1;
+    for (i=0; i<7; i++) {
+      p->basemap[i] = global.basemap[i];
+      p->basemul[i] = global.basemul[i];
+      p->workmap[i] = global.workmap[i];
+      p->workmul[i] = global.workmul[i];
+      };
+    }
   return(p);
 }
 
@@ -402,16 +431,18 @@ char **filename;
   atext = (char**) checkmalloc(maxtexts*sizeof(char*));
   words = (char**) checkmalloc(maxwords*sizeof(char*));
   if ((getarg("-h", argc, argv) != -1) || (argc < 2)) {
-    printf("abc2midi version 1.24\n");
+    printf("abc2midi version 1.36\n");
     printf("Usage : abc2midi <abc file> [reference number] [-c] [-v] ");
     printf("[-o filename]\n");
-    printf("        [-t] [-n <value>]\n");
+    printf("        [-t] [-n <value>] [-RS]\n");
     printf("        [reference number] selects a tune\n");
     printf("        -c  selects checking only\n");
     printf("        -v  selects verbose option\n");
     printf("        -o <filename>  selects output filename\n");
     printf("        -t selects filenames derived from tune titles\n");
     printf("        -n <limit> set limit for length of filename stem\n");
+    printf("        -RS use 3:1 instead of 2:1 for broken rhythms\n");
+    printf("        -NAR suppress assuming repeat warning\n");
     printf(" The default action is to write a MIDI file for each abc tune\n");
     printf(" with the filename <stem>N.mid, where <stem> is the filestem\n");
     printf(" of the abc file and N is the tune reference number. If the -o\n");
@@ -460,6 +491,8 @@ char **filename;
       event_error("No filename given, ignoring -o option");
     };
   };
+  ratio_standard = getarg("-RS", argc, argv);
+  assume_repeat_warning  = getarg("-NAR", argc, argv);
   dotune = 0;
   parseroff();
   setup_chordnames();
@@ -669,10 +702,10 @@ char *package, *s;
 {
   char msg[200], command[40];
   char *p;
+  int done;
 
   if (strcmp(package, "MIDI") == 0) {
     int ch;
-    int done;
     int trans, rtrans;
 
     p = s;
@@ -700,19 +733,12 @@ char *package, *s;
       skipspace(&p);
       val = readnump(&p);
       if (neg) val = - val;
-      if (pastheader) {
+
         if (trans == 0) {
-          addfeature(TRANSPOSE, val, 0, 0);
+          addfeature(GTRANSPOSE, val, 0, 0);
         } else {
           addfeature(RTRANSPOSE, val, 0, 0);
         };
-      } else {
-        if (trans == 0) {
-          global_transpose = val;
-        } else {
-          global_transpose = global_transpose + val;
-        };
-      };
       done = 1;
     };
     if (strcmp(command, "C") == 0) {
@@ -801,23 +827,116 @@ char *package, *s;
         i = 0;
         while ((i<=6) && (*p == ' ')) {
           skipspace(&p);
-          notes[i] = readnump(&p);
+          notes[i] = readsnump(&p); 
           i = i + 1;
         };
         addchordname(name, i, notes);
       };
       done = 1;
     };
+
+    if (strcmp(command,"drumon") == 0) {
+      addfeature(DRUMON, 0, 0, 0);
+      if ((drumvoice != 0) && (drumvoice != v->indexno)) {
+        event_warning("Implementation limit: drums only supported in one voice");
+       };
+      if (v == NULL) event_error("%%MIDI drumon must occur after the first K: header");
+      else {
+           drumvoice = v->indexno;
+           done = 1;
+           }
+    }
+    if (strcmp(command,"drumoff") == 0) {
+       addfeature(DRUMOFF, 0, 0, 0);
+       done = 1;
+    }
     if (done == 0) {
       /* add as a command to be interpreted later */
       textfeature(DYNAMIC, s);
     };
-  } else {
+  } else
+  {
+/* Parse %%abc directive */
+      done = 0;
+      if (strcmp(package, "abc") == 0)
+      {
+         p = s;
+         skipspace(&p);
+/* skip '-' character after abc */          
+         p++;
+         readstr(command, &p, 40);
+/* Parse %%abc-copyright */
+         if (strcmp(command, "copyright") == 0)
+         {            
+            int lnth;
+            int n;
+            char *ptr;
+
+            done = 1;            
+            skipspace(&p);
+/* Copy string to parse.
+ * Convert \n, \t, \r, \x and \\ in string to C style character constant defaults.
+ * (Handles carriage return, linefeed and tab characters and hex codes.)
+ */
+            lnth = 0;
+            ptr = &msg[0];
+            while ((*p != '\0') && (lnth < 199))
+            { 
+               if (*p == '\\')
+               {
+                  p++;
+                  switch (*p)
+                  {
+                     case 'n':
+                        *ptr = '\n';
+                        break;
+                     case 'r':  
+                        *ptr = '\r';
+                        break;
+                     case 't':  
+                        *ptr = '\t';
+                        break;
+                     case '\\':
+                        *ptr = *p;
+                        break; 
+                     case 'x':
+                     case 'X':
+                        p++;
+                        sscanf (p, "%x", &n);
+                        *ptr = n;
+                        while ((*p != '\0') && (isxdigit (*p)))                     
+                           p++;
+                        p--;   
+                        break;
+                     default:
+                        *ptr = *p;
+                        break;
+                  }
+               }
+               else
+                  *ptr = *p;
+               ptr++;
+               p++;
+            }
+            *ptr = '\0';
+            textfeature(COPYRIGHT, msg);
+        }
+        else
+        {
+           strcpy(msg, "%");
+           strcat(msg, package);
+           strcat(msg, s);
+           event_comment(msg);
+        }
+      }
+    if (done == 0)  
+    {
     strcpy(msg, "%");
     strcat(msg, package);
     strcat(msg, s);
     event_comment(msg);
-  };
+    }
+  }
 }
 
 void event_startinline()
@@ -868,6 +987,7 @@ void extract_filename(char *f)
 
 void event_field(k, f)
 /* Handles R: T: and any other field not handled elsewhere */
+/* Added code to handle C: field. */
 char k;
 char *f;
 {
@@ -878,6 +998,9 @@ char *f;
       if (titlenames && (!got_titlename)) {
         extract_filename(f);
       };
+      break;
+    case 'C':
+      textfeature(COMPOSER, f);
       break;
     case 'R':
       {
@@ -893,9 +1016,9 @@ char *f;
       break;
     default:
       {
-        char buff[100];
-
-        if (strlen(f) < 98) {
+        char buff[256];
+        
+        if (strlen(f) < 256) {
           sprintf(buff, "%c:%s", k, f);
           textfeature(TEXT, buff);
         };
@@ -1095,16 +1218,26 @@ char* s;
   };
 }
 
-void event_voice(n, s)
+void event_voice(n, s,gotclef,gotoctave,gottranspose,
+		clefname,octave,transpose)
 /* handles a V: field in the abc */
 int n;
 char *s;
+int gotclef,gotoctave,gottranspose;
+char *clefname;
+int octave,transpose;
 {
-  if (pastheader) {
+  if (pastheader || XTEN1) {
     voicesused = 1;
-    checkbreak();
+    if (pastheader)  checkbreak();
     v = getvoicecontext(n);
     addfeature(VOICE, v->indexno, 0, 0);
+    if (gotoctave) {
+      event_octave(octave,1);
+    };
+    if (gottranspose) {
+      addfeature(TRANSPOSE, transpose, 0, 0);
+    };
   } else {
     event_warning("V: in header ignored");
   };
@@ -1194,13 +1327,13 @@ int n, m, dochecking;
   };
 }
 
-void event_octave(num)
+void event_octave(num, local)
 /* used internally by other routines when octave=N is encountered */
 /* in I: or K: fields */
 int num;
 {
   if (dotune) {
-    if (pastheader) {
+    if (pastheader || local) {
       v->octaveshift = num;
     } else {
       global.octaveshift = num;
@@ -1214,9 +1347,12 @@ char* value;
 {
   int num;
 
+#ifdef INFO_OCTAVE_DISABLED
+  return;
+#endif
   if (strcmp(key, "octave")==0) {
     num = readsnumf(value);
-    event_octave(num);
+    event_octave(num,0);
   };
 }
 
@@ -1729,14 +1865,18 @@ static void marknote()
   marknoteend();
 }
 
-void event_rest(n,m)
+void event_rest(decorators,n,m,type)
 /* rest of n/m in the abc */
-int n, m;
+int n, m,type;
+int decorators[DECSIZE];
 {
   int num, denom;
 
   num = n;
   denom = m;
+  if (decorators[FERMATA]) {
+    num = num*2;
+  };
   if (v == NULL) {
     event_fatal_error("Internal error : no voice allocated");
   };
@@ -1779,9 +1919,12 @@ void event_mrest(n,m)
 int n, m;
 {
   int i;
+  int decorators[DECSIZE];
+  decorators[FERMATA]=0;
+/* it is not legal to pass a fermata to a multirest */
 
   for (i=0; i<n; i++) {
-    event_rest(time_num*(v->default_length), time_denom);
+    event_rest(decorators,time_num*(v->default_length), time_denom,0);
     if (i != n-1) {
       event_bar(SINGLE_BAR, "");
     };
@@ -2099,13 +2242,18 @@ char* s;
   inversion = -1;
   if (*p == '/') {
     p = p + 1;
-    if ((*p < 'A') || (*p > 'G')) {
-      event_error(" / must be followed by A-G in chord");
-    } else {
+    if ((*p >= 'A') && (*p <= 'G')) {
       note = (int)*p - 'A' + 'a';
       p = p + 1;
       p = get_accidental(p, &accidental);
       inversion = pitchof(note, accidental, 1, 0, 0) - middle_c;
+    } else if ((*p >= 'a') && (*p <= 'g')) {
+      note = (int)*p;
+      p = p + 1;
+      p = get_accidental(p, &accidental);
+      inversion = pitchof(note, accidental, 1, 0, 0) - middle_c;
+    } else {
+      event_error(" / must be followed by A-G or a-g in gchord");
     };
   };
   name[i] = '\0';
@@ -2197,6 +2345,17 @@ char* s;
     addfeature(DRUMOFF, 0, 0, 0);
     done = 1;
   };
+
+  if (strcmp(s, "fermata") == 0) {
+    decorators_passback[FERMATA] =1;
+    done = 1;
+    };
+
+  if (strcmp(s, "trill") == 0) {
+    decorators_passback[TRILL] =1;
+    done = 1;
+    };
+
   if (done == 0) {
     sprintf(buff, "instruction !%s! ignored", s);
     event_warning(buff);
@@ -2613,7 +2772,7 @@ static void placeendrep(j)
 /* patch up missing repeat */
 int j;
 {
-  event_warning("Assuming repeat");
+  if (assume_repeat_warning == -1) event_warning("Assuming repeat");
   switch(feature[j]) {
   case DOUBLE_BAR:
     feature[j] = REP_BAR;
@@ -2634,7 +2793,7 @@ static void placestartrep(j)
 /* patch up missing repeat */
 int j;
 {
-  event_warning("Assuming repeat");
+  if (assume_repeat_warning == -1) event_warning("Assuming repeat");
   switch(feature[j]) {
   case DOUBLE_BAR:
     feature[j] = BAR_REP;
@@ -2766,6 +2925,7 @@ static void startfile()
   setmap(0, global.basemap, global.basemul);
   copymap(&global);
   global.octaveshift = 0;
+  global.keyset = 0;
   voicecount = 0;
   head = NULL;
   v = NULL;
@@ -2782,12 +2942,16 @@ static void startfile()
   ntexts = 0;
   gfact_num = 1;
   gfact_denom = 3;
-  global_transpose = 0;
   hornpipe = 0;
   karaoke = 0;
   retain_accidentals = 1;
-  ratio_a = 2;
-  ratio_b = 4;
+  if (ratio_standard == -1) {
+    ratio_a = 2;
+    ratio_b = 4;
+  } else {
+     ratio_a = 2;
+     ratio_b = 6;
+   }
   wcount = 0;
   parts = -1;
   middle_c = 60;
@@ -2807,7 +2971,7 @@ static void startfile()
   wordvoice = 0;
 }
 
-static void setbeat()
+void setbeat()
 /* default accompaniment patterns for various time signatures */
 {
   /* set up chord/fundamental sequence if not already set */
@@ -2867,7 +3031,6 @@ static void headerprocess()
   /* make tempo in terms of 1/4 notes */
   tempo = (long) 60*1000000*t_denom/(Qtempo*4*t_num);
   div_factor = division;
-  setbeat();
   voicesused = 0;
 }
 
@@ -2894,19 +3057,20 @@ char* clefname;
       };
     } else {
       if (gottranspose) {
-        global_transpose = transpose;
+        addfeature(GTRANSPOSE, transpose, 0, 0);
       };
       setmap(sharps, global.basemap, global.basemul);
       altermap(&global, modmap, modmul);
+      global.keyset=1;
       copymap(&global);
       sf = sharps;
       mi = minor;
       headerprocess();
-      v = newvoice(1);
-      head = v;
+
+      v = getvoicecontext(1);
     };
     if (gotoctave) {
-      event_octave(octave);
+      event_octave(octave,0);
     };
   };
 }
@@ -2915,6 +3079,8 @@ static void finishfile()
 /* end of tune has been reached - write out MIDI file */
 {
   extern int nullputc();
+  
+
 
   clearvoicecontexts();
   if (!pastheader) {
@@ -2969,6 +3135,8 @@ static void finishfile()
       printf("writing MIDI file %s\n", outname);
       Mf_putc = myputc;
       Mf_writetrack = writetrack;
+      header_time_num = time_num;
+      header_time_denom = time_denom;
       if (ntracks == 1) {
         mfwrite(0, 1, division, fp);
       } else {
@@ -2994,6 +3162,7 @@ void event_blankline()
 /* blank line found in abc signifies the end of a tune */
 {
   if (dotune) {
+    print_voicecodes();
     finishfile();
     parseroff();
     dotune = 0;
@@ -3021,6 +3190,10 @@ int n;
     };
     parseron();
     dotune = 1;
+     
+      v = newvoice(1);
+      head = v;
+
     pastheader = 0;
     if (userfilename == 0) {
       if (outname != NULL) {

@@ -1,0 +1,1058 @@
+2003 March 27:
+Updated the man pages to abc2abc, abc2midi and midi2abc and created a
+new man page for yaps.  Minor changes to midifile.c and midifile.h
+were made to minimize the number of warning error messages. Midi2abc
+was upgraded to be in line with the version I use with the script
+midi2abc.tcl. The syntax in mftext.c was improved to reduce the
+number of compilation warnings.
+
+
+2003 April 12
+abc2midi: for abc tunes with no guitar chords, an error
+message "Command not recognized" is issued whenever a %%MIDI
+chordprog or %%MIDI bassprog command is encountered.
+The problem occurs mainly with runabc, which
+performs only one pass through the tune and is unable to
+know whether guitar chords are present before sending 
+%%MIDI commands. Since no MIDI program command is issued
+in this situation, the error message  was disabled, The
+fix was made in dodeferred() in genmidi.c
+
+2003 April 12
+abc2midi assumes the ratio of 2:1 for long/short notes
+in broken rhythms specified with angle brackets (eg. c>d),
+Though this can be changed using the %%MIDI ratio command, it
+is inconvenient for many users since it is necessary to edit
+each tune in the abc file in order to effect this change.
+A new command parameter -RS (ratio standard) changes default
+ratio to 3:1 which is the standard music notation. The new
+parameter still allows the %%MIDI ratio command to override
+the default. The change was incorporated in event_init()
+of store.c.
+ 
+2003 Apri 19
+The proposed abc standard allows non numeric identifications
+for the voice field, eg. V: soprano instead of V:1.  If you
+are creating a midi file, each unique identification string will
+mapped to a sequential numbers 1,2 etc, as if you had used numbers
+originally. The change allows abcMIDI to handle a number of 
+new multivoiced abc files which have adopted this convention.
+Only the first 20 characters of the identification
+string are distinguished. Anything following the identification
+string is ignored. The identification string should not end with
+an equal sign =.  If nonnumeric identifications are used,
+abc2midi will print the mapping between the id's and the numbers.
+This may be useful for catching spelling errors in the id's.
+The fix was made in function parsefield in parseabc.c. The
+change does not yet allow V: commands to appear before the
+body of the tune.
+
+A number of abc files may designate a rest using x instead of
+z. This means that this rest exists but should not appear 
+in the printed score. I have modified the parser so it shall
+now interpret x as rest; however, if you are using yaps to 
+print the score, this rest will still remain visible. Abc2midi
+will now treat x exactly like z. Abc2abc will probably
+automatically convert the x's to z's whether you want it or not.
+A minor change was made in parsemusic in parseabc.c. It is
+necessary to modify toabc.c and yapstree.c to fix the
+remaining problems.
+
+2003 April 27
+Guitar chords. The base note preceeded by a slash in the guitar
+chord may now  be in lower case as well as upper case. For example,
+"G/B" and "G/b" will both be treated the same way. This complies
+with the proposed abc standard 1.7.6 (abc-draft.txt) and avoids
+problems with some files in the Nottingham database. The fix was
+made in event_handle_gchord in store.c.
+
+Guitar chords. When there is a change of meter, the gchord beat
+does not seem to get changed. I inserted a call to setbeat()
+in writetrack() in genmidi.c whenever a TIME feature is encountered.
+It was also necessary to change the definition of setbeat in
+store.c from static to external.
+
+2003 May 3
+Karoake lyrics: Improved the documentation for the functions
+write_syllable and getword in genmidi.c  which handle the lyrics
+in the w: body line. If a bar line is placed in the lyric
+line between two tied notes, for example see below,
+
+"C6" c> G E2- | E2 (3 c d c | "E7" B> ^G E2- | E4 |
+w: All of me, | * why not take | all of me.*
+              ^
+write_syllable loses synchrony with the music while searching
+for the next bar line in the music. The problem was fixed
+by resetting waitforbar to 0 between the two calls of
+write_syllable, in writetrack (genmidi.c) after TNOTE is 
+handled.
+
+I found most warning messages about mismatched
+lyric syllables to music notes have to do with users
+failing to notate syllables correctly when tied notes
+occur.  (Failure to place a * or  _ (underscore)  preceding
+syllable of tied note. Confusing hyphen with underscore...)
+
+
+
+2003 May 4
+
+abc2midi file xref: Abc2midi has the option of converting
+only a particular tune in a abcfile to a midi file by specifying
+the X: reference number immediately following the abc file name.
+When this feature is used, warning messages such as
+
+Warning in line 28: T: outside tune body - possible missing X:
+
+The problem occurs in the function parsefield in parseabc.c.
+In order to catch the reference number of the selected tune,
+every line of the input file is parsed. A flag "parsing" equal
+to 0 or 1 is used to turn on the parsing inside the body of
+the of the music. This flag is turned in function event_refno()
+in store.c by calling the function parseon() in parseabc.c.
+Unfortunately all field lines (eg. T: , M:, L:, V: ...) were 
+unaffected by this flag and continued to be parsed. When the
+T: field command is encountered, it falls through to the
+default: in parsefield and it is processed by the function,
+event_field in store.c. Event_field was designed to treat
+the T: and R: conditions but before handling these conditions
+it checks whether the control flag dotune is set. This flag
+is also set by event_refno. If the flag is not set, then 
+event_field assumes that a T: field command was encountered
+without a preceding X: reference field which is a valid
+error condition.
+
+Since all field lines in the abc file are parsed this
+introduces other problems. Any anomaly in the field lines
+whether they are from the selected tune or not are reported.
+For example, if a user has selected for example tune 500
+from a large abc file, errors in the field lines of other 
+tunes will be reported. Furthermore, in some cases the
+program may crash in processing a field line of another tune.
+
+To address these problems, the functions parseline and
+parsefield in parseabc.c were modified so that all field
+lines (except for the X: field line) and all text lines are
+ignored for nonselected tunes. Parseline checks whether 
+the flag parsing is set before calling parsemusic or
+event_text. In parsefield, the condition key == 'X'
+was moved from the switch control structure and
+treated separately immediately when entering this function.
+If parsing flag has not been set, the function returns
+immediately after checking for key == 'X'.
+
+This introduces a new problem. If the abc file has no 
+X: field, the abcmidi programs does nothing 
+without any error indication. To handle, this situation
+I introduced a the global variable parsing_started into
+parseabc.c, It is initialized to 0 and set to 1
+when the function parseron() is called. Prior to the
+end of the function parsefile, the parsing_started
+variable is checked. If it is still 0, an error message
+is returned.
+
+Finally, event_linebreak() is suppressed in parsefile()
+whenever the variable parsing is not set. This avoids
+a lot of blank line output from abc2abc whenever the
+X: field is missing from the input abc file.
+
+This is a major change to the code, since it affects
+three programs, abc2midi, yaps and abc2abc. I hope this
+has not introduced new problems.
+
+2003 May 11
+
+Many tunes have a left repeat sign (|:) missing. In most
+cases it is fairly clear where to place the repeat sign
+and abc2midi merely puts a warning message "Assuming repeat".
+When you are processing a large group of abc tunes these
+messages may be annoying. A new parameter -NAR (no assuming
+repeat) will suppress this message when you are
+running abc2midi. However, occasionally you get the error
+message "Found unexpected :| ...". This is a more serious
+problem.  Due to some ambiguity, the program store.c was
+unable to place a missing |: into the tune. During the
+second pass, genmidi.c encounters the :| and does not know
+where to begin the repeat. This is a real error since the
+repeat will not occur. This error message is not suppressed.
+
+The instructions !trill! and !fermata! are recognized by
+yaps and abc2midi and are treated in the same way as the
+decorations T and H preceding a note. To do this I introduced
+a new integer global array decorator_passback[] which is set
+by event_handle_instruction in both yapstree.c and store.c.
+The array is passed between files parseabc.c, store.c
+and yapstree.c as an extern.
+
+2003 May 18
+
+The symbol y used to denote a space in Barfly, is ignored
+and no longer causes an error message. It is deleted by
+abc2abc.
+
+2003 May 19
+
+Added an option to number bars in yaps. Note the bar numbers
+may not match those in abc2midi or other abc*ps programs.
+Introduced global flag barnums and global integer nnbars in 
+yapstree.c which is set by event_init and linked to 
+drawtune.c. Added new -k option in event_init
+in yapstree.c. In event_bar in yapstree.c passed the current
+bar number instead of NULL in addfeature. In drawtune.c
+introduced a new function printbarnumber which is called
+in various places in the function printvoiceline.
+
+%%MIDI chordname accepts negative semitone shifts relative
+to root. In function event_specific in store.c, replaced
+readnump with readsnump.
+
+2003 May 22
+
+Bar numbering in yaps is now in agreement with abc2midi but
+may differ by one unit with abc2ps and other members of its
+family. See abcguide.txt for more discussion. I moved the
+position of the call to checkbar() in event_bar() (yapstree.c)
+so it occurs before addfeature is called rather than after.
+
+The decoration field line d: (used inabcm2ps) is not parsed as
+a music line but is an ignored field line. Change
+was made in parseabc.c in parsefield() and parseline().
+
+2003 May 31
+
+Yaps crashes when it encounters text preceeded by an underscore
+in a  guitar chord. For example 
+"G" AB/2B/2 "_quiet" DD| g/2g/2d/2d/2 |
+here yaps crashes when the function event_handle_gchord (in
+yapstree.c)  encounters the text _quiet. The problem was fixed
+by ensuring that, cv->instruction_pending is not NULL prior
+to adding anything to this structure.
+
+2003 June 6
+
+Yaps ignores any guitar chords placed in front of a chord if
+the notes in the chord are not in descending order. For
+example in the following line
+|"Gm"[G2B2][Ac]|[Bd][Ac][GB]|"D"[A/2c/2][A/2c/2][Ac][Bd]|
+the guitar chords Gm and D do not appear because they precede
+a chords [G2B2] and [A/2c/2]. This problem also applies to
+any instructions (eg. !quiet!) which immediately precede 
+a chord. The problem has to do with the way the gchord
+and instructions are processed by yapstree.c. When they
+are first encountered they are placed in temporary places,
+cv->gchord_pending and cv->instructions->pending. When
+the next note is encountered, the function newnote moves 
+them to fields associated with that note. Unfortunately,
+when printvoiceline in drawtune.c processes the notes in
+a chord it expects the guitar chord or instructions to be
+associated with the first note encountered in the chord.
+(It checks chordcount variable.) This is not always true
+because the function insertnote in yapstree.c for some
+reason will reorder the the notes in the chord if they
+are not in descending order.
+
+The fix was to modify noteinsert in yapstree.c so that
+if it reorders the notes in the chord, it also moves the
+gchord and instructions fields to be with the first note.
+
+
+14 June 2003
+
+Yaps produces a segmentation error when it fails to
+find an expected continuation line and attempts to
+print a guitar chord.(eg.)
+
+X:1
+T:example
+K:C
+"C" abcd|\
+
+(In this example there is no more records following the
+backslash.)
+
+The error occurs when it tries to execute showtext in
+the function notetext in the file drawtune.c. The fix was
+to ensure that the pointer spacing is not NULL prior to
+calling showtext.
+
+
+21 June 23
+
+Abc2midi assumes the last %%MIDI gchord string specified
+as the default for the start of the tune. In the following
+tune,
+ 
+X: 1
+T: gchords
+M:4/4
+L:1/4
+K:C
+"C" CCCC|CCCC|
+%%MIDI gchord czcz
+FFFF|FFFF|
+%%MIDI gchord fzzz
+ GGGG|GGGG|
+%%MIDI  gchord fcfz
+ CCCC|CCCC|
+
+the gchord string was not set for the first two bars. It was
+expected that abc2midi would use the system default for 4/4 time,
+i.e. fzczfzcz. Instead, the last defined gchord fzfz was assumed,
+which is not expected. If the user places another %%MIDI
+gchord string before the first bar or adds a redundant meter
+field M:4/4 just before the first bar, everything is ok.
+Abc2midi calls setbeat which calls set_gchords just after
+it processes the first K: declaration in the field area.
+When abc2midi writes the first track writetrack(0) containing
+the melody, everything is still ok, except that the accompaniment
+is not written at this point. Each time writetrack encounters
+another %%MIDI gchord declaration, set_gchord changes the
+gchord string. When it is time to start the accompaniment track,
+the gchord string was left as the last declared string.
+
+The fix was to move the setbeat invocation from headerprocess()
+in store.c to the beginning of writetrack in genmidi.c  when
+the accompaniment track is identified. I also added a short
+caveate in abcguide.txt about the setting of MIDI gchord
+string.
+
+
+28 June 2003
+
+The %%MIDI transpose command transposes all channels including
+the drum channel. For the drum channel, the pitch component
+selects the percussion instrument, so transposition is not
+appropriate here.
+
+The fix was applied to the function save_note in the file
+genmidi.c. Transposition is blocked if the drum channel
+9 (counting from 0) is selected.
+
+29 June 2003
+
+Besides the key signature, the K: field can contain many
+other descriptors, such as the clef (treble, bass...), the
+octave and transposition. The code for parsing the K: field
+parsekey was rather convoluted and hard to understand. It
+was simplified by breaking it up into several functions.
+During this process, I discovered an Easter Egg (undocumented
+feature) in abc2midi. It is possible to transpose an
+individual voice without affecting the other voices.
+The documentation to these features was improved in abcguide.txt.
+
+
+1 July 2003 
+
+The single voice transpose function described above does not
+work correctly in combination with the global transpose initiated
+by the %%MIDI transpose (or rtranspose) function. The original
+code in store.c and genmidi.c was confusing since communications
+between the two files was performed by both the feature/pitch
+arrays and a global variable global_transpose which was linked
+to both files using an extern int declaration. Here is a
+short description on how it was originally.
+
+Parsekey passes transpose to event_key. When a
+new transpose value is obtained from event_key, the TRANSPOSE
+flag is  added to the feature array and the value of transpose
+is put in the pitch array. In addition the  global_transpose
+variable (a variable linked to genmidi.c) is also set to
+transpose if event_key obtains the transpose value before
+getting to the body of the music.  When a transpose value
+is obtained from event_specific (i.e. from a %%MIDI transpose
+indication) a TRANSPOSE flag is also added to the feature
+array and the linked variable global_transpose is always
+set to the transpose value.
+
+Genmidi.c processes the TRANSPOSE feature in the function
+writetrack. At the start of every track, writetrack sets
+the transpose variable (here not linked with store.c) to
+global_transpose. When TRANSPOSE feature is encountered the variable
+transpose is extracted from the pitch array. The transpose
+value is added to the note pitch whenever a note is issued. The
+transpose value is also stashed away by save_state in case a
+REPEAT feature is encountered. In this situation, the stashed value
+is recovered by restore_state.
+
+It would make more sense to treat transpose and
+global_transpose independently. i.e.
+new pitch = pitch + transpose + global_transpose.
+Also it would be be a good idea not to pass global_transpose
+to genmidi.c using "extern int" but setting it using a new
+feature GTRANSPOSE in the feature array.
+
+Fix: GTRANSPOSE introduced in abc.h. global_transpose variable
+and associated code eliminated from store.c. In writetrack
+in store.c, another switch condition for GTRANSPOSE was
+introduced. global_transpose initialized to 0. transpose initialized
+to 0 in starttrack. In noteon_data and addtoQ transpose +
+global_transpose are added to pitch. These changes now allow
+global_transpose and transpose functions to work together and
+independently.
+
+Basically transposition is now performed by either or both
+variables 'transpose' and 'global_transpose'. The only difference
+between these variables is that the transpose variable is
+reinitialized to zero each time a new track is started, while
+global_transpose is only initialized at the start of the tune.
+These variables are set only through the feature/pitch
+arrays in store.c.
+
+5 July 2003
+
+Abcm2ps allows the voice field to contain additional
+descriptor information such as the clef name. This information
+may indicate a voice transposition by one octave. Abc2midi
+and other abcMIDI programs currently ignore this information.
+
+Fix:
+A new function parsevoice was introduced into parseabc.
+which contains a combination of the code in both parsefield
+and parsekey. New parameters were introduced to event_voice
+in store.c, yapstree.c, toabc.c, parseabc.c and parseabc.h
+in order to pass this information. In store.c, event_voice
+will call event_octave if gotoctave is set and insert
+a TRANSPOSE feature in the feature/pitch array. In toabc.c,
+event_voice will also output the clef if gotclef is set.
+
+In the event that treble+8, treble-8, or tenor-8 is 
+specified, parsevoice will set octave to the appropriate
+value and set gotoctave so that event_voice in store.c will also
+issue an event_octave. The transpose indication in the
+clef is detected in the function isclef() in parseabc.c
+which now has extra parameters.
+
+Please note no transposition is assumed for the bass clef.
+If it is desired that abc2midi transpose that voice, a
+octave=-1 or -2, should be included in the K: or V: field.
+ 
+
+
+6 July 2003
+
+Abc2midi considers the placement of a V: indication outside
+the music body (in the header) as an error and ignores it.
+Other applications such as abcm2ps permit V: indications to
+occur music header.  In such instances, the voice field
+specifies information such as the clef to be used for that
+voice. Several changes were needed to handle the this
+convention.
+
+(1) In event_voice, the check "pastheader" was disabled; however,
+it is important not to call checkbreak() prior to passing the
+header. (2) It is necessary to create the first voicecontext
+structure immediately after the parser is started rather than wait
+for the first K: field (which ends the header block).
+Therefore, the code 
+
+   v = newvoice(1);
+   head = v;
+
+was moved to event_refno and event_key was replaced
+   getvoicecontext(1);
+
+(3) Normally event_octave will transpose all the music voices
+if it is called in the music header. This needs to be disabled
+when it is called from event_voice. A new parameter, local
+(as opposed to global) was introduced into event_voice to
+indicate such a situation. (It was necessary to also
+put this change in parseabc.c, yapstree.c, toabc.c, parseabc.h,
+in addition to store.c)
+
+
+
+12 July 2003
+
+Abc2midi loses synchronization between voices when a voice
+change occurs in the middle of a bar. The following tune
+does not get converted correctly into a MIDI file.
+
+X:1
+T: sample
+M: 2/4
+L: 1/8
+K:G
+V:1
+|:AG Bc|
+V:2
+|:C2 C2|
+V:1
+ AG Bc|[1
+V:2
+ C2 C2|[1
+V:1
+  CDEF:|[2
+  EFG2|
+V:2
+  D2 D2:|[2
+  G4|
+
+The problem occurs when writetrack (in genmidi) is processing the
+second repeat. When it comes to the bar marked
+with a [1 it attempt to skip to the bar labeled [2, however,
+it failed to check for a voice change. (It is unusual to
+switches  voices in the middle of a bar.)  Instead it another [1 
+and outputs numerous error messages.
+
+The problem was fixed by checking for a voice change and searching
+for the continuation of the current active voice using the 
+findvoice function.
+
+
+
+Yaps terminates prematurely if a tune does not contain a
+M: indication in the header. Yaps reports that there is no
+M: field but when it attempts to set it to the default 4/4
+in startbody(), no voice structure has been created.
+To fix this problem  lines of code, setvoice(1) and
+startbody() were interchanged in event_true_key() in yapstree.c
+
+
+13 July 2003
+
+Yaps bar alignment fails in multivoiced files containing
+tuples (eg. triplets). For example,
+
+X: 1
+T: yaps trips on triplets
+M: 2/4
+L: 1/8
+K: G
+V:1
+C4|C4|(3BBB (3BBB|C4|C4|
+V:2
+F4|F4|F4|F4|F4|
+
+The bars for the second line do line up after the triplets.
+
+The function advance() in position.c does not set the
+notelengths in the case of triplets. As a result,
+spaceline() in position.c has the incorrect temporal position
+of the notes when it tries to place the notes on the staff.
+
+Fix: a new variable tuplenotes was introduced in the struct
+note (struct.h). This variable is set in event_note, in yapstree.c
+and contains the sequence number of the tuple note (descending).
+In event that advance() detects a tuple note (based on this
+variable), the temporal length is adjusted by multiplying it
+by the tuplefactor. (A new function mulfract was introduced
+for this purpose.). The notes and bars are lined up now,
+but more work is probably needed to get more pleasing spacing.
+
+
+19 July 2003
+
+Abc2midi fails to set key signature sharps or flats pattern in 
+multivoiced tunes with voice indications in the header.
+For example in the following tune,
+
+X: 1
+T: G minor scale
+M: 2/4
+L: 1/8
+V:2
+K: Bb
+V:2
+GABc|defg|
+
+the notes B and e are not flattened in the output MIDI file.
+This is a new bug I introduced in July 5, 2003 when I extended
+the abcMIDI package to handle voice field indications in the
+header block. For each voice there is a separate voicecontext
+structure which contains its own basemap for sharpening or
+flattening selected notes. See store.c code.  (This permits
+the option of a voice to have its own key signature which is
+different from the other voices.)  There is also a global
+voicecontext structure used for applying the key signature to
+all voices if they are not indicated separately. The global
+key signature is copied to the voicecontext of a separate voice
+at the time that the voicecontext structure is created.
+Unfortunately, if the voicecontext structure is created prior
+to setting the overall key signature with the first K: indicator,
+then the basemap for that voice is set for C major or A minor.
+
+Fix: a new flag, keyset was introduced in the voicecontext
+structure. This flag indicates whether the key signature was
+known at the time when the voicecontext structure was 
+allocated by newvoice(). Whenever getvoicecontext() switches
+voices context, it now checks keyset to determine whether
+it is necessary to copy the basemap and related variables
+from the global voicecontext structure.
+  
+I: octave=n has been disabled in abc2midi.
+Since an octave shift can be indicated in either the
+K: or V: field, it is no longer necessary to use the
+info field for setting the octave range. I have disabled
+this feature to discourage using the info field for
+setting the octave range.
+
+
+20 July 2003
+
+The hidden rest (x) was introduced in abcMIDI in April 19
+2003. Abc2midi treated it as a regular rest but abc2abc
+automatically converted it into a regular rest z. The
+new  functionality to transpose separate voices that was
+introduced in abc2midi now makes abc2abc even more useful.
+I have upgraded abc2abc so it now preserves the hidden
+rests in the abc files. Yaps continues to not distinguish
+the two types of rests (like abc2midi).
+
+Fix: introduced an extra variable in event_rest in 
+parseabc.c, store.c, yapstree.c, toabc.c and parseabc.h.
+In toabc.c event_rest emits an x instead of a z if
+a hidden rest is detected.
+
+
+16 August 2003
+
+
+Abc2midi: The drum accompaniment is started or stopped using the 
+instruction command !drum! and !nodrum!. The !drum! and
+!nodrum! commands are not part of the abc standard so
+other applications such as abc2ps and related clones do
+not understand this instruction. The programs either ignore
+or it or return a warning.
+
+I have introduced an alternate method of starting and stopping
+the drum track using the MIDI indications.
+
+%%MIDI drumon
+and
+%%MIDI drumoff
+
+This is similar to the method of starting and stopping gchords.
+(%%MIDI gchordon and %%MIDI gchordoff). I feel this is the
+preferred method and the older method will probably be
+deprecated. Fortunately, I am the only one using drum
+accompaniment (eg. isra.abc) so all of this has little impact.
+
+August 22 2003
+
+Midi2abc creates a abc file with a blank title. It is
+more useful to place the name of the input midi file in the
+title.
+
+Midi2abc puts a blank line in the abc file in the
+event that a newline character \n is embedded in the 
+meta_text. A blank line signifies the end of a tune, so
+the remaining part of the abc file is not processed.
+The function remove_carriage_return was updated so it
+now checks for both \r and \n.
+
+August 31 2003
+
+Reorganized and improved documentation of midi2abc.c
+
+Many MIDI files have multiple tempo indications. In fact
+some MIDI files change the tempo at every beat. Midi2abc
+assumes the last tempo indication; however, in some MIDI
+files the tempo slows down at the end. When the resulting
+abc file is converted back to a MIDI file it plays much
+slower than the original. I have modified midi2abc so
+that it now assumes the first tempo indication and
+ignores all following indications.
+
+September 8 2003
+
+Midi2abc identifies drum tracks (channel 10) but it needs
+to issue a %%MIDI channel 10 to that voice so that abc2midi
+will know to assign that voice channel 10. Printtrack was
+modified to test for a drum track.
+
+Added two new parameters, -bpl and -bps to control the
+formatting of the output abc file. These parameters
+control the number of bars printed per line, and the number
+of bars to be associated with a music staff. The -obpl
+(one bar per line) parameter is deprecated.
+
+
+September 13 2003
+
+Midi2abc by default does not use the PPQN information in the
+MIDI header to determines the note length in MIDI pulses.
+Furthermore it ignores any time signature information in
+the MIDI file that may be present.  Most MIDI files do
+contain valid information so midi2abc produces the best 
+output when run time options -xl and -xm are included.
+Midi2abc was modified to make these run time options the default
+and the unnecessary flags -xl and -xm are now removed. 
+To allow the user to force midi2abc to estimate xunits
+(MIDI pulses per standard unit note length) from the note
+duration statistics, a new option -gu was now introduced.
+Since this is a major change in how midi2abc runs, the
+version number was bumped up to 2.6.
+
+September 14 2003
+
+Contrary to the documentation, the anacrusis is not specified
+in beats but in abc half unit lengths where a unit length is
+given in the L: field in the header.  For example if
+L:1/8 and M: 4/4, an anacrusis of 1 beat is specified as 4 (i.e.
+four 1/16 units).  This is due to the way the quantized 
+music is represented in midi2abc. Midi2abc does not allow notes
+shorter than than 1/2 an L: unit. Therefore if the unit length is
+L: 1/8, the shortest note that can be produced by abc2midi
+is a sixteenth note. Note lengths are stored internally in
+midi2abc as numerator/denominator where the denominator is
+always 2. So a sixteenth note is quantized to a numerator
+value of 1. Therefore midi2abc has difficulty representing
+very short notes that are encountered in trills or drum
+rolls. In such situations you should use the -s option
+for short notes to get an approximation.
+
+This also explains why printtrack, findana and guessana want
+the barsize to be measured in half abc unit lengths (barsize
+is doubled in the calling sequence for these functions.) 
+
+I have corrected the readme.txt and the midi2abc.1 man file.
+
+September 21 2003
+
+Laura Michaels contributed patches to store.c, genmidi.c
+and abc.h to handle the Copyright extended information field
+(see abc2-draft) and to improve the production of Karaoke
+MIDI files. Laura Michaels also provided makefiles for
+other compilers such as Ming and Watfor. More details follow.
+
+The proposed standard introduces a new field using the
+syntax
+
+%%abc-copyright (c) Copyright John Smith 2003
+
+Abc2midi now inserts this in the MIDI file in the form of a
+metatext copyright tag. Changes were made to the event_specific
+function in store.c to process the copyright information.
+
+Karaoke file applications such as Winamp, VanBasco;s Karaoke
+player, and WinKaraoke (on Windows) have difficulty extracting
+the composer and copyright information fields and confuse them
+with the Karaoke text. The function karaokestarttrack in genmidi.c
+was modified to handle additional @T information lines for
+composer and copyright information after the title line in the
+first MIDI track. In the Karaoke track (track 3), this
+information was also added in the form of @I fields. Also
+other abc information fields such as H: and A: were suppressed
+in the Karaoke track by setting texton to 0 in printtrack.
+
+The 98 character limit for text lines handled by event_field
+in store.c was changed to 255 (see default case in switch (k)).
+
+
+
+September 28 2003
+
+For multivoiced abc files there is a need to be able to apply
+a fermata to a rest. For example, consider this file.
+
+X: 1
+T: fermata applied to rest
+M: 2/4
+L: 1/8
+K: G
+[V:1] CDEF|GAF!fermata!G|C2 C2|
+[V:2] EFGA|Bcd!fermata!z|C2 C2|
+[V:1] CDEF|GAF!fermata!G|C2 C2|
+[V:2] EFGA|Bcd!fermata!G|C2 C2|
+
+If the fermata is not applied to the rest, there is a loss
+of synchronization between the two voices.
+
+The function event_rest was modified to get the array decorators
+from one of its passed parameters. In store.c event_rest would
+double the length of the rest (including hidden rests) if
+decorators[FERMATA] is set. In parseabc.c it was necessary to
+to update the decorators array for the case 'z' and 'x', prior
+to passing it to event_rest. Changes were also required in
+yapstree.c and toabc.c even though event_rest does not use the
+decorators array in these files. The declarations for event_rest
+in parseabc.h also needed to be changed.
+
+September 29 2003
+
+A new problem with setbeat (store.c) was discovered. For the
+file
+
+X:1
+T: time sig
+M: 2/4
+L: 1/8
+K: G
+"C" G2 G2| G2 G2|
+[M:3/4] G2 G2 G2|G2 G2 G2|
+
+
+The gchord output was not correct for the first two bars.
+This was caused by several problems in the code. (1) Setbeat
+calls set_gchord to set the gchord_seq, gchord_len, g_num,
+and g_denom used by dogchords. The values for g_num and g_denom
+were incorrect because they were computed from mtime_num
+and mtime_denom which were set by set_meter. The values
+of mtime_num and mtime_denom were the last values in the 
+previous tracks processed so if there was a change of meter 
+in the tune they would not reflect the initial value.
+(2) Setbeat chooses the appropriate gchord string on the basis
+of the time signature stored in the time_num and time_denom
+array. It is therefore necessary that these values remain
+current to the current context during the writetrack pass.
+Therefore set_meter was modified to update time_num and 
+time_denom whenever it is called.
+
+Set_meter is called in several places. It was called in
+starttrack with the global parameters time_num and time_denom.
+Unfortunately these parameters are affected by the event_timesig
+which is called during the parsing stage. Therefore their
+values reflect the last time signature encountered during
+the parsing stage. It is necessary to cache the initial settings
+of the time signature set in the header block. New variables
+header_time_num and header_time_denom are defined in store.c
+and passed to genmidi.c as externals.
+
+In writetrack, for the accompaniment track it was necessary
+to call set_meter() with the header time signatures just prior
+to setbeat(). Set_meter is also called by write_meter in genmidi.c.
+Write_meter is called whenever a TIME feature (for time signature)
+is encountered. Fortunately, the correct time signature stored in
+the num[] and denom[] arrays are used. Setbeat is called shortly
+after in printtrack.
+
+
+October 13 2003
+
+Though most MIDI files indicate a time signature few also
+indicate a key signature. Though midi2abc reports any key
+signature it finds in the MIDI file, it does not use it but
+insists on determining it by scanning all notes and choosing
+the key signature that minimizes the number of accidentals.
+This works fine if there are no key changes in the music.
+If the MIDI file does indeed indicate key signatures and
+key changes then midi2abc should use this information in
+creating the abc file.
+
+In a similar vein, for some MIDI files there may be more
+than one meter change. Midi2abc uses the first time signature
+that is indicated in the MIDI file. If it encounters other
+time signature indications later, it reports it but it still
+uses the initial time signature to transcribe the file.
+Again it would be desirable if midi2abc would act on this
+information.
+
+Looking at midi2abc.c, it was noticed that the function findkey()
+is always invoked except when the key signature is passed in
+one of the run time parameters. If a key signature or time
+signature metatext command is encountered, a time stamped
+text message is added to the tlistx structure associated
+with that track. These text messages are sent to the
+abc file at the appropriate time using the handletext function
+which is invoked by printtrack; however, no adjustment is
+made for any key or meter change. Further the barsize
+is assumed to be fixed. The barsize is a local variable
+in the main program and it is passed to printtrack as
+one of its parameters. The barsize controls the placement
+of bar lines in the output abc file.
+
+
+Numerous changes were needed to fix these problems.
+(1) A new global flag, gotkeysig was introduced to the code.
+It is initialized to zero but set to 1 whenever a key signature
+metatext command is encountered. (2) A new variable 'type' was
+added to the tlistx structure. If tlistx.text contains the
+key signature, tlistx.type is set to 1. If tlistx.text contains
+the time signature, tlistx.type is set to 2. For everything
+else, tlistx.type is set to 0. (3) The 'type' variable was
+added to the addtext() function and in the many places where
+it was invoked. (4) In the function txt_keysig(), the verbose
+message sent to the tlistx structure was replaced with just
+the sf and mi (number of sharps/flats and major/minor flag).
+(5) In the function txt_timesig(), The verbose message was
+replaced with just the key signature nn/denom. (6) Major
+additions were made to the function handletext() which now
+does more than just print text at the appropriate place.
+If the text string is a key signature or time signature as
+indicated by the type variable, then the key signature or
+time signature parameters are extracted. If it is a key signature,
+setupkey(sf) is called which does all the work of printing
+the K: field and setting up the tables for suppressing
+the accidentals. If it is a time signature, a M: %d/%d %d
+command is printed (time signature and pulses per quarter note).
+(7) The barsize variable was turned into a global variable
+like asig and bsig. (8) The function txt_timesig() was
+broken into two functions, txt_timesig and setup_timesig().
+The new function setup_timesig() updates the global variables,
+asig, bsig and barsize. If unitlen was never set, it is
+also set as well as xunit. Because the notes are quantized
+in a separate pass, we must use a fixed xunit and unitlen
+for the entire file. Setup_timesig() is also called during
+the printtrack pass whenever handletext() detects a meter
+change. (9) Printtrack uses the barnotes counter to decide
+when to place a bar line. It is set to barsize at the
+beginning of each bar and it is decremented by each note.
+When it reaches zero a new bar line is issued. (It is
+done this way in order to handle anacrusis.) If barsize
+changes after the start of the bar it is necessary to
+correct barnotes. Printtrack keeps track of the previous
+barsize (last_barsize) and uses that to fix barnotes.
+(10) Added a new option -gk to force midi2abc to guess
+the key signature by minimizing accidentals even though
+the key signature is already indicated in the MIDI file.
+Normally it will automatically guess the key signature if
+no key signature is found in the file and the key signature
+is not specified with the -k parameter.
+
+Unfortunately, this was not all the needed changes.
+For multitrack MIDI files it is customary to reserve the 
+first track for handling global operations such as tempo,
+key, meter changes, and text messages. The remaining tracks
+contain the actual music. In the case of multivoiced abc
+files, it is necessary to apply the meter change or key
+change to each voice. Therefore for each voice, midi2abc
+needs to also check the tlistx structure in track zero for
+any such changes. Another handletext() call was added to
+to printtrack to handle this situation.
+
+Abc2midi does not follow this convention exactly. For
+single voice abc files with possible bass/chord or drum
+accompaniment and possible Karaoke, it uses several tracks
+but it does not reserve track 0 for this special purpose.
+For multi voice abc files, abc2midi does use track 0 for
+this special purpose and places text and metatext commands
+grabbed from track one; however, because the delta times
+from the missing notes were not accounted for, the delta
+times for the time signature and key signatures are
+not correct.  (They are all zero.) Fortunately, each
+track also has any key or time signature metatext commands
+with the correct delta times (assuming the abc file
+was notated correctly), so that information in track
+zero is not needed. The simplest fix was to suppress
+output of these meta commands in track 0. In writetrack
+(genmidi.c) a new flag 'timekey' was introduced to suppress
+MIDI commands for key/meter changes in track 0.
+
+The function setupkey does not work correctly after
+the first call to this function. After that, the accidentals
+are put in the wrong place. It was noticed that the
+array key[] is initialized to zero in the function findkey()
+instead of setupkey where it is actually used. Findkey()
+is normally only called once if it is called. The 
+initialization code was moved to setupkey.
+
+October 25 2003
+
+When the MIDI file has more than one key signature or
+time signature, the first key signature or time signature
+displayed in the header block reflects the last signature
+that was encountered in the MIDI file rather than the
+initial initial signature. This is corrected later on,
+however the abc file looks strange. To fix this problem
+new variables, header_asig, header_bsig, header_unitlen,
+header_keysig and header_bb were introduced. When parsing 
+the MIDI file, they are set to the first time signature or
+key signature encountered. They are printed in the header
+block.
+
+For multitrack MIDI files, midi2abc prints out all
+the textual information for track 0 immediately following
+the end of the header block (first K: indication). This
+unfortunately may include a whole list of key signature
+or time signature meta text commands resulting in a 
+correct but rather confusing abc file. To avoid this
+situation a new variable, trackno, was added to the
+function handletext. The function handletext now suppresses
+the K:, M:, and L: indications for track zero when the MIDI file
+has more than one track.
+
+October 26 2003
+ 
+There are still circumstances where a redundant key signature
+or time signature is printed in the abc file. To avoid these
+situations new variables, active_asig, active_bsig and
+active_keysig were introduced. They are set to the current
+status. Before printing a new signature, the present status
+is checked and only changes are printed.
+
+
+November 9 2003
+
+Midi2abc frequently fails to detect triplets in the MIDI file;
+even when it has been notated correctly using a music notation
+program. Therefore sets of triplets may be converted into
+
+D3/2D-[D/2-D/2]D A3/2B-[B/2C/2-]C| 
+
+instead of 
+
+(3D2D2D2 (3A2B2C2| 
+
+which is another annoyance. Midi2abc.c has a special function
+called dospecial which attempts to detect broken notes (eg.
+C > D) and triplets; however, it does not seem to work
+consistently. The problem is that all notes are quantized
+to units of 1/32 or 1/16 notes, (depending on the meter).
+The length of a triplet note is 1/12 or 1/24 which does
+not get quantized exactly. Thus the representation of this
+sequence (calling scannotes in the debugger) appears as
+follows.
+ 
+Pitch 62 chan 0 vel 127 time 160 xnum 3 playnum 3
+Pitch 62 chan 0 vel 90 time 160 xnum 2 playnum 3
+Pitch 62 chan 0 vel 90 time 160 xnum 3 playnum 3
+Pitch 69 chan 0 vel 90 time 160 xnum 3 playnum 3
+Pitch 71 chan 0 vel 90 time 160 xnum 2 playnum 3
+Pitch 60 chan 0 vel 90 time 160 xnum 3 playnum 3
+
+time is in units of midi pulses, xnum and playnum
+are in quantized half units where xunit = 120 midi pulses.
+The time and xnum are the inter-onset time of the note (length
+between onset of this note and the next note). Playnum
+is the quantized duration of the note (from midi on to
+midi off). All of these variables are computed
+by the function quantize() in midi2abc. Note that
+160 is not divided even by the half unit = 60. Playnum
+is rounded up but xnum compensates for the fact
+that it may have been too long in the previous note.
+
+The code in the function dospecial is far from transparent.
+It looks ahead one or two notes to determine whether
+this note and the following notes should be treated
+differently (either as broken or triplets) and uses
+the return character or featurecount array  to signal
+to printtrack how  to handle these notes. One of the
+tests in dospecial is the line just before the
+broken rhythm tests is (reformatted for clarity)
+ if ((v2 < pnum) || (v2 > 1 + pnum) ||
+     (pnum == 0) || (v1+v2 > *barnotes
+      )) {
+    return(' ');
+
+where v1,v2 refer to the xnum values of this note and the
+next note and playnum is the playnum value of the next note.
+v2 happened to be less than pnum due to the adjustment
+discussed above, so the program returns from this function
+without testing for broken notes or triplets. I commented
+out /* (v2 <pnum) || */, and triplets are now detected
+more consistently.  This could have some impact somewhere 
+else, but I do not know at this time.
+
+November 11 2003
+
+More tuning for multiple key signatures (see October
+26 2003). In printtrack, I moved the call to handletext
+after active_keysig, active_asig, and active_keysig
+were set. This fixed a problem in single track files,
+where the same key signature was printed twice.
+In the main function, header_keysig is set to keysig
+only if gotkeysig is equal to zero. Otherwise, header_keysig
+can be changed to the wrong (last value of keysig) value
+if multiple key signatures exist.
+
+November 12
+
+Midi2abc sometimes places a backslash line continuation
+after the last bar or note on a track. This confuses
+yaps. A check for remaining data in the track is made
+prior to sending a backslash.
+
+~
+~
+~
+~

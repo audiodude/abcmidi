@@ -46,6 +46,16 @@ int n, m;
   reducef(f);
 }
 
+static void mulfract(f, n, m)
+struct fract* f;
+int n, m;
+/* multiply  n/m to fraction pointed to by f */
+/* like addunits(), but does not use unitlength */
+{
+  f->num =   n*f->num;
+  f->denom = m*f->denom;
+  reducef(f);
+}
 
 static void advance(struct voice* v, int phase, int* items, double* itemspace, double x)
 /* move on one symbol in the specified voice */
@@ -53,6 +63,7 @@ static void advance(struct voice* v, int phase, int* items, double* itemspace, d
   struct feature* p;
   struct rest* arest;
   struct note* anote;
+  struct fract tuplefactor, notelen;
   int done;
   int stepon;
   int zerotime, newline;
@@ -121,6 +132,7 @@ static void advance(struct voice* v, int phase, int* items, double* itemspace, d
       break;
     case REST:
     case NOTE:
+      tuplefactor = v->tuplefactor;
       if ((zerotime==1) && (!v->ingrace)) {
         done = 1;
         stepon = 0;
@@ -136,7 +148,17 @@ static void advance(struct voice* v, int phase, int* items, double* itemspace, d
         };
         if ((p->type == NOTE) && (!v->ingrace)) {
           anote = p->item;
-          addfract(&v->time, anote->len.num, anote->len.denom);
+	  notelen = anote->len;
+
+ 	 if (anote->tuplenotes >0) {
+		  mulfract(&notelen,tuplefactor.num,tuplefactor.denom);
+	           }
+
+
+          addfract(&v->time, notelen.num, notelen.denom);
+/*	  printf("%c %d/%d %d/%d\n",anote->pitch,notelen.num,notelen.denom,
+			  v->time.num,v->time.denom);
+*/
         };
       };
       break;

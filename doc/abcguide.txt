@@ -45,6 +45,9 @@ of the tune, D: discography, H: history of the tune, S: source, N: notes,
 Z: transcription note, A: area from which the tune comes, B: book
 and R: rhythm. 
 
+
+Key Signature:
+
 The K: is made up of a base note A-G possibly followed by b for flat or
 # for sharp. This specifies a major key. A minor key can be specified
 by adding an m while Mixolydian and Dorian modes can be specified by adding
@@ -89,54 +92,86 @@ set by the key signature. e.g.
 
 K: C ^a
 
-Another extension of the K: field is that it can include a clef specifier and
-an octave specifier e.g.
+Another extension of the K: field is that it can include a clef specifier
+an octave specifier and a transpose specifier e.g.
 
-K:G clef=soprano octave=-1
+K:G clef=soprano octave=-1 transpose=-1
 
-The clef has no effect on the output of abc2midi, but may be used by typesetting
-programs. Recognized clefs are treble, bass, baritone, tenor, alto, mezzo
-and soprano. There are also variants of these clefs; treble-8 and treble+8
-cover ranges which are an octave below and an octave above the normal treble
-clef; there are similar variants for the other clefs. The octave specifier
-behaves as described below for the I: field.
+The clef is recognized by typesetting programs such as yaps and abc2mps
+and in some situations it will cause abc2midi to transpose the notes
+up or down by an octave.  Recognized clefs are treble,
+bass, baritone, tenor, alto, mezzo and soprano. There are also variants
+of these clefs; treble-8, tenor-8,  treble+8  covering ranges which are an
+octave below and an octave above the normal treble clef. Other
+variants are not recognized at this time. No transposition is
+assumed for the bass clef since many abc files enter the notes
+with all the commas.
 
-abc2midi also recognizes the I: (information) field, which can be used as
-an alternative way to select the clef and also to shift the range of a 
-notated section of music by a whole number of octaves. The general format is
-
-I: key=value [key=value ... ]
-
-where 'key' is a single word with no spaces, but 'value' is a string which
-may include spaces, and one I: field can set both the clef and the octave
-parameters. 
-
-e.g. 
-I:clef=bass octave=-2
-
-When support for different clefs was added to abc2ps (another widely-used
-free utility), the clef command also caused octave jumps in the case of
-certain clefs. The idea behind this was to make entering music easier, but
-it had the unfortunate effect of making abc which used these clefs 
-incompatible with other abc programs. For this reason, abc2midi does not
-do transposition on the clef command, but introduces a separate command
-(octave) which allows the note represention to be shifted by one or more 
-octaves when entering a sequence of very low or very high notes. The
-intention is to avoid having to type in lots of commas or lots of 
-apostrophes. The standard notation may be restored afterwards with
-I:octave=0 .
+The octave specifier is a convenience to make entering music easier.
+It allows the user to avoid repeatedly entering commas  or apostrophes
+when entering a sequence of low or high notes. Both yaps and abc2midi
+will transpose the notes by the specified number of octaves during 
+the parsing stage.
 
 e.g. the passage  B,,, C,, D,, E,, F,, could be written more compactly as
 
-I:octave=-2
-B, C D E F
-I:octave=0
+  I:octave=-2
+  B, C D E F
+  I:octave=0
 
-In more general terms, after the command I:octave=-N,  c  will represent 
-a pitch N octaves below its standard pitch value as given in the abc 
-1.6 standard.
 
-The I: field is an extension to the abc version 1.6 specification.
+Some instruments such as the Bb clarinet automatically transpose the
+written music. For example in the case of the clarinet, the music is
+written in the key of C but the instrument plays it in the key of Bb.
+For multivoiced tunes, the %%MIDI transpose indication is not that useful
+since it transposes all the voices by the specified amount. The 
+transpose=n subcommand in the K: field tells abc2midi to transpose
+a particular voice by n semitones without affecting how it appears in
+the printed score. For example for the tune,
+
+X:1
+T:tranposing
+M:1/8
+L:2/4
+K:C
+V:1
+K:C transpose=-1
+CDEF|GABc|
+V:2
+K:C
+CDEF|GABc
+V:1
+CDEF|GABc|
+V:2
+CDEF|GABc
+
+Voice 1 will be played one semitone lower than indicated.
+
+
+Voice indication:
+
+Many multivoiced abc files now use the V: indication to
+specify additional information such as the clef, name of
+the voice (to appear in the score). Furthermore, the
+V: indication may occur in the header (i.e. before the
+first K: indication), for the sole purpose of specifying
+such information. Abc2midi, yaps and abc2abc now recognizes
+the subfields octave=, clef= and transpose= in the V:
+field and treats them in the same manner as if they occurred
+in a K: field (as discussed above). Thus the V: field may
+appear as
+V: 1 clef=treble+8
+or
+[V: 3 transpose=3]
+The V: field is also recognized in both the body and header
+of the abc file.  Note that not all abc applications may recognize
+these extensions, so you use them at the risk that they may not be 
+treated as expected in some cases. Also in the event that
+there is a conflicting indication in either the voice or
+key signature field, eg.  [V: 1 clef=transpose+8 octave=-1]
+the clef indication predominates. 
+
+
 
 The Body of the Tune
 --------------------
@@ -185,9 +220,16 @@ z3 - a rest of 3 unit note lengths.
 Multiple bar rests can be created using 'Zn' where n is the number of
 bars rest required. This is an extension to the standard syntax.
 
-Placing a dot before a note causes it to be played staccato.
+Placing a dot before a note causes it to be played staccato.  (.e)
+Placing a M before a note indicates legato. (Me)
+Placing a H before a note indicates a fermata.  (He)
+Placing a T before a note indicates that this note is trilled.  (Te)
+Placing a R before a note indicates that this note is rolled. (Re)
 
-.e
+Alternatively you may put !fermata! or !trill! before the
+note. Other decorations have not been implemented in this manner.
+The fermata may also be applied to a rest, (in order to handle
+multivoiced files).
 
 Combining notes
 
@@ -325,8 +367,8 @@ signatures which this uses, or you can set up your own.
 Lower case a-g followed by optional # or b will generate a single note,
 the fundamental, only.
 
-The chord notation also allows chords such as "G/B". The note following
-the / is interpreted in one of two ways:
+The chord notation also allows chords such as "G/B" or "G/b". The 
+note following the / is interpreted in one of two ways:
 
 If the note following / does not exist as part of the given chord, it
 is added to the chord below the root note of the chord (G in the above
@@ -334,7 +376,9 @@ example).
 
 If the note following / does exist in the chord, then the notes of the
 chord are re-arranged so that it becomes the lowest pitch note of the
-chord. This is known as an inversion of the chord.
+chord. This is known as an inversion of the chord. It does not matter
+whether the note following the / is upper or lower case. They are
+both treated the same.
 
 This notation has been extended so that finger numbers "1" "2" "3", 
 "4" or "5" are allowed. abc2midi ignores these, but a typesetting
@@ -425,6 +469,15 @@ everything after it appeared up until the next L:, regardless of what
 voice changes there were.
 
 The Q: tempo field should only appear in voice 1 and applies to all voices.
+
+The U: abbreviation field has limited use here. You can specify
+an abbreviation such as
+U: P = !trill!
+and then in the body, eg. |DGAPF|, P will be replaced with !trill!
+Only letters between H and Z can be used. Furthermore, you can
+not redefine reserved letters such as H (fermata), L (unit length),
+M (mordent) , R (roll) , T (trill).
+
 
 Adding Lyrics to a Tune
 -----------------------
@@ -594,6 +647,18 @@ For 6/8 time default is equivalent to :
 For 9/8 time default is equivalent to :
 %%MIDI gchord fzcfzcfzc
 
+Please note, that the default gchord string is reissued any
+time a time signature change is specified in the body of the music.
+This means if one of the bars has an extra beat you included
+a M: declaration before and after the measure, the gchord string
+would be reset to the default string for that time signature
+and not the one that you had declared. It is necessary for
+you to send another %%MIDI gchord declaration after the
+the time signature in order to set this back the way you want
+it. This is one of the changes introduced into abc2midi so
+that the accompaniment track always follows the meter of the
+music for the regular time signatures.
+
 %%MIDI chordprog n
 
 Sets the MIDI instrument for the chords to be n.
@@ -629,12 +694,21 @@ and the drum program values determine what each drum strike sounds like.
 e.g. %%MIDI drum d2zdd 35 38 38  100 50 50
 
 The string may contain 'd' for a drum strike or 'z' for a rest. By default
-a voice starts with no drum pattern and !drum! is needed to enable the
-drumming. The drum pattern is repeated during each bar until !nodrum! is
-encountered. The %%MIDI drum command may be used within a tune to change
-the drum pattern. This command places the drum sounds on channel 10 and
-assumes your tone generator complies with the General Midi standard - if
-it does not, then you may hear tones instead of drum sounds.
+a voice starts with no drum pattern. Like gchord, a command
+ 
+%%MIDI drumon
+
+is needed to enable the drumming. The drum pattern is repeated 
+during each bar until a
+
+%%MIDI drumoff
+
+is encountered. The %%MIDI drum command may be used within a tune
+to change the drum pattern. This command places the drum sounds on 
+channel 10 and assumes your tone generator complies with the 
+General Midi standard - if it does not, then you may hear tones 
+instead of drum sounds. (Note the old method of using the
+instruction !drum! and !nodrum! is being deprecated.)
 
 In both the gchord and drum commands, the standard note length of
 a single note f,c,z or d is not set by the L: command. Instead it
@@ -731,6 +805,21 @@ notated. This can be achieved with
 
 %%MIDI ratio 3 1
 
+Compatibility with proposed abc standard version 2.0
+
+The proposed standard introduces a new copyright field
+using the syntax
+
+%%abc-copyright (c) Copyright John Smith 2003
+
+Abc2midi now inserts this in the MIDI file in the form of a
+metatext copyright tag. Changes were made to the event_specific
+function in store.c to process the copyright information. It
+is also copied into the Karaoke track (if it is created) as
+as @T field.
+
+
+
 
 Typesetting abc
 ---------------
@@ -766,7 +855,51 @@ This is usually either because it has run out of memory or because
 there is some problem with reading or writing a file.
 
 
+
+Bar counting and checking
+-------------------------
+
+Conventionally bars are numbered starting from one. If the first
+bar is incomplete (anacrusis), then it is counted as zero.
+Abc2ps and abcm2ps follows this convention but abcMIDI does not.
+All bars are counted starting from zero and furthermore if there
+is an incomplete bar just before a repeat (:| |: or ::), the
+bar count is not incremented. It is difficult to change this
+convention since abcMIDI assigns a number to the bar ahead
+when it sees a bar line. It would be necessary to introduce
+some look ahead for the first bar in the tune.
+
+If abc2midi reports a problem in a specific bar, you can use
+yaps with the -k option (for print bar numbers) to locate this
+bar. If you use another program such as abc2ps, then the bar
+number in the displayed or printed version may be one unit
+higher.
+
+The most common error seems to be a missing beat or having
+an extra beat in a bar. In the vicinity of a repeat, abc2midi
+tries to complete the first bar using the incomplete bar at
+the end of the repeat. If the first bar can be completed, then
+no warning is reported. The first bar may be complete the first
+time the section is played but incomplete in the second repeat. 
+Complications occur when the left repeat symbol (|:) is
+missing and abc2midi has to assume it is at the beginning.
+More complications occur when there is a key change after
+the repeat or the music is split into parts A,B,C, etc.
+Yaps does the bar checking differently when it encounters
+repeats so that it may not resolve as many incomplete bars
+and report more warnings.
+
+The bar checking is present for providing warnings. For some
+music, an extra beat may be intentional and it is not
+marked by a meter change. If you are only printing the
+music, there is probably no problem; however, if you are
+producing a MIDI file and there is guitar (gchord) accompaniment
+then a break or missing beat might be noticeable.
+
+
+
 General MIDI Program Number/Instrument Name
+-------------------------------------------
 
  1. Acoustic Grand Piano
  2. Bright Acoustic Piano 

@@ -1,3 +1,16 @@
+This file has not been updated since I have taken over
+the support of the abcMIDI package. To see the list
+of the latest versions see the readme.txt file. To see
+a log of all the changes I have made see the file CHANGES.
+The abcguide.txt and the unix (linux) man files (eg. abc2midi.1)
+contain the latest user guides. The abcguide.txt probably
+contains the most detail. The official version number
+of the abcMIDI package is given in the file VERSION.
+
+Seymour Shlien 26 October 2003.
+-------------------------------------------------------------
+
+
 current versions :
 midi2abc version 2.4
 abc2midi version 1.24

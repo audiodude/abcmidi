@@ -45,6 +45,8 @@
 #define strchr index
 #endif
 
+void setbeat();
+
 /* global variables grouped roughly by function */
 
 extern int lineno; /* source line being parsed */
@@ -95,6 +97,12 @@ int bar_num, bar_denom, barno, barsize;
 int b_num, b_denom;
 extern int barchecking;
 
+
+/* time signature after header processed */
+extern int header_time_num,header_time_denom;
+
+
+
 /* generating MIDI output */
 int beat;
 int loudnote, mednote, softnote;
@@ -103,7 +111,8 @@ int nbeats;
 int channel, program;
 #define MAXCHANS 16
 int channels[MAXCHANS + 3];
-int transpose, global_transpose;
+int  transpose;
+int  global_transpose=0;
 
 /* karaoke handling */
 extern int karaoke, wcount;
@@ -218,6 +227,7 @@ char* s;
   g_num = mtime_num * 4;
   g_denom = mtime_denom * seq_len;
   reduce(&g_num, &g_denom);
+/*  printf("%s  %d %d\n",s,g_num,g_denom); */
 }
 
 void set_drums(s)
@@ -526,28 +536,75 @@ int voice, xtrack;
 static void text_data(s)
 /* write text event to MIDI file */
 char* s;
-{
+{   
   mf_write_meta_event(delta_time, text_event, s, strlen(s));
   tracklen = tracklen + delta_time;
   delta_time = 0L;
 }
 
-static void karaokestarttrack()
+static void karaokestarttrack (track)
+int track;
 /* header information for karaoke track based on w: fields */
 {
   int j;
+  int done;
+  char atitle[200];
 
-  text_data("@LENGL");
+/*
+ *  Print Karaoke file headers in track 0.
+ *  @KMIDI KARAOKE FILE - Karaoke midi file marker)
+ */
+   if (track == 0)
+   {
+      text_data("@KMIDI KARAOKE FILE");
+   }
+/*
+ *  Name track 2 "Words" for the lyrics track.
+ *  @LENGL - language
+ *  Print @T information.
+ *  1st @T line signifies title.
+ *  2nd @T line signifies author.
+ *  3rd @T line signifies copyright.
+ */
+   if (track == 2)
+   {
+      mf_write_meta_event(0L, sequence_name, "Words", 5);
+      kspace = 0;
+      text_data("@LENGL");
+      strcpy(atitle, "@T");
+   }
+   else 
+/*
+ *  Write name of song as sequence name in track 0 and as track 1 name. 
+ *  Print general information about the file using @I marker.
+ *  Add to tracks 0 and 1 for various Karaoke (and midi) players to find.
+ */
+      strcpy(atitle, "@I");
+
   j = 0;
-  while ((j < notes) && (feature[j] != TITLE)) j = j+1;
-  if (feature[j] == TITLE) {
-    char atitle[200];
-
-    strcpy(atitle, "@T");
-    strcpy(atitle+2, atext[pitch[j]]);
-    text_data(atitle);
-  };
-  kspace = 0;
+  done = 3;
+     
+  while ((j < notes) && (done > 0))
+  {
+     j = j+1;
+     if (feature[j] == TITLE) {
+        if (track != 2)
+           mf_write_meta_event(0L, sequence_name, atext[pitch[j]], strlen (atext[pitch[j]]));
+        strcpy(atitle+2, atext[pitch[j]]);
+        text_data(atitle);
+        done--;
+     }
+     if (feature[j] == COMPOSER) {
+        strcpy(atitle+2, atext[pitch[j]]);
+        text_data(atitle);
+        done--;
+     }     
+     if (feature[j] == COPYRIGHT) {
+        strcpy(atitle+2, atext[pitch[j]]);
+        text_data(atitle);
+        done--;
+     }
+  }
 }
 
 static int findwline(startline)
@@ -633,8 +690,28 @@ int startline;
   return(newwordline);
 }
 
+
+
 static int getword(place, w)
-/* picks up next syllable out of w: field */
+/* picks up next syllable out of w: field.
+ * It strips out all the control codes ~ - _  * in the
+ * words and sends each syllable out to the Karoake track.
+ * Using the place variable, it loops through each character
+ * in the word until it encounters a space or next control
+ * code. The syllstatus variable controls the loop. After,
+ * the syllable is sent, it then positions the place variable
+ * to the next syllable or control code.
+ * inword   --> grabbing the characters in the syllable and
+ *             putting them into syllable for output.
+ * postword --> finished grabbing all characters
+ * foundnext--> ready to repeat process for next syllable
+ * empty    --> between syllables.
+ *
+ * The variable i keeps count of the number of characters
+ * inserted into the syllable[] char for output to the
+ * karoake track. The kspace variables signals that a
+ * space was encountered.
+ */
 int* place;
 int w;
 {
@@ -652,9 +729,9 @@ int w;
   };
   if (*place == 0) {
     if ((w % 2) == 0) {
-      syllable[i] = '/';
+      syllable[i] = '/'; 
     } else {
-      syllable[i] = '\\';
+      syllable[i] = '\\'; 
     };
     i = i + 1;
   };
@@ -796,10 +873,20 @@ int w;
   return(syllcount);
 }
 
+
+
+
 static void write_syllable(place)
 int place;
-/* Write out a syllable. This routine must check that it has a line of */
-/* lyrics and find one if it doesn't have one. */
+/* Write out a syllable. This routine must check that it has a line of 
+ * lyrics and find one if it doesn't have one. The function is called
+ * for each note encountered in feature[j] when the global variable
+ * wordson is set. The function keeps count of the number of notes
+ * in the music and words in the lyrics so that we can check that 
+ * they match at the end of a music line. When waitforbar is set
+ * by getword, the function  does nothing (allows feature[j]
+ * to advance to next feature) until waitforbar is set to 0
+ * (by writetrack).                                                 */
 {
   musicsyllables = musicsyllables + 1;
   if (waitforbar) {
@@ -844,7 +931,12 @@ int place;
 }
 
 static void checksyllables()
-/* check line of lyrics matches line of music */
+/* check line of lyrics matches line of music. It grabs
+ * all remaining syllables in the lyric line counting
+ * them as it goes along. It then checks that the number
+ * of syllables matches the number of notes for that music
+ * line
+*/
 {
   int done;
   int syllcount;
@@ -928,6 +1020,8 @@ int n, m;
 {
   mtime_num = n;
   mtime_denom = m;
+  time_num =n; 
+  time_denom=m; 
   /* set up barsize */
   barsize = n;
   if (barsize % 3 == 0) {
@@ -1079,7 +1173,7 @@ int n;
       };
     };
   }
-  noteon_data(pitch[n] + transpose, channel, vel);
+  noteon_data(pitch[n] + transpose + global_transpose, channel, vel);
 }
 
 static void write_program(p, channel)
@@ -1174,7 +1268,8 @@ char* s;
     set_drums(p);
     done = 1;
   };
-  if ((strcmp(command, "chordprog") == 0) && (gchordvoice > 0)) {
+/*  if ((strcmp(command, "chordprog") == 0) && (gchordvoice > 0)) { */
+  if ((strcmp(command, "chordprog") == 0))  {
     int prog;
 
     prog = readnump(&p);
@@ -1183,7 +1278,8 @@ char* s;
     };
     done = 1;
   };
-  if ((strcmp(command, "bassprog") == 0) && (gchordvoice> 0)) {
+/*  if ((strcmp(command, "bassprog") == 0) && (gchordvoice> 0)) { */
+  if ((strcmp(command, "bassprog") == 0)) {
     int prog;
 
     prog = readnump(&p);
@@ -1296,8 +1392,11 @@ static void save_note(num, denom, pitch, chan, vel)
 int num, denom;
 int pitch, chan, vel;
 {
-  noteon_data(pitch + transpose, chan, vel);
-  addtoQ(num, denom, pitch + transpose, chan, -1);
+/* don't transpose drum channel */
+  if(chan == 9) {noteon_data(pitch, chan, vel);
+                addtoQ(num, denom, pitch, chan, -1);}
+  else  {noteon_data(pitch + transpose + global_transpose, chan, vel);
+        addtoQ(num, denom, pitch + transpose + global_transpose, chan, -1);}
 }
 
 void dogchords(i)
@@ -1402,8 +1501,10 @@ static void starttrack()
   softnote = 80;
   beatstring[0] = '\0';
   nbeats = 0;
-  transpose = global_transpose;
-  set_meter(time_num, time_denom);
+  transpose = 0;
+/* make sure meter is reinitialized for every track
+ * in case it was changed in the middle of the last track */
+  set_meter(header_time_num,header_time_denom);
   div_factor = division;
   gchords = 1;
   partno = -1;
@@ -1460,8 +1561,12 @@ int xtrack;
   int slurring;
   int state[5];
   int texton;
+  int timekey;
+
+/*  printf("writing track %d\n",xtrack); */
 
   /* default is a normal track */
+  timekey=1;
   tracklen = 0L;
   delta_time = 0L;
   trackvoice = xtrack;
@@ -1473,11 +1578,18 @@ int xtrack;
   drumson = 0;
   in_varend = 0;
   if (karaoke) {
-    /* is this karaoke track ? */
+    if (xtrack < 3)                  
+       karaokestarttrack(xtrack);
+    /* lyrics are in track 2 (track count starts from 0) */
     if (xtrack == 2) {
-      karaokestarttrack();
+      kspace = 0;
       noteson = 0;
       wordson = 1;
+/*
+ *  Turn text off for H:, A: and other fields.
+ *  Putting it in Karaoke Words track (track 2) can throw off some Karaoke players.
+ */   
+      texton = 0;
       gchordson = 0;
       trackvoice = wordvoice;
     } else {
@@ -1486,11 +1598,16 @@ int xtrack;
   };
   /* is this accompaniment track ? */
   if ((gchordvoice != 0) && (xtrack == gchordtrack)) {
-    noteson = 0;
+    noteson = 0; 
     gchordson = 1;
     drumson = 0;
     temposon = 0;
     trackvoice = gchordvoice;
+/* be sure set_meter is called before setbeat even if we
+ * have to call it more than once at the start of the track */
+    set_meter(header_time_num,header_time_denom);
+/*    printf("calling setbeat for accompaniment track\n"); */
+    setbeat();
   };
   /* is this drum track ? */
   if ((drumvoice != 0) && (xtrack == drumtrack)) {
@@ -1504,9 +1621,6 @@ int xtrack;
     printf("track %d, voice %d\n", xtrack, trackvoice);
   };
   if (xtrack == 0) {
-    if (karaoke) {
-      text_data("@KMIDI KARAOKE FILE");
-    };
     mf_write_tempo(tempo);
     /* write key */
     write_keysig(sf, mi);
@@ -1519,9 +1633,10 @@ int xtrack;
        noteson = 0;
        texton = 0;
        trackvoice = 1;
+       timekey=0;
        /* return(0L); */
-    };
-  };
+    }
+  }
   starttrack();
   inchord = 0;
   /* write notes */
@@ -1547,7 +1662,7 @@ int xtrack;
       if (noteson) {
         noteon(j);
         /* set up note off */
-        addtoQ(num[j], denom[j], pitch[j] + transpose, channel, -1);
+        addtoQ(num[j], denom[j], pitch[j] + transpose +global_transpose, channel, -1);
       };
       if (!inchord) {
         delay(num[j], denom[j], 0);
@@ -1556,14 +1671,18 @@ int xtrack;
       break;
     case TNOTE:
       if (wordson) {
-        /* counts as 2 syllables : note + first tied note */
+        /* counts as 2 syllables : note + first tied note.
+	 * We ignore any bar line placed between tied notes
+	 * since this causes write_syllable to lose synchrony
+	 * with the notes.                                    */
         write_syllable(j);
+        waitforbar = 0;
         write_syllable(j);
       };
       if (noteson) {
         noteon(j);
         /* set up note off */
-        addtoQ(num[j], denom[j], pitch[j] + transpose, channel, -1);
+        addtoQ(num[j], denom[j], pitch[j] + transpose + global_transpose, channel, -1);
       };
       break;
     case OLDTIE:
@@ -1625,11 +1744,13 @@ int xtrack;
       };
       break;
     case TITLE:
-      if (noteson) {
-        /* only write title in notes track */
-        mf_write_meta_event(0L, sequence_name, atext[pitch[j]],
-                          strlen(atext[pitch[j]]));
-      };
+/*  Write name of song as sequence name in track 0 and as track 1 name. */
+/*  karaokestarttrack routine handles this instead if tune is a Karaoke tune. */
+        if (!karaoke) {
+           if (xtrack < 2)
+              mf_write_meta_event(0L, sequence_name, atext[pitch[j]],
+                                strlen(atext[pitch[j]]));
+        }
       break;
     case SINGLE_BAR:
       waitforbar = 0;
@@ -1700,6 +1821,7 @@ int xtrack;
         };
         if (inlist(j, passnum) != 1) {
           j = j + 1;  
+          if(feature[j] == VOICE) j = findvoice(j, trackvoice, xtrack);
           while ((j<notes) && (feature[j] != REP_BAR) && 
                  (feature[j] != BAR_REP) &&
                  (feature[j] != PART) &&
@@ -1708,6 +1830,7 @@ int xtrack;
                  (feature[j] != THIN_THICK) &&
                  (feature[j] != PLAY_ON_REP)) {
             j = j + 1;
+            if(feature[j] == VOICE) j = findvoice(j, trackvoice, xtrack);
           };
           barno = barno + 1;
           if ((j == notes) || (feature[j] == PLAY_ON_REP)) {
@@ -1776,11 +1899,14 @@ int xtrack;
       dodeferred(atext[pitch[j]]);
       break;
     case KEY:
-      write_keysig(pitch[j], denom[j]);
+      if(timekey) write_keysig(pitch[j], denom[j]);
       break;
     case TIME:
-      barchecking = pitch[j];
-      write_meter(num[j], denom[j]);
+      if(timekey) {
+        barchecking = pitch[j];
+        write_meter(num[j], denom[j]);
+        setbeat();   /* NEW [SS] 2003-APR-27 */
+        }
       break;
     case TEMPO:
       if (temposon) {
@@ -1810,8 +1936,11 @@ int xtrack;
     case TRANSPOSE:
       transpose = pitch[j];
       break;
+    case GTRANSPOSE:
+      global_transpose = pitch[j];
+      break;
     case RTRANSPOSE:
-      transpose = transpose + pitch[j];
+      global_transpose +=  pitch[j];
       break;
     case SLUR_ON:
       if (slurring) {
@@ -1824,6 +1953,11 @@ int xtrack;
         event_error("Unexpected end of slur found");
       };
       slurring = 0;
+      break;
+    case COPYRIGHT:
+       if (xtrack == 0) {
+          mf_write_meta_event(delta_time, copyright_notice, atext[pitch[j]], strlen (atext[pitch[j]]));
+       }
       break;
     default:
       break;

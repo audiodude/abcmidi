@@ -1,4 +1,4 @@
-# DJGPP (DOS port of gcc) Makefile for abcMIDI package 
+# Mingw Win32 Makefile for abcMIDI package 
 # 
 #
 # compilation #ifdefs - you may need to change these defined to get
@@ -20,28 +20,31 @@
 #
 # KANDR selects functions prototypes without argument prototypes.
 #
+# If your mingw compiler is in another path, change the include
+# options below in CFLAGS.
+#
 CC=gcc
-CFLAGS=-c -ansi -DANSILIBS -Wformat -Wtraditional
-# -ansi forces ANSI compliance
-LNK=gcc
+CFLAGS=-c -I/mingw/i386-mingw32/include
+LNK=gcc 
+LDFLAGS=-o
 
 all : abc2midi.exe midi2abc.exe abc2abc.exe mftext.exe yaps.exe
 
 abc2midi.exe : parseabc.o store.o genmidi.o queues.o midifile.o parser2.o
-	$(LNK) -o abc2midi.exe parseabc.o genmidi.o store.o \
+	$(LNK) $(LDFLAGS) abc2midi.exe parseabc.o genmidi.o store.o \
 	queues.o midifile.o parser2.o
 
 abc2abc.exe : parseabc.o toabc.o
-	$(LNK) -o abc2abc.exe parseabc.o toabc.o
+	$(LNK) $(LDFLAGS)   abc2abc.exe parseabc.o toabc.o
 
 midi2abc.exe : midifile.o midi2abc.o 
-	$(LNK) midifile.o midi2abc.o -o midi2abc.exe
+	$(LNK) $(LDFLAGS)   midi2abc.exe midifile.o midi2abc.o 
 
 mftext.exe : midifile.o mftext.o crack.o
-	$(LNK) midifile.o mftext.o crack.o -o mftext.exe
+	$(LNK) $(LDFLAGS)   mftext.exe midifile.o mftext.o crack.o 
 
 yaps.exe : parseabc.o yapstree.o drawtune.o debug.o pslib.o position.o parser2.o
-	$(LNK) -o yaps.exe parseabc.o yapstree.o drawtune.o debug.o \
+	$(LNK)  $(LDFLAGS)  yaps.exe parseabc.o yapstree.o drawtune.o debug.o \
 	position.o pslib.o parser2.o
 
 # common parser object code
