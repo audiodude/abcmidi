@@ -86,6 +86,8 @@ int decorators_passback[DECSIZE];
 int nokey=0;  /* K: none was encountered */
 int chord_n,chord_m ; /* for event_chordoff */
 
+extern programname program;
+
 
 int* checkmalloc(bytes)
 /* malloc with error checking */
@@ -361,6 +363,21 @@ char **p;
     };
   };
 }
+
+
+int ismicrotone(p,dir)
+char **p;
+int dir;
+{
+int a, b;
+readlen(&a, &b, p);
+if (b != 1) {
+  event_microtone(dir,a,b);
+  return 1;}
+return 0;
+}
+
+
 
 
 int isclef(s, gotoctave, octave, strict)
@@ -893,6 +910,7 @@ gotoctave = 0;
 gotclef = 0;
 cgotoctave=0;
 coctave=0;
+gotname = 0;
 skipspace(&s);
 if ((*s >= '0') && (*s <= '9')) {
   num = readnump(&s);
@@ -931,8 +949,10 @@ char **s;
   char accidental, note;
   int octave, n, m;
   char msg[80];
+  int microtone;
 
   mult = 1;
+  microtone=0;
   accidental = ' ';
   note = ' ';
   for (i = 0; i<DECSIZE; i++) {
@@ -946,18 +966,21 @@ char **s;
   };
   /*check for decorated chord */
   if (**s == '[') {
-    event_warning("decorations applied to chord");
+    if (program == YAPS) event_warning("decorations applied to chord");
     for (i = 0; i<DECSIZE; i++) chorddecorators[i] = decorators[i];
-    event_chordon();
+    event_chordon(chorddecorators);
+    if (program == ABC2ABC)
+      for (i=0; i<DECSIZE; i++) decorators[i] = 0;
     parserinchord = 1;
     *s = *s + 1;
     skipspace(s);
   };
   if (parserinchord) {
     /* inherit decorators */
-    for (i = 0; i<DECSIZE; i++) {
-      decorators[i] = decorators[i] | chorddecorators[i];
-    };
+    if (program != ABC2ABC)
+       for (i = 0; i<DECSIZE; i++) {
+          decorators[i] = decorators[i] | chorddecorators[i];
+          };
   };
   /* read accidental */
   switch (**s) {
@@ -968,6 +991,11 @@ char **s;
       *s = *s + 1;
       mult = 2;
     };
+    microtone =  ismicrotone(s,-1);
+    if (microtone) {
+       if(mult ==2) mult = 1;
+       else accidental = ' '; 
+       }
     break;
   case '^':
     accidental = **s;
@@ -976,13 +1004,31 @@ char **s;
       *s = *s + 1;
       mult = 2;
     };
+    microtone =  ismicrotone(s,1);
+    if (microtone) {
+       if(mult ==2) mult = 1;
+       else accidental = ' '; 
+       }
+
     break;
   case '=':
     accidental = **s;
     *s = *s + 1;
-    if ((**s == '^') || (**s == '_')) {
+   /* if ((**s == '^') || (**s == '_')) {
       accidental = **s;
-    };
+    };*/
+    if (**s == '^') {
+      accidental == **s;
+      *s = *s + 1;
+      microtone = ismicrotone(s,1);
+      if (microtone ==0) accidental = '^';
+      } 
+    else if (**s == '_') { 
+      accidental == **s;
+      *s = *s + 1;
+      microtone = ismicrotone(s,-1);
+      if (microtone ==0) accidental = '_';
+      } 
     break;
   default:
     /* do nothing */
@@ -1028,6 +1074,7 @@ char **s;
   } else {
     readlen(&n, &m, s);
     event_note(decorators, accidental, mult, note, octave, n, m);
+    if (microtone) event_normal_tone();
   };
 }
 
@@ -1627,7 +1674,7 @@ char* field;
             if (isalpha(*p) && (*(p+1) == ':')) {
               p = parseinlinefield(p);
             } else {
-              event_chordon();
+              event_chordon(chorddecorators);
               parserinchord = 1;
             };
           };

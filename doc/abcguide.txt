@@ -197,6 +197,30 @@ barlines modify the default pitch in the same way as on a stave. Preceding
 a note with = generates natural pitch and ^^ and __ can be used for double 
 sharp and double flat respectively.
 
+Microtones are indicated by following a ^ or _ with a fraction.
+^/C is played as one quarter tone (i.e. half a semitone) above C.
+_/C is played as one quarter tone (i.e. half a semitone) below C.
+^^/4F is played as 1/4 of a semitone above F#. (The microtone always
+follows any accidentals.) In general a microtone offset is indicated
+by a fraction using the same convention as note length (described
+below). Abcmidi uses the same microtone syntax as abcm2ps.
+(See features.txt in the abcm2ps distribution.)
+
+Note that unlike accidentals, microtones do not propogate across a measure.
+Microtones are implemented using the MIDI pitchwheel command. Since the
+pitchwheel affects all notes played on a specific channel, a microtone
+applied to any note in a chord specified by rectangular brackets,
+(eg. [ACE]) will apply to all the notes in the chord.
+
+In accordance to the General MIDI recommendations the pitch range
+of the pitchwheel is set to plus or minus two semitones. Therefore
+abc2midi cannot go beyond this range.
+
+Microtones have been introduced fairly recently into abcmidi (Mar 2005);
+so far there is very little abc notated on the web which exploits
+this feature.
+
+
 The length is in general specified by a fraction following the pitch
 specifier. However, the notation is made more concise by allowing much
 of the fraction to be omitted.

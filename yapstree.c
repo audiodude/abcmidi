@@ -22,7 +22,7 @@
 /* yapstree.c - back-end for abc parser. */
 /* generates a data structure suitable for typeset music */
 
-#define VERSION "1.32 January 09 2005"
+#define VERSION "1.33 February 26 2005"
 #include <stdio.h>
 #ifdef USE_INDEX
 #define strchr index
@@ -52,6 +52,8 @@ extern void setup_fonts();
 extern void printtune(struct tune *t);
 extern void set_keysig(struct key *k, struct key *newval);
 
+programname program = YAPS;
+
 struct voice* cv;
 struct tune thetune;
 
@@ -77,7 +79,8 @@ in parseabc.c */
 
 enum linestattype {fresh, midmusic, endmusicline, postfield};
 enum linestattype linestat;
-
+ 
+int dummydecorator[DECSIZE]; /* used in event_chord */
 
 void setfract(f, a, b)
 struct fract* f;
@@ -1083,6 +1086,7 @@ char** filename;
   int refmatch;
   int papsize, margins, newscale;
   int ier;
+  int j;
 
   if (getarg("-ver",argc, argv) != -1) {
 	  printf("%s\n",VERSION);
@@ -1211,6 +1215,7 @@ char** filename;
   init_tune(&thetune, -1);
   setup_fonts();
   /* open_output_file(outputname); */
+  for (j=0;j<DECSIZE;j++)  dummydecorator[j] = 0;
 }
 
 static void check_voice_end(struct voice* v)
@@ -2673,12 +2678,13 @@ void event_chord()
     if (cv->inchord) {
       event_chordoff(1,1);
     } else {
-      event_chordon();
+      event_chordon(dummydecorator);
     };
 }
 
-void event_chordon()
+void event_chordon(int chorddecorators[])
 /* start of a chord */
+/* the array chorddecorators is not used yet. */
 {
   if (cv->inchord) {
     event_error("nested chords found");
@@ -2880,6 +2886,17 @@ int xoctave, n, m;
     };
   };
 }
+
+/* these functions are here to satisfy the linker */
+void event_microtone(int dir, int a, int b)
+{
+}
+
+void event_normal_tone()
+{
+}
+
+
 
 void event_info_key(key, value)
 char* key;

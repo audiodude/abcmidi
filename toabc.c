@@ -21,7 +21,7 @@
 
 /* back-end for outputting (possibly modified) abc */
 
-#define VERSION "1.37 February 03 2005"
+#define VERSION "1.38 February 26 2005"
 
 /* for Microsoft Visual C++ 6.0 or higher */
 #ifdef _MSC_VER
@@ -47,6 +47,8 @@ extern char* strchr();
 
 #define MAX_VOICES 30
 /* should be plenty! */
+
+programname program = ABC2ABC;
 
 struct fract {
   int num;
@@ -1597,8 +1599,13 @@ void event_chord()
   chordcount = 0;
 }
 
-void event_chordon()
+void event_chordon(int chorddecorators[])
 {
+  int i;
+  for (i=0; i<DECSIZE; i++) {
+    if (chorddecorators[i]) 
+      emit_char(decorations[i]);
+    }
   emit_string("[");
   inmusic = 1;
   inchord = 1;
@@ -2002,6 +2009,16 @@ int xoctave, n, m;
     };
   };
 }
+
+/* these functions are here to satisfy the linker */
+void event_microtone(int dir, int a, int b)
+{
+}
+
+void event_normal_tone()
+{
+}
+
 
 
 int accidental_to_code (char xaccidental)

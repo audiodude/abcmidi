@@ -2947,3 +2947,189 @@ with
 pitchline[i] = pitchline[i+1];
 
 
+February 12 2005
+
+Michele reports the following bug in the function dotie
+in store.c. For the following tune,
+
+%
+X: 1
+T: Tie bug
+M:C
+L:1/4
+K:D
+[V: 1] | f/e/g/f/-f2 |
+[V: 2] |  d3/2 d/-d2 |
+
+abc2midi returns the message
+Error in line 7 : Could not find note to be tied.
+
+The message is wrong, since abc2midi handles both
+ties correctly.
+
+Michele added the conditional break statements
+ if(localvoiceno != voiceno) break;
+after case TIE: and after case CHORDON:
+
+which seems to fix the problem.
+
+Analysis: The function dotie is a real birds nest of
+code. Here is a description of how it works.
+Dotie is called by tiefix when a TIE feature is
+encountered. It has two parameters, j the index
+in the feature array where TIE was encountered and
+xinchord, a flag indicating whether the TIE is
+enclosed in a chord (eg [A-B] A). The reason for the
+complexity of the code is because the function dotie
+is controlled by three semaphores tietodo, done,
+and tied_denom. To start, dotie searches backwards
+for the note preceding the tie, and calls its address
+(in the feature space) tienote. It changes 
+feature[tienote] from NOTE to TNOTE. It changes
+feature[j] from TIE to REST and sets the rest length
+to that of tienote (so they are both the same).
+Finally it sets the semaphores
+done = 0; tied_num = num[tienote]; tietodo = 1;
+which controls the stopping conditions of the following
+while loop that searches for the following note to be
+tied to tienote. Now the fun begins. To simplify things
+assume we do not have chords.  The loop begins with the
+variable place set to j, the original position of the TIE
+now converted to a rest. So the first feature in the loop 
+is gauranteed to be a  REST. case REST: subtracts
+the length of the rest from tied_num so it is back to zero.
+Now the semaphores are
+done = 0; tietodo = 1; tied_num = 0;
+The loop variable place is incremented and now feature[place]
+probably points to a NOTE. Case NOTE: since tietodo is not
+zero the function compares the pitches (pitchline) of
+place and tienote. If they are equal, the tienote length
+is increased by the place note, the tied_num semaphore
+is also increased by the place note. Feature[place] is changed
+from a NOTE to a REST and to make things more confusing,
+if we are not in a chord the length of tied_num is now
+decremented by the place note so that it is back to zero.
+Finally the tietodo variable is also set to zero indicating
+that we have finally joined the two notes in the tie. The
+semaphores are now:
+done = 0; tietodo = 0; tied_num = 0;
+Unfortunately the while loop does not stop here and this
+is the reason for the spurious error message described above.
+In order for the while loop to stop, the variable done must
+be set to a nonzero value. This usually happens when the
+next NOTE or REST is found. In the above example, the
+next note is found in a different voice.
+
+The remedy is probably to end the while loop when tietodo is
+zero. However, since the code is working fine now I am
+rather reluctant to try it in case another bug surfaces.
+
+
+Feb 13 2005
+
+Abcmidi /abcm2ps incompatibility problem for decorations
+applied to chords. It is perfectly normal to apply a
+fermata or a staccatto to a chord, eg H[C2E2G2] or
+.[CEG]; in fact abcm2ps prefers that you do it this way
+rather than [.C.E.G]. Abc2midi handles both notations
+correctly but it sends the following warning message if you use
+the former convention.
+
+Warning in line 6 : decorations applied to chord
+
+Nevertheless, abc2midi sends the chord decoration to each
+note in the chord and everything works fine provided you
+don't attempt to apply roll, trill or ornamentation
+to a chord. In the later case you receive an error message
+and the decoration is not applied. It is therefore preferable
+that parseabc does not produce this warning when abc2midi
+is running.
+
+Fix: it is convenient if  parseabc.c knows which program
+is running (i.e. abc2midi, abc2abc or yaps). A new typedef
+programname which distinguishes ABC2MIDI, YAPS, and ABC2MIDI 
+was added to abc.h. A programname variable called "program"
+was added as a global variable to store.c, yapstree.c and
+toabc.c and set to proper value. The program variable is
+linked to parseabc.c as an extern global. This variable
+is used to fine tune parseabc.c.
+
+Unfortunately not everything is well with yaps and abc2abc.
+Like abc2midi, the chord decoration is applied to every
+note in the chord. In the case of yaps, this does not produce
+an aesthetically pleasing result. Since yaps is not the
+preferred postscript converter and I am also not very
+knowledgeable of its internals, yaps shall remain as it
+is and the warnings serve a useful purpose. In the case
+of abc2abc, it is not desirable that it automatically
+converts H[A2C2E2] to [HA2HC2HE2] or something similar.
+A few more changes are necessary.
+
+It was necessary to introduce a new parameter (chorddecorators)
+into the function event_chordon. This entailed making changes to
+parseabc.h, parseabc.c, store.c, yapstree.c and toabc.c.
+In store.c and yapstree.c the new parameter is not used;
+however, in toabc.c extra code was added to event_chordon
+to print out any decorations applied to the chord. In parseabc.c
+the decorators were not inherited from the chorddecorators
+when parseabc.c was linked to toabc.c.
+
+Unfortunately event_chordon is also called by the function
+event_chord which handles the obsolete form of chords
++CEG+. For store.c, yapstree.c and toabc.c, I introduced
+a global array dummydecorators[DECSIZE] which is initialized
+to zero's in event_init. This array is used in event_chord.
+
+February 14 2005
+
+Abc2abc prints garbage in the V: field (reported by Hudson Lacerda).
+Given a normal file :
+
+X:1
+T: abc2abc V: bug
+M: 4/4
+L: 1/8
+K: C
+V: 1
+CDE FGABC| def gab c'2|
+V: 2
+C8|C8|
+
+abc2abc outputs
+
+X: 1
+T:abc2abc V: bug
+M:4/4
+L:1/8
+K:C
+V:1 name=(LI
+CDE FGABC| def gab c'2|
+V:2 name=(LI
+C8|C8|
+
+Analysis: the local variable gotname in the function
+parsevoice in parseabc is never initialized to zero.
+The problem was fixed by adding
+gotname = 0;
+
+
+February 21 2005
+
+I have started to introduce microtone note capability into abcMIDI.
+A _/ means lower the pitch of the following note by a half a semitone. 
+A ^/ means raise the pitch of the following note by a half a semitone. 
+The microtone notation does not propogate across a measure but
+applies to only the immediate note. For chords in the same channel
+(voice), the microtone will apply to both notes no matter
+how it has been notated. For example [C_/E] is the same as
+[_/C_/E]. The abcm2ps program provides more flexibility, however
+I need more clarification before I can proceed.
+
+Implementation: added a new function ismicrotone() called by
+parsenote() in parseabc.c. I also introduced functions
+event_microtone() and event_normal_tone() in store.c, yapstree.c
+and toabc.c. This is presently an undocumented feature.
+
+
+
+

@@ -2,6 +2,11 @@
 /* Copyright James Allwright 2000 */
 /* may be copied under the terms of the GNU public license */
 
+typedef enum {
+ABC2MIDI,
+ABC2ABC,
+YAPS} programname;
+
 /* define types of abc object */
 typedef enum {
 /* types of bar sign */

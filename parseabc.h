@@ -20,6 +20,8 @@ extern int getarg(char *option, int argc, char *argv[]);
 extern int *checkmalloc(int size);
 extern char *addstring(char *s);
 extern char *lookup_abbreviation(char symbol);
+extern int ismicrotone(char **p, int dir);
+extern void event_normal_tone(void);
 #else
 extern int readnump();
 extern int readsnump();
@@ -31,6 +33,8 @@ extern int getarg();
 extern int *checkmalloc();
 extern char *addstring();
 extern char *lookup_abbreviation();
+extern int ismicrotone();
+extern void event_normal_tone();
 #endif
 extern void parseron();
 extern void parseroff();
@@ -70,6 +74,7 @@ extern void event_key(int sharps, char *s, int minor,
                char modmap[7], int modmul[7],
                int gotkey, int gotclef, char *clefname,
                int octave, int transpose, int gotoctave, int gottranspose);
+extern void event_microtone(int dir, int a, int b);
 extern void event_graceon(void);
 extern void event_graceoff(void);
 extern void event_rep1(void);
@@ -87,7 +92,7 @@ extern void event_lineend(char ch, int n);
 extern void event_broken(int type, int mult);
 extern void event_tuple(int n, int q, int r);
 extern void event_chord(void);
-extern void event_chordon(void);
+extern void event_chordon(int chorddecorators[DECSIZE]);
 extern void event_chordoff(int, int);
 extern void event_instruction(char *s);
 extern void event_gchord(char *s);
@@ -121,6 +126,7 @@ extern void event_octave();
 extern void event_info_key();
 extern void event_info();
 extern void event_key();
+extern void event_microtone();
 extern void event_graceon();
 extern void event_graceoff();
 extern void event_rep1();

@@ -31,7 +31,7 @@
  * Wil Macaulay (wil@syndesis.com)
  */
 
-#define VERSION "1.59 February 05 2005"
+#define VERSION "1.60 February 26 2005"
 /* enables reading V: indication in header */
 #define XTEN1 1
 /*#define INFO_OCTAVE_DISABLED 1*/
@@ -82,6 +82,8 @@ extern void reduce();
 /* global variables grouped roughly by function */
 
 FILE *fp;
+
+programname program = ABC2MIDI;
 
 /* parsing stage */
 int tuplecount, tfact_num, tfact_denom, tnote_num, tnote_denom;
@@ -200,6 +202,7 @@ in parseabc.c */
 /* time signature after header processed */
 int header_time_num,header_time_denom;
 
+int dummydecorator[DECSIZE]; /* used in event_chord */
 
 extern long writetrack();
 
@@ -453,6 +456,7 @@ char **filename;
   denom = checkmalloc(maxnotes*sizeof(int));
   feature = (featuretype*) checkmalloc(maxnotes*sizeof(featuretype));
   pitchline = checkmalloc(maxnotes*sizeof(int));
+  for (j=0;j<DECSIZE;j++)  dummydecorator[j] = 0;
 
   /* and for text */
   atext = (char**) checkmalloc(maxtexts*sizeof(char*));
@@ -1759,7 +1763,7 @@ void event_chord()
   if (v->inchord) {
     event_chordoff(1,1);
   } else {
-    event_chordon();
+    event_chordon(dummydecorator);
   };
 }
 
@@ -2059,8 +2063,10 @@ int n, m;
   };
 }
 
-void event_chordon()
+void event_chordon(int chorddecorators[])
 /* handles a chord start [ in the abc */
+/* the array chorddecorators is needed in toabc.c and yapstree.c */
+/* but is not relevant here.                                     */
 {
   if (v->inchord) {
     event_error("Attempt to nest chords");
@@ -2384,6 +2390,24 @@ int xoctave, n, m;
       };
     };
   };
+}
+
+void event_microtone(int dir, int a, int b)
+{
+int bend;
+char buff[MAXLINE];
+/* pitchwheel range +/- 2 semitones according to General MIDI specification*/
+/* i.e. 64+32 shifts up by one semitone.                                   */
+bend = dir*32*a/b+64;
+if (bend <0) bend=0;
+if (bend >127) bend = 127;
+sprintf(buff,"pitchbend 0 %d",bend);
+event_specific("MIDI", buff);
+}
+
+void event_normal_tone()
+{ 
+event_specific("MIDI", "pitchbend 0 64");
 }
 
 char *get_accidental(place, accidental)
@@ -2741,6 +2765,7 @@ int j, xinchord,voiceno;
           };
           break;
         case TIE:
+          if(localvoiceno != voiceno) break;
           if (lastnote == -1) {
             event_error("Bad tie: possibly two ties in a row");
           } else {
@@ -2751,6 +2776,7 @@ int j, xinchord,voiceno;
           };
           break;
         case CHORDON:
+          if(localvoiceno != voiceno) break;
           inchord = 1;
           break;
         case CHORDOFF:
