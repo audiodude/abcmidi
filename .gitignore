@@ -1,0 +1,8 @@
+*.o
+/abc2abc
+/abc2midi
+/abcmatch
+/mftext
+/midi2abc
+/midicopy
+/yaps
