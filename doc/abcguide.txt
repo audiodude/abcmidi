@@ -261,7 +261,9 @@ possible. In typeset music, a slur looks very similar to a tie, but in
 abc, ( marks the start of a slur and ) marks the end. e.g. (ABc) .
 abc2midi recognizes slurs, but they have no effect on the MIDI generated.
 
-Barlines :
+
+
+Barlines and variant endings
 
 | is an ordinary barline
 || is a double barline
@@ -270,14 +272,30 @@ Barlines :
 :: is "repeat last and next sections".
 |1 or |[1 or | [1 is "first repeat ending".
 :|2 or :|[2 or :| [2 is "second repeat ending".
+|[1,3 is first and third ending
+:|[2,4 is second and fourth ending
 |] and [| are variants of ||.
 
-A tune with different ending for the first and second repeats has the
+The notation :: is short for :| followed by |: .
+
+A tune with different ending for the first, second and third repeats has the
 general form:
 
-|:  common body of tune  |1  first ending  :|2  second ending  ||
+|:  common body of tune  |1  first ending  :|2  second ending :|3 third ending  ||
 
-The notation :: is short for :| followed by |: .
+You may also use this notation to indicate that the first ending is
+played on the first and third repeat. For example 
+
+|:common body of tune|1,3  first ending  :|2 second ending  :|4 forth ending|
+
+(The last variant ending should not end with a :|. In other words,
+this will not work correctly.  |: ... |[1,2 :|.)
+
+For multivoice abc files, you should be careful that the
+different voices share the same repeat structure. When switching
+voices (assuming they are interleaved)  abc2midi does not cache 
+the repeat state.
+ 
 
 Printed music commonly misses out a start repeat at the beginning of a tune.
 abc2midi will try to fix up things if you miss out a start repeat in single
@@ -295,29 +313,6 @@ the mistake themselves, but abc2midi will play exactly what is written, so
 care needs to be taken that this is corrected when the piece is transcribed
 to abc.
 
-Variant Endings
----------------
-abc2midi has been extended so that it understands variant endings if
-you use the P: part notation to repeat a section. For example, if the
-header of the tune contains P:A4B4 then parts A and B will each be
-played 4 times. To play a different ending each time, you could write
-
-P:A
-<notes> | [1  <notes>  || [2 <notes> || [3 <notes> || [4 <notes> ||
-
-The Nth ending starts with [N and ends with one of || :| |] or [|. 
-You can also mark a section as being used for more than one ending e.g.
-
-[1,3 <notes> ||
-
-plays on the 1st and 3rd endings and
-
-[1-3 <notes> ||
-
-plays on endings 1, 2 and 3. In general, [ can be followed by any list
-of numbers and ranges as long as it contains no spaces e.g.
-
-[1,3,5-7  <notes>  || [2,4,8 <notes> ||
 
 
 Rhythm field and Broken Rhythm Notation

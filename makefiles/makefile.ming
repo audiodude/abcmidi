@@ -28,7 +28,8 @@ CFLAGS=-c -I/mingw/i386-mingw32/include
 LNK=gcc 
 LDFLAGS=-o
 
-all : abc2midi.exe midi2abc.exe abc2abc.exe mftext.exe yaps.exe
+all : abc2midi.exe midi2abc.exe abc2abc.exe mftext.exe yaps.exe \
+midicopy.exe
 
 abc2midi.exe : parseabc.o store.o genmidi.o queues.o midifile.o parser2.o
 	$(LNK) $(LDFLAGS) abc2midi.exe parseabc.o genmidi.o store.o \
@@ -46,6 +47,9 @@ mftext.exe : midifile.o mftext.o crack.o
 yaps.exe : parseabc.o yapstree.o drawtune.o debug.o pslib.o position.o parser2.o
 	$(LNK)  $(LDFLAGS)  yaps.exe parseabc.o yapstree.o drawtune.o debug.o \
 	position.o pslib.o parser2.o
+
+midicopy.exe: midicopy.o
+	$(LNK)  $(LDFLAGS) midicopy.exe midicopy.o
 
 # common parser object code
 #
@@ -111,9 +115,14 @@ crack.o : crack.c
 mftext.o : mftext.c midifile.h
 	$(CC) $(CFLAGS) mftext.c
 
+# objects needed for midicopy
+$
+midicopy.o : midicopy.c
+	$(CC) $(CFLAGS) midicopy.c
+
 clean:
 	rm *.o
 	rm *.exe
 
-zipfile: midi2abc.exe abc2midi.exe mftext.exe yaps.exe abc2abc.exe
+zipfile: midi2abc.exe abc2midi.exe mftext.exe yaps.exe abc2abc.exe midicopy.exe
 	zip pcexe2.zip *.exe readme.txt abcguide.txt demo.abc yaps.txt

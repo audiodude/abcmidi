@@ -44,6 +44,12 @@
  *
  */
 
+#define VERSION "2.75 July 17 2004"
+
+/* Microsoft Visual C++ Version 6.0 or higher */
+#ifdef _MSC_VER
+#define ANSILIBS
+#endif
 
 #include <stdio.h>
 #ifdef PCCFIX
@@ -70,6 +76,8 @@ extern char* strchr();
 void initfuncs();
 void setupkey(int);
 int testtrack(int trackno, int barbeats, int anacrusis);
+int open_note(int chan, int pitch, int vol);
+int close_note(int chan, int pitch, int *initvol);
 
 
 /* Global variables and structures */
@@ -110,6 +118,7 @@ int guessk;   /* flag - guess key signature                     */
 int summary;  /* flag - output summary info of MIDI file        */
 int keep_short; /*flag - preserve short notes                   */
 int swallow_rests; /* flag - absorb short rests                 */
+int midiprint; /* flag - run midigram instead of midi2abc       */
 int restsize; /* smallest rest to absorb                        */
 int no_triplets; /* flag - suppress triplets or broken rhythm   */
 int obpl = 0; /* flag to specify one bar per abc text line      */
@@ -192,6 +201,9 @@ struct dlistx {
   struct anote* note;
 };
 
+int notechan[2048],notechanvol[2048]; /*for linking on and off midi
+					channel commands            */
+int last_tick; /* for getting last pulse number in MIDI file */
 
 
 
@@ -710,6 +722,123 @@ char *mess;
 int leng;
 {
 }
+
+
+
+/* Dummy functions for handling MIDI messages.
+ *    */
+ void no_op0() {}
+ void no_op1(int dummy1) {}
+ void no_op2(int dummy1, int dummy2) {}
+ void no_op3(int dummy1, int dummy2, int dummy3) { }
+ void no_op4(int dummy1, int dummy2, int dummy3, int dummy4) { }
+ void no_op5(int dummy1, int dummy2, int dummy3, int dummy4, int dummy5) { }
+
+
+
+void print_txt_noteon(chan, pitch, vol)
+{
+int start_time;
+int initvol;
+if (vol > 0)
+open_note(chan, pitch, vol);
+else {
+  start_time = close_note(chan, pitch,&initvol);
+  if (start_time >= 0)
+      printf("%8.4f %8.4f %d %d %d %d\n",
+       (double) start_time/(double) division,
+       (double) Mf_currtime/(double) division,
+       trackno+1, chan +1, pitch,initvol);
+      if(Mf_currtime > last_tick) last_tick = Mf_currtime;
+   }
+}
+
+
+
+void print_txt_noteoff(chan, pitch, vol)
+{
+int start_time,initvol;
+
+start_time = close_note(chan, pitch, &initvol);
+if (start_time >= 0)
+    printf("%8.4f %8.4f %d %d %d %d\n",
+     (double) start_time/(double) division,
+     (double) Mf_currtime/(double) division,
+     trackno+1, chan+1, pitch,initvol);
+    if(Mf_currtime > last_tick) last_tick = Mf_currtime;
+}
+
+
+
+/* In order to associate a channel note off message with its
+ * corresponding note on message, we maintain the information
+ * the notechan array. When a midi pitch (0-127) is switched
+ * on for a particular channel, we record the time that it
+ * was turned on in the notechan array. As there are 16 channels
+ * and 128 pitches, we initialize an array 128*16 = 2048 elements
+ * long.
+**/
+init_notechan()
+{
+/* signal that there are no active notes */
+ int i;
+ for (i = 0; i < 2048; i++) notechan[i] = -1;
+}
+
+
+/* The next two functions update notechan when a channel note on
+   or note off is encountered. The second function close_note,
+   returns the time when the note was turned on.
+*/
+int open_note(int chan, int pitch, int vol)
+{
+    notechan[128 * chan + pitch] = Mf_currtime;
+    notechanvol[128 * chan + pitch] = vol;
+    return 0;
+}
+
+
+int close_note(int chan, int pitch, int *initvol)
+{
+    int index, start_tick;
+    index = 128 * chan + pitch;
+    if (notechan[index] < 0)
+	return -1;
+    start_tick = notechan[index];
+    *initvol = notechanvol[index];
+    notechan[index] = -1;
+    return start_tick;
+}
+
+
+void initfunc_for_midinotes()
+{
+    Mf_error = error;
+    Mf_header = txt_header;
+    Mf_trackstart = txt_trackstart;
+    Mf_trackend = txt_trackend;
+    Mf_noteon = print_txt_noteon;
+    Mf_noteoff = print_txt_noteoff;
+    Mf_pressure = no_op3;
+    Mf_parameter = no_op3;
+    Mf_pitchbend = no_op3;
+    Mf_program = no_op2;
+    Mf_chanpressure = no_op3;
+    Mf_sysex = no_op2;
+    Mf_metamisc = no_op3;
+    Mf_seqnum = no_op1;
+    Mf_eot = no_op0;
+    Mf_timesig = no_op4;
+    Mf_smpte = no_op5;
+    Mf_tempo = no_op1;
+    Mf_keysig = no_op2;
+    Mf_seqspecific = no_op3;
+    Mf_text = no_op3;
+    Mf_arbitrary = no_op2;
+}
+
+
+
 
 void initfuncs()
 {
@@ -1961,6 +2090,16 @@ int argc;
 {
   int val;
   int arg;
+  arg = getarg("-ver",argc,argv);
+  if (arg != -1) {printf("%s\n",VERSION); exit(0);}
+  midiprint = 0;
+  arg = getarg("-Midigram",argc,argv);
+  if (arg != -1) 
+   {
+   midiprint=1;
+/*   return arg; */
+   }
+
   arg = getarg("-a", argc, argv);
   if ((arg != -1) && (arg < argc)) {
     anacrusis = readnum(argv[arg]);
@@ -2101,7 +2240,7 @@ int argc;
 /*    fprintf(outhandle,"%% input file %s\n", argv[arg]); */
   }
   else {
-    printf("midi2abc version 2.73\n  usage :\n");
+    printf("midi2abc version %s\n  usage :\n",VERSION);
     printf("midi2abc filename <options>\n");
     printf("         -a <beats in anacrusis>\n");
     printf("         -xa  extract anacrusis from file ");
@@ -2127,6 +2266,8 @@ int argc;
     printf("         -bpl <number> of bars printed on one line\n");
     printf("         -bps <number> of bars to be printed on staff\n");
     printf("         -obpl one bar per line\n");
+    printf("         -Midigram   Prints midigram instead of abc file\n");
+    printf("         -ver version number\n");
     printf(" None or only one of the options -gu, -b, -Q -u should\n");
     printf(" be specified. If none are present, midi2abc will uses the\n");
     printf(" the PPQN information in the MIDI file header to determine\n");
@@ -2140,17 +2281,14 @@ int argc;
 }
 
 
-int main(argc,argv)
-char *argv[];
-int argc;
-{
-  FILE *efopen();
-  int j;
-  int arg;
-  int voiceno;
-  int accidentals; /* used for printing summary */
 
-  arg = process_command_line_arguments(argc,argv);
+void midi2abc (arg, argv)
+char *argv[];
+int arg;
+{
+int voiceno;
+int accidentals; /* used for printing summary */
+int j;
 
 /* initialization */
   trackno = 0;
@@ -2297,7 +2435,31 @@ int argc;
     };
   };
   fclose(outhandle);
-  return(0);
+}
+
+void midigram(argc,argv)
+char *argv[];
+int argc;
+{
+initfunc_for_midinotes();
+init_notechan();
+last_tick=0;
+/*F = efopen(argv[argc -1],"rb");*/
+Mf_getc = filegetc;
+mfread();
+printf("%d\n",last_tick);
 }
 
 
+int main(argc,argv)
+char *argv[];
+int argc;
+{
+  FILE *efopen();
+  int arg;
+
+  arg = process_command_line_arguments(argc,argv);
+  if(midiprint) midigram(argc,argv);
+  else midi2abc(argc,argv); 
+  return 0;
+}

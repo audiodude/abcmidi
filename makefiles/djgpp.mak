@@ -25,7 +25,8 @@ CFLAGS=-c -ansi -DANSILIBS -Wformat -Wtraditional
 # -ansi forces ANSI compliance
 LNK=gcc
 
-all : abc2midi.exe midi2abc.exe abc2abc.exe mftext.exe yaps.exe
+all : abc2midi.exe midi2abc.exe abc2abc.exe mftext.exe yaps.exe\
+     midicopy.exe
 
 abc2midi.exe : parseabc.o store.o genmidi.o queues.o midifile.o parser2.o
 	$(LNK) -o abc2midi.exe parseabc.o genmidi.o store.o \
@@ -39,6 +40,9 @@ midi2abc.exe : midifile.o midi2abc.o
 
 mftext.exe : midifile.o mftext.o crack.o
 	$(LNK) midifile.o mftext.o crack.o -o mftext.exe
+
+midicopy.exe : midicopy.o
+	$(LNK) midicopy.o -o midicopy.exe
 
 yaps.exe : parseabc.o yapstree.o drawtune.o debug.o pslib.o position.o parser2.o
 	$(LNK) -o yaps.exe parseabc.o yapstree.o drawtune.o debug.o \
@@ -71,6 +75,9 @@ tomidi.o : tomidi.c abc.h midifile.h
 
 queues.o: queues.c genmidi.h
 	$(CC) $(CFLAGS) queues.c
+
+midicopy.o: midicopy.c midicopy.h
+	$(CC) $(CFLAGS) midicopy.c
 
 # common midifile library
 #
@@ -112,5 +119,6 @@ clean:
 	del *.o
 	del *.exe
 
-zipfile: midi2abc.exe abc2midi.exe mftext.exe yaps.exe abc2abc.exe
+zipfile: midi2abc.exe abc2midi.exe mftext.exe yaps.exe\
+         abc2abc.exe midicopy.exe
 	zip pcexe2.zip *.exe readme.txt abcguide.txt demo.abc yaps.txt

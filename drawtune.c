@@ -24,6 +24,10 @@
 /* There are 2 stages to this process. First the symbol positions are */
 /* calculated, then the PostScript symbols are generated.             */
 
+#ifdef _MSC_VER
+#define ANSILIBS 1
+#endif
+
 #include <stdio.h>
 #ifdef ANSILIBS
 #include <stdlib.h>
@@ -812,14 +816,14 @@ static void sizerest(struct rest* r, struct feature* ft)
       break;
     };
     if (r->dots > 0) {
-      ft->xright = ft->xright + (r->dots*DOT_SPACE);
+      ft->xright = ft->xright + (r->dots* (float) DOT_SPACE);
     };
   };
   if (r->gchords != NULL) {
     width = maxstrwidth(r->gchords, (double)(gchordfont.pointsize),
                                      gchordfont.default_num);
     if (width > ft->xleft + ft->xright) {
-      ft->xright = width - ft->xleft;
+      ft->xright = (float) width - ft->xleft;
     };
   };
 }
@@ -882,13 +886,13 @@ static void setstemlen(struct note* n, int ingrace)
       } else {
         switch(n->base_exp) {
         case -6:
-          n->stemlength = GRACE_STEMLEN + 2*TAIL_SEP*0.7;
+          n->stemlength = (float) GRACE_STEMLEN + 2* (float) TAIL_SEP* (float) 0.7;
           break;
         case -5:
-          n->stemlength = GRACE_STEMLEN + TAIL_SEP*0.7;
+          n->stemlength = (float) GRACE_STEMLEN + (float) TAIL_SEP* (float) 0.7;
           break;
         default:
-          n->stemlength = GRACE_STEMLEN; /* default stem length */
+          n->stemlength = (float) GRACE_STEMLEN; /* default stem length */
           break;
         };
       };
@@ -899,13 +903,13 @@ static void setstemlen(struct note* n, int ingrace)
       } else {
         switch(n->base_exp) {
         case -6:
-          n->stemlength = STEMLEN + 2*TAIL_SEP;
+          n->stemlength = (float) STEMLEN + 2* (float) TAIL_SEP;
           break;
         case -5:
-          n->stemlength = STEMLEN + TAIL_SEP;
+          n->stemlength = (float) STEMLEN + (float) TAIL_SEP;
           break;
         default:
-          n->stemlength = STEMLEN; /* default stem length */
+          n->stemlength = (float) STEMLEN; /* default stem length */
           break;
         };
       };
@@ -920,11 +924,11 @@ static void sizenote(struct note* n, struct feature* f, int ingrace)
   char* decorators;
   int i;
 
-  f->ydown = TONE_HT*(n->y - 2);
-  f->yup = TONE_HT*(n->y + 2);
+  f->ydown = (float) TONE_HT*(n->y - 2);
+  f->yup = (float) TONE_HT*(n->y + 2);
   if (ingrace) {
-    f->xleft = GRACE_HALF_HEAD;
-    f->xright = GRACE_HALF_HEAD;
+    f->xleft = (float) GRACE_HALF_HEAD;
+    f->xright = (float) GRACE_HALF_HEAD;
   } else {
     if (n->base_exp >= 1) {
       f->xleft = HALF_BREVE;
@@ -935,14 +939,14 @@ static void sizenote(struct note* n, struct feature* f, int ingrace)
     };
     if (n->fliphead) {
       if (n->stemup) {
-        f->xright = f->xright + HALF_HEAD * 2;
+        f->xright = (float) f->xright + (float) HALF_HEAD * 2;
       } else {
-        f->xleft = f->xleft + HALF_HEAD * 2;
+        f->xleft = f->xleft + (float) HALF_HEAD * 2;
       };
     };
   };
   if (n->dots > 0) {
-    f->xright = f->xright + (n->dots*DOT_SPACE);
+    f->xright = f->xright + (n->dots* (float) DOT_SPACE);
   };
   if ((n->stemup) && (n->base_exp <= -3) && (n->beaming==single)) {
     if (f->xright < (HALF_HEAD + TAILWIDTH)) {
@@ -950,11 +954,11 @@ static void sizenote(struct note* n, struct feature* f, int ingrace)
     };
   };
   if (n->accidental != ' ') {
-    f->xleft = HALF_HEAD + ACC_OFFSET + (n->acc_offset-1) * ACC_OFFSET2;
+    f->xleft = (float) HALF_HEAD + (float) ACC_OFFSET + (n->acc_offset-1) * (float) ACC_OFFSET2;
     if (n->stemup) {
-      f->ydown = TONE_HT*(n->y) - (double)(acc_downsize(n->accidental));
+      f->ydown = (float) TONE_HT*(n->y) - (float)(acc_downsize(n->accidental));
     } else {
-      f->yup = TONE_HT*(n->y) + (double)(acc_upsize(n->accidental));
+      f->yup = (float) ((float) TONE_HT*(n->y) + (double)(acc_upsize(n->accidental)));
     };
   };
   if (n->stemlength > 0.0) {
@@ -1001,14 +1005,14 @@ static void sizenote(struct note* n, struct feature* f, int ingrace)
     width = maxstrwidth(n->syllables, (double)(vocalfont.pointsize),
                                       vocalfont.default_num);
     if (width > f->xleft + f->xright) {
-      f->xright = width - f->xleft;
+      f->xright = (float) width - f->xleft;
     };
   };
   if (n->gchords != NULL) {
     width = maxstrwidth(n->gchords, (double)(gchordfont.pointsize),
                          gchordfont.default_num);
     if (width > f->xleft + f->xright) {
-      f->xright = width - f->xleft;
+      f->xright = (float) width - f->xleft;
     };
   };
 }
@@ -1266,7 +1270,7 @@ static void sizevoice(struct voice* v, struct tune* t)
     ft->yup = 0.0;
     switch (ft->type) {
     case SINGLE_BAR: 
-      ft->xleft = 0.8;
+      ft->xleft = (float) 0.8;
       ft->xright = 0.0;
       break;
     case DOUBLE_BAR: 
@@ -1315,12 +1319,12 @@ static void sizevoice(struct voice* v, struct tune* t)
         afract = &v->meter;
       };
       ft->xleft = 0;
-      ft->xright = size_timesig(afract);
+      ft->xright = (float) size_timesig(afract);
       break;
     case KEY: 
       ft->xleft = 0;
       akey = ft->item;
-      ft->xright = size_keysig(v->keysig->map, akey->map);
+      ft->xright = (float) size_keysig(v->keysig->map, akey->map);
       set_keysig(v->keysig, akey);
       break;
     case REST: 
@@ -2324,11 +2328,11 @@ static void setbeams(struct feature* note[], struct chord* chording[], int m,
     anote = note[i]->item;
     xi = note[i]->x;
     if (stemup) {
-      anote->stemlength =   y1 + (y2-y1)*(xi-x1)/(x2-x1) + lift - 
-                           TONE_HT*anote->y;
+      anote->stemlength =  (float) (y1 + (y2-y1)*(xi-x1)/(x2-x1) + lift - 
+                           TONE_HT*anote->y);
     } else {
-      anote->stemlength = -(y1 + (y2-y1)*(xi-x1)/(x2-x1) + lift - 
-                            TONE_HT*anote->y);
+      anote->stemlength = - (float) ((y1 + (y2-y1)*(xi-x1)/(x2-x1) + lift - 
+                            TONE_HT*anote->y));
     };
   };
   /* now transfer results to chords */
@@ -2339,8 +2343,8 @@ static void setbeams(struct feature* note[], struct chord* chording[], int m,
       if (chording[i]->stemup) {
         chording[i]->stemlength = anote->stemlength;
       } else {
-        chording[i]->stemlength = anote->stemlength -
-           (double)((chording[i]->ytop - chording[i]->ybot)*TONE_HT);
+        chording[i]->stemlength = (float) (anote->stemlength -
+           (double)((chording[i]->ytop - chording[i]->ybot)*TONE_HT));
       };
     };
   };
@@ -3293,12 +3297,12 @@ static int finalsizeline(struct voice* v)
   };
   if ((ft != NULL) && (ft->type == PRINTLINE)) {
     avertspacing = ft->item;
-    avertspacing->height = height;
-    avertspacing->descender = descender;
-    avertspacing->yend = yend;
-    avertspacing->yinstruct = yinstruct;
-    avertspacing->ygchord = ygchord;
-    avertspacing->ywords = ywords;
+    avertspacing->height = (float) height;
+    avertspacing->descender = (float) descender;
+    avertspacing->yend = (float) yend;
+    avertspacing->yinstruct = (float) yinstruct;
+    avertspacing->ygchord = (float) ygchord;
+    avertspacing->ywords = (float) ywords;
     ft = ft->next;
   };
   v->place = ft;
@@ -3456,11 +3460,11 @@ void printtune(struct tune* t)
     if (landscape) {
       boundingbox.llx = ymargin;
       boundingbox.lly = xmargin;
-      boundingbox.urx = ymargin + tuneheight(t) * scale;
+      boundingbox.urx = (int) (ymargin + tuneheight(t) * scale);
       boundingbox.ury = xmargin + pagewidth;
     } else {
       boundingbox.llx = xmargin;
-      boundingbox.lly = ymargin + pagelen - tuneheight(t) * scale;
+      boundingbox.lly = (int) (ymargin + pagelen - tuneheight(t) * scale);
       boundingbox.urx = xmargin + pagewidth;
       boundingbox.ury = ymargin + pagelen;
     };

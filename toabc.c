@@ -21,6 +21,13 @@
 
 /* back-end for outputting (possibly modified) abc */
 
+#define VERSION "1.35 November 09 2004"
+
+/* for Microsoft Visual C++ 6.0 or higher */
+#ifdef _MSC_VER
+#define ANSILIBS
+#endif
+
 #include "abc.h"
 #include "parseabc.h"
 #include <stdio.h>
@@ -48,6 +55,7 @@ struct fract {
 struct fract barlen; /* length of a bar as given by the time signature */
 struct fract unitlen; /* unit length as given by the L: field */
 struct fract count; /* length of bar so far */
+struct fract prevcount; /* length of bar before last increment */
 struct fract tuplefactor; /* factor associated with a tuple (N */
 struct fract breakpoint; /* used to break bar into beamed sets of notes */
 int barno; /* number of bar within tune */
@@ -81,6 +89,9 @@ int output_on = 1;  /* if 0 suppress output */
 int selected_voice = -1; /* no voice was selected */
 int newrefnos; /* boolean for -X option (renumber X: fields) */
 int newref; /* next new number for X: field */
+int useflats=0; /* flag associated with nokey.*/ 
+int adapt_useflats_to_gchords = 1; /* experimental flag */
+extern int nokey; /* signals no key signature assumed */
 extern int voicecodes ;  /* from parseabc.c */
 extern char voicecode[16][30]; /*for interpreting V: string */
  
@@ -111,6 +122,12 @@ struct abctext{ /* linked list used to store output before re-formatting */
 };
 struct abctext* head;
 struct abctext* tail;
+
+int basemap[7], workmap[7]; /* for -nokey and pitchof() */
+int  workmul[7];
+void copymap();
+void printpitch(int);
+int pitchof(char note,int accidental,int mult,int octave);
 
 
 static int purgespace(p)
@@ -328,7 +345,6 @@ enum abctype t;
 /* part of new linebreak option (-n) */
 {
   struct abctext* p;
-  int save_voice;
 
   if (output_on == 0) {
     p = NULL;
@@ -422,13 +438,20 @@ int *a, *b;
   *b = *b/n;
 }
 
+
 static void addunits(n, m)
 int n, m;
 /* add fraction n/m to count */
 {
+  prevcount = count;  /* in case of chord extension eg [CE]3/2 */
   count.num = n*count.denom + count.num*(m*unitlen.denom);
   count.denom = (m*unitlen.denom)*count.denom;
   reduce(&count.num, &count.denom);
+}
+
+static void repudiate_lastaddunits()
+{
+  count = prevcount;
 }
 
 void event_init(argc, argv, filename)
@@ -440,9 +463,9 @@ char** filename;
   int targ, narg;
 
   if ((getarg("-h", argc, argv) != -1) || (argc < 2)) {
-    printf("abc2abc version 1.29\n");
+    printf("abc2abc version %s\n",VERSION);
     printf("Usage: abc2abc <filename> [-s] [-n X] [-b] [-r] [-e] [-t X]\n");
-    printf("       [-u] [-d] [-v] [-V X] [-X n]\n");
+    printf("       [-u] [-d] [-v] [-V X] [-ver] [-X n]\n");
     printf("  -s for new spacing\n");
     printf("  -n X to re-format the abc with a new linebreak every X bars\n");
     printf("  -b to remove bar checking\n");
@@ -450,16 +473,23 @@ char** filename;
     printf("  -e to remove all error reports\n");
     printf("  -t X to transpose X semitones\n");
     printf("  -nda No double accidentals in guitar chords\n");
+    printf("  -nokeys No key signature. Use sharps\n");
+    printf("  -nokeyf No key signature. Use flats\n");
     printf("  -u to update notation ([] for chords and () for slurs)\n");
     printf("  -d to notate with doubled note lengths\n");
     printf("  -v to notate with halved note lengths\n");
     printf("  -V X to output only voice X\n");
+    printf("  -ver  prints version number and exits\n");
     printf("  -X n renumber the all X: fields as n, n+1, ..\n");
     exit(0);
   } else {
     *filename = argv[1];
   };
   nodouble_accidentals = 0;   /* use correct guitar chords */
+  if (getarg("-ver",argc,argv) != -1) {
+	  printf("%s\n",VERSION);
+	  exit(0);
+  }
   if (getarg("-u", argc, argv) == -1) {
     cleanup = 0;
   } else {
@@ -539,6 +569,12 @@ char** filename;
   };
   targ = getarg("-nda",argc,argv);
   if (targ != -1) nodouble_accidentals = 1;
+
+  targ = getarg("-nokeys",argc,argv);
+  if (targ != -1) nokey=1;
+
+  targ = getarg("-nokeyf",argc,argv);
+  if (targ != -1) {nokey=1; useflats=1;}
 
   targ = getarg("-V", argc, argv);
   if (targ != -1) {
@@ -792,7 +828,7 @@ struct abctext *place;
   return(newplace);
 };
 
-append_lyrics(place, newwords)
+void append_lyrics(place, newwords)
 struct abctext *place;
 char *newwords;
 /* add lyrics to end of lyric list associated with bar */
@@ -827,7 +863,6 @@ struct abctext *place;
 int *notesleft;
 struct vstring *barwords;
 {
-  struct lyricwords* new_words;
   struct abctext* new_place;
 
   if (place == NULL) {
@@ -852,7 +887,6 @@ struct abctext *place;
 int *notesleft;
 struct vstring *barwords;
 {
-  struct lyricwords* new_words;
   struct abctext* new_place;
   char msg[80];
 
@@ -1035,13 +1069,14 @@ int num;
   return(voice_index);
 }
 
-void event_voice(n, s, gotclef, gotoctave, gottranspose,
-	       	clefname, octave, transpose)
+void event_voice(n, s, gotclef, gotoctave, gottranspose, gotname,
+	       	clefname, octave, transpose, namestring)
 int n;
 char *s;
-int gotclef, gotoctave, gottranspose;
+int gotclef, gotoctave, gottranspose, gotname;
 char *clefname;
 int octave, transpose;
+char *namestring;
 {
   char output[32];
   if (xinbody) {
@@ -1068,7 +1103,9 @@ int octave, transpose;
     if (gotoctave) {sprintf(output," octave=%d",octave);
 	    emit_string(output);}
     if (gottranspose) {sprintf(output," transpose=%d",transpose);
-	    emit_string(transpose);}
+	    emit_string(output);}
+     if (gotname) {sprintf(output," name=%s",namestring);
+            emit_string(output);}
   } else {
     if(voicecodes >= n) emit_string_sprintf("V:%s",voicecode[n-1]);
     emit_int_sprintf("V:%d ", n);
@@ -1077,7 +1114,9 @@ int octave, transpose;
     if (gotoctave) {sprintf(output," octave=%d",octave);
 	    emit_string(output);}
     if (gottranspose) {sprintf(output," transpose=%d",transpose);
-	    emit_string(transpose);}
+	    emit_string(output);}
+     if (gotname) {sprintf(output," name=%s",namestring);
+            emit_string(output);}
     emit_string(s);
   };
   inmusic = 0;
@@ -1188,6 +1227,11 @@ static void setmap(sf, map)
 int sf;
 int map[7];
 {
+/* map[0] to map[7] corresponds to keys a to g and indicates
+   whether they are flattened or sharpened. sf encodes the
+   key signature by indicating the number of sharps (positive
+   numbers) or flats (negative numbers)
+*/
   int j;
 
   for (j=0; j<7; j++) {
@@ -1254,7 +1298,9 @@ int octave, xtranspose, gotoctave, gottranspose;
                            "G", "D", "A", "E", "B", "F#"};
 
   if (gotkey) {
+    setmap(sharps, basemap); /* required by copymap and pitchof */
     setmap(sharps, oldtable);
+    copymap();
     newkey = (sharps+7*transpose)%12;
     if (sharps < -5) orig_key_number = (int) keys[sharps+17][0] - (int) 'A';
     else if (sharps > 6) orig_key_number = (int)keys[sharps-7][0] - (int) 'A';
@@ -1268,15 +1314,16 @@ int octave, xtranspose, gotoctave, gottranspose;
       newkey = newkey + 12;
       lines = lines - 1;
     };
-    setmap(newkey, newtable);
+    setmap(newkey, newtable);  /* used by event_note1 */
     new_key_number = (int) keys[newkey+5][0] - (int) 'A';
   };
   emit_string("K:");
-  if (transpose == 0) {
+  if (transpose == 0 && !nokey) {
     emit_string(s);
   } else {
     if (gotkey) {
-      emit_string(keys[newkey+5]);
+      if (!nokey) emit_string(keys[newkey+5]);
+      else {emit_string("none"); /*setupkey(0);*/ }
       if (gotclef) {
         emit_string(" ");
       };
@@ -1419,6 +1466,7 @@ char* replist;
   barno = barno + 1;
   count.num = 0;
   count.denom = 1;
+  copymap();
 }
 
 void event_space()
@@ -1541,11 +1589,32 @@ void event_chordon()
   chordcount = 0;
 }
 
-void event_chordoff()
+void event_chordoff(int chord_n, int chord_m)
 {
+  char string[16];
   emit_string("]");
+  if(chord_n !=1 && chord_m !=1)
+     {
+     sprintf(string,"%d/%d",chord_n,chord_m);
+     emit_string(string);
+     }
+  else if(chord_n !=1)
+     {
+     sprintf(string,"%d",chord_n);
+     emit_string(string);
+     }
+  else if(chord_m !=1)
+     {
+     sprintf(string,"/%d",chord_m);
+     emit_string(string);
+     }
   inmusic = 1;
   inchord = 0;
+  if(chord_n !=1 || chord_m !=1)
+    {
+    repudiate_lastaddunits();
+    addunits(chord_n,chord_m);
+    }
 }
 
 static void splitstring(s, sep, handler)
@@ -1645,6 +1714,7 @@ char* s;
                         j = strlen(newchord);
                         strcpy(&newchord[j],"b");
                         j = j+1;
+                        if (adapt_useflats_to_gchords) useflats=1;
 	                } else
           if (!nodouble_accidentals && (triad_diff  ==1 || triad_diff == -6)) {
   	         /*	   printf("*** %d old chord = %s (%d) new chord = %s (%d)\n",
@@ -1656,11 +1726,14 @@ char* s;
                         j = strlen(newchord);
                         strcpy(&newchord[j],"#");
                         j = j+1;
+                        if (adapt_useflats_to_gchords) useflats=0;
                         } else  
+/* no extra flats or sharps needed */
                         {
                         strcpy(&newchord[j], roots[pitch]);
                         j = strlen(newchord);
                         }
+
           chordstart = 0;
         } else {
           if ((*p >= 'a') && (*p <= 'g')) {
@@ -1794,7 +1867,9 @@ int n;
   };
 }
 
-void event_note(decorators, xaccidental, xmult, xnote, xoctave, n, m)
+
+
+void event_note1(decorators, xaccidental, xmult, xnote, xoctave, n, m)
 int decorators[DECSIZE];
 int xmult;
 char xaccidental, xnote;
@@ -1912,6 +1987,102 @@ int xoctave, n, m;
   };
 }
 
+
+int accidental_to_code (char xaccidental)
+{
+ switch (xaccidental) {
+ case ' ':
+   return 10;
+   break;
+ case '_':
+   return -1;
+   break;
+ case '^':
+   return 1;
+   break;
+  case '=':
+    return 0;
+    break;
+  default:
+    return 10;
+  }
+}
+
+
+void event_note2(decorators, xaccidental, xmult, xnote, xoctave, n, m)
+/* this function is called if flag nokey is set */
+int decorators[DECSIZE];
+int xmult;
+char xaccidental, xnote;
+int xoctave, n, m;
+{
+  int t;
+  struct fract barpoint;
+  struct fract newlen;
+
+  int acc,assumed_acc;
+  int propogate;
+  int val;
+  char *anoctave = "cdefgab";
+  int midipitch;
+
+ for (t=0; t<DECSIZE; t++) 
+    if (decorators[t]) emit_char(decorations[t]);
+
+  acc = accidental_to_code(xaccidental);
+  if (acc == -1 || acc == 1) acc = xmult*acc;
+  val = (int) ((long) strchr(anoctave, xnote) - (long) anoctave);
+
+  /* if no accidental precedes, then get accidental from key signature */
+  assumed_acc = oldtable[(int)anoctave[val] - (int)'a']; 
+  propogate=0;
+  midipitch = pitchof(xnote, acc, xmult, xoctave);
+  printpitch(midipitch+transpose);
+
+  if (!ingrace) {
+    notecount = notecount + 1;
+  };
+
+  newlen.num = n * lenfactor.num;
+  newlen.denom = m * lenfactor.denom;
+  reduce(&newlen.num, &newlen.denom);
+  printlen(newlen.num, newlen.denom);
+  if (inchord) {
+    chordcount = chordcount + 1;
+  };
+  if ((!ingrace) && (!inchord || (chordcount == 1))) {
+    if (tuplenotes == 0) {
+      addunits(n, m);
+    } else {
+      addunits(n*tuplefactor.num, m*tuplefactor.denom);
+      tuplenotes = tuplenotes - 1;
+    };
+  };
+  if (newspacing) {
+    barpoint.num = count.num * breakpoint.denom;
+    barpoint.denom = breakpoint.num * count.denom;
+    reduce(&barpoint.num, &barpoint.denom);
+    if ((barpoint.denom == 1) && (barpoint.num != 0) && 
+        (barpoint.num != barend)) {
+      emit_string(" ");
+    };
+  };
+}
+
+
+void event_note(decorators, xaccidental, xmult, xnote, xoctave, n, m)
+int decorators[DECSIZE];
+int xmult;
+char xaccidental, xnote;
+int xoctave, n, m;
+{
+if (nokey)
+  event_note2(decorators, xaccidental, xmult, xnote, xoctave, n, m);
+else
+  event_note1(decorators, xaccidental, xmult, xnote, xoctave, n, m);
+}
+
+
 void event_abbreviation(char symbol, char *string, char container)
 /* a U: field has been found in the abc */
 {
@@ -1926,3 +2097,120 @@ void event_abbreviation(char symbol, char *string, char container)
   };
   inmusic = 0;
 }
+
+/* The following functions provide an alternative
+   method for transposing. The note is converted
+   to MIDI representation. It is transposed and
+   then converted back. These functions were
+   borrowed from store.c and midi2abc with
+   some minor modifications.
+*/
+
+
+int pitchof(char note, int accidental, int mult, int octave)
+/* finds MIDI pitch value for a given note taking into account the  */
+/* key signature if any and propogation of accidentals across a bar.*/
+/* accidental = 0  implies a natural specified.                     */
+/* accidental = 1  implies one or more sharps indicated by mult.    */
+/* accidental =-1  implies one or more flats indicated by mult.     */
+/* accidental = 10 nothing specified, determine from context        */
+{
+  int p;
+  int acc;
+  int mul, noteno;
+  static int scale[7] = {0, 2, 4, 5, 7, 9, 11};
+  char *anoctave = "cdefgab";
+  int middle_c = 60;
+
+  p = (int) ((long) strchr(anoctave, note) - (long) anoctave);
+  p = scale[p];
+  mul = mult;
+  noteno = (int)note - 'a';
+  if (accidental==10) {        /* propagate accidentals  */
+    mul = workmul[noteno];
+  } else {
+      workmap[noteno] = accidental;
+      workmul[noteno] = mul;
+  };
+  p = p + workmap[noteno]*workmul[noteno];
+  return p + 12*octave + middle_c;
+}
+
+int lastaccidental[7];
+
+void copymap()
+/* sets up working map at the start of each bar */
+{
+  int j;
+
+  for (j=0; j<7; j++) {
+    workmap[j] = basemap[j];
+    workmul[j] = 1;
+    lastaccidental[j] = 0;
+  };
+}
+
+#define MIDDLE 72
+
+
+int sharpmap[12] =  { 0, 0, 1, 1, 2, 3, 3, 4, 4, 5, 5, 6};
+int flatmap[12]  =  { 0, 1, 1, 2, 2, 3, 4, 4, 5, 5, 6, 6};
+int sharpsym[12] =  { 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0};
+int flatsym[12]  =  { 0,-1, 0,-1, 0, 0,-1, 0,-1, 0,-1, 0};
+char hikey[7]    =  {'c','d','e','f','g','a','b'};
+char lowkey[7]   =  {'C','D','E','F','G','A','B'};
+char symlet[3]   =  {'=','^','_'};
+
+
+void printpitch(int pitch)
+/* convert midi pitch value to abc note */
+{
+int p;
+char keylet,symlet;
+int keynum,symcod;
+char string[16];
+p = pitch%12;
+if (useflats)
+ {keynum = flatmap[p];
+  symcod = flatsym[p];
+ } else
+ {keynum = sharpmap[p];
+  symcod = sharpsym[p];
+ }
+
+if (pitch<MIDDLE)
+  keylet = lowkey[keynum];
+else
+  keylet = hikey[keynum];
+
+switch (symcod) {
+  case 0:
+   symlet = '=';
+   break;
+  case 1:
+   symlet = '^';
+   break;
+  case -1:
+   symlet = '_';
+   break;
+}
+ 
+if (lastaccidental[keynum] == symcod)
+   sprintf(string,"%c",keylet);
+else {
+   sprintf(string,"%c%c", symlet, keylet);
+   lastaccidental[keynum] = symcod;
+   }
+  emit_string(string);
+
+p = pitch;
+while (p >= MIDDLE + 12) {
+    emit_string("'");
+    p = p - 12;
+    };
+while (p < MIDDLE - 12) {
+    emit_string(",");
+    p = p + 12;
+    };
+}
+

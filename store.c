@@ -31,9 +31,15 @@
  * Wil Macaulay (wil@syndesis.com)
  */
 
+#define VERSION "1.53 November 09 2004"
 /* enables reading V: indication in header */
 #define XTEN1 1
 /*#define INFO_OCTAVE_DISABLED 1*/
+
+/* for Microsoft Visual C++ 6.0 and higher */
+#ifdef _MSC_VER
+#define ANSILIBS
+#endif
 
 #include "abc.h"
 #include "parseabc.h"
@@ -158,6 +164,7 @@ int tempo_num, tempo_denom;
 int relative_tempo, Qtempo;
 extern int division;
 extern int div_factor;
+int default_tempo = 120; /* quarter notes per minutes */
 
 /* output file generation */
 int userfilename = 0;
@@ -187,6 +194,7 @@ in parseabc.c */
 
 /* time signature after header processed */
 int header_time_num,header_time_denom;
+
 
 extern long writetrack();
 
@@ -422,6 +430,10 @@ char **filename;
   } else {
     verbose = 0;
   };
+  if (getarg("-ver",argc, argv) != -1) {
+     printf("%s\n",VERSION);
+     exit(0);
+  }
   maxnotes = 500;
   /* allocate space for notes */
   pitch = checkmalloc(maxnotes*sizeof(int));
@@ -434,18 +446,20 @@ char **filename;
   atext = (char**) checkmalloc(maxtexts*sizeof(char*));
   words = (char**) checkmalloc(maxwords*sizeof(char*));
   if ((getarg("-h", argc, argv) != -1) || (argc < 2)) {
-    printf("abc2midi version 1.45\n");
+    printf("abc2midi version %s\n",VERSION);
     printf("Usage : abc2midi <abc file> [reference number] [-c] [-v] ");
     printf("[-o filename]\n");
     printf("        [-t] [-n <value>] [-RS]\n");
     printf("        [reference number] selects a tune\n");
     printf("        -c  selects checking only\n");
     printf("        -v  selects verbose option\n");
+    printf("        -ver prints version number and exits\n");
     printf("        -o <filename>  selects output filename\n");
     printf("        -t selects filenames derived from tune titles\n");
     printf("        -n <limit> set limit for length of filename stem\n");
     printf("        -RS use 3:1 instead of 2:1 for broken rhythms\n");
     printf("        -NAR suppress assuming repeat warning\n");
+    printf("        -Q default tempo (quarter notes/minute)\n");
     printf(" The default action is to write a MIDI file for each abc tune\n");
     printf(" with the filename <stem>N.mid, where <stem> is the filestem\n");
     printf(" of the abc file and N is the tune reference number. If the -o\n");
@@ -477,6 +491,19 @@ char **filename;
       event_error("No number given, ignoring -n option");
     };
   };
+  /* look for default tempo */
+  j = getarg("-Q", argc,argv);
+  if (j != -1) {
+    if (argc >= j+1) {
+      sscanf(argv[j], "%d", &default_tempo);
+      if (default_tempo < 3) {
+        event_fatal_error("Q parameter is too small\nEnter -Q 240 not -Q 1/4=240");
+       };
+    } else {
+      event_error("No number given, ignoring -Q option");
+    };
+  };
+       
   /* look for user-supplied output filename */
   j = getarg("-o", argc, argv);
   if (j != -1) {
@@ -1079,7 +1106,6 @@ void event_words(p, continuation)
 char* p;
 int continuation;
 {
-  int l;
 
   karaoke = 1;
   v->haswords = 1;
@@ -1108,7 +1134,7 @@ static void checkbreak()
   };
   if (v->inchord != 0) {
     event_error("Previous voice has incomplete chord");
-    event_chordoff();
+    event_chordoff(1,1);
   };
   if (v->ingrace != 0) {
     event_error("Previous voice has unfinished grace notes");
@@ -1137,10 +1163,13 @@ char ch;
 static void read_spec(spec, part)
 /* converts a P: field to a list of part labels */
 /* e.g. P:A(AB)3(CD)2 becomes P:AABABABCDCD */
+
+/********** This feature is not supported ********[SS] 2004-10-08
 /* A '+' indicates 'additive' behaviour (a part may include repeats).  */
 /* A '-' indicates 'non-additive' behaviour (repeat marks in the music */
 /* are ignored and only repeats implied by the part order statement    */
 /* are played).  */
+
 char spec[];
 struct vstring* part;
 {
@@ -1158,14 +1187,15 @@ struct vstring* part;
     if (*in == '.') {
       in = in + 1;
     };
-    if (*in == '+') {
-      additive = 1;
-      in = in + 1;
-    };
-    if (*in == '-') {
-      additive = 0;
-      in = in + 1;
-    };
+/*    if (*in == '+') {     no longer supported
+*      additive = 1;
+*      in = in + 1;
+*    };
+*    if (*in == '-') {
+*      additive = 0;
+*      in = in + 1;
+*    };
+*/
     if ((*in >= 'A') && (*in <= 'Z')) {
       char_out(part, *in);
       lastch = *in;
@@ -1261,14 +1291,15 @@ char* s;
   };
 }
 
-void event_voice(n, s,gotclef,gotoctave,gottranspose,
-		clefname,octave,transpose)
+void event_voice(n, s,gotclef,gotoctave,gottranspose,gotname,
+		clefname,octave,transpose,namestring)
 /* handles a V: field in the abc */
 int n;
 char *s;
-int gotclef,gotoctave,gottranspose;
+int gotclef,gotoctave,gottranspose,gotname;
 char *clefname;
 int octave,transpose;
+char *namestring;
 {
   if (pastheader || XTEN1) {
     voicesused = 1;
@@ -1463,31 +1494,6 @@ void event_graceoff()
   };
 }
 
-void event_rep1()
-/* [1 in the abc */
-{
-  addfeature(PLAY_ON_REP, 0, 0, 1);
-/*
-  if ((notes == 0) || (feature[notes-1] != SINGLE_BAR)) {
-    event_error("[1 must follow a single bar");
-  } else {
-    feature[notes-1] = BAR1;
-  };
-*/
-}
-
-void event_rep2()
-/* [2 in the abc */
-{
-  addfeature(PLAY_ON_REP, 0, 0, 2);
-/*
-  if ((notes == 0) || (feature[notes-1] != REP_BAR)) {
-    event_error("[2 must follow a :| ");
-  } else {
-    feature[notes-1] = REP_BAR2;
-  };
-*/
-}
 
 void event_playonrep(s)
 char* s;
@@ -1673,7 +1679,7 @@ void event_chord()
 /* a + has been encountered in the abc */
 {
   if (v->inchord) {
-    event_chordoff();
+    event_chordoff(1,1);
   } else {
     event_chordon();
   };
@@ -1988,13 +1994,17 @@ void event_chordon()
   };
 }
 
-void event_chordoff()
+
+void event_chordoff(int chord_n, int chord_m)
 /* handles a chord close ] in the abc */
 {
   if (!v->inchord) {
     event_error("Chord already finished");
   } else {
-    addfeature(CHORDOFF, 0, v->chord_num, v->chord_denom);
+    if(chord_m == 1 && chord_n == 1) /* chord length not set outside [] */
+      addfeature(CHORDOFF, 0, v->chord_num, v->chord_denom); 
+    else
+      addfeature(CHORDOFFEX, 0, chord_n*4, chord_m*v->default_length);
     v->inchord = 0;
     v->chordcount = 0;
     marknoteend();
@@ -2111,6 +2121,74 @@ int pitch;
   marknoteend();
 }
 
+
+/******************************
+void makecut (mainpitch, shortpitch, n,m)
+int mainpitch,shortpitch,n,m;
+{
+int adjusted_num,adjusted_den;
+adjusted_num = n*gfact_denom -m;
+adjusted_den = m*gfact_denom;
+if (adjusted_den <0) 
+  addfeature(NOTE, mainpitch, n, m);
+else {
+  addfeature(NOTE, shortpitch, 4,gfact_denom*(v->default_length));
+  reduce(&adjusted_num,&adjusted_den);
+  addfeature(NOTE, mainpitch,4*adjusted_num,adjusted_den*(v->default_length));
+  }
+}
+*****************************/
+
+void makecut (mainpitch, shortpitch, n,m)
+int mainpitch,shortpitch,n,m;
+{
+addfeature(GRACEON, 0, 0, 0);
+addfeature(NOTE, shortpitch, 4,v->default_length);
+addfeature(GRACEOFF, 0, 0, 0);
+addfeature(NOTE, mainpitch, 4*n,m*v->default_length);
+}
+
+
+static void doornament(note, octave, n, m, pitch)
+/* applies a roll to a note */
+char note;
+int octave, n, m;
+int pitch;
+{
+  char up, down;
+  int t;
+  int upoct, downoct, pitchup, pitchdown;
+  char *anoctave = "cdefgab";
+  int nnorm,mnorm,nn;
+
+  upoct = octave;
+  downoct = octave;
+  t = (int) ((long) strchr(anoctave, note)  - (long) anoctave);
+  up = *(anoctave + ((t+1) % 7));
+  down = *(anoctave + ((t+6) % 7));
+  if (up == 'c') upoct = upoct + 1;
+  if (down == 'b') downoct = downoct - 1;
+  pitchup = pitchof(up, v->basemap[(int)up - 'a'], 1, upoct, 0);
+  pitchdown = pitchof(down, v->basemap[(int)down - 'a'], 1, downoct, 0);
+  marknotestart();
+  /* normalize notelength to L:1/8 */
+  nnorm =n*8;
+  mnorm =m*(v->default_length);
+  reduce(&nnorm,&mnorm);
+  if (nnorm == 3 && mnorm == 1) /* dotted quarter note treated differently */
+     {
+     nn = n/3; /* in case L:1/16 or smaller */
+     if(nn < 1) nn=1;
+     addfeature(NOTE, pitch, 4*nn,v->default_length);
+     makecut(pitch,pitchup,nn,m);
+     makecut(pitch,pitchdown,nn,m);
+     }
+  else makecut(pitch,pitchup,n,m);
+  marknoteend();
+}
+
+
+
 static void hornp(num, denom)
 /* If we have used R:hornpipe, this routine modifies the rhythm by */
 /* applying appropriate broken rhythm */
@@ -2191,11 +2269,16 @@ int xoctave, n, m;
     } else {
       if (decorators[TRILL]) {
         dotrill(note, octave, num, denom, pitch);
-      } else { 
+      }
+      else if (decorators[ORNAMENT]) {
+        doornament(note, octave, num, denom, pitch);
+      }
+      else { 
         doroll(note, octave, num, denom, pitch);
       };
-    };
-  } else {
+     }; /* end of else block for not in chord */
+   } /* end of if block for ROLL,ORNAMENT,TRILL */
+   else {
     if (decorators[STACCATO]) {
       if (v->inchord) {
         if (v->chordcount == 1) {
@@ -2586,12 +2669,31 @@ int j, xinchord;
   };
 }
 
+static void fix_enclosed_note_lengths(int from, int end) 
+{
+/* in event that the chord length was set outside [], */
+/* we must go back and adjust the note length of each note */
+/* inside the chord.                                   */
+
+int j;
+for (j = from; j < end; j++)
+  {
+  if (feature[j] == NOTE) 
+    {
+      num[j] = num[end];
+      denom[j] =denom[end]; 
+    }
+  }
+}
+
 static void tiefix()
-/* connect up tied notes */
+/* connect up tied notes and cleans up the */
+/* note lengths in the chords (eg [ace]3 ) */
 {
   int j;
   int inchord;
   int chord_num, chord_denom;
+  int chord_start;
 
   j = 0;
   inchord = 0;
@@ -2601,11 +2703,17 @@ static void tiefix()
       inchord = 1;
       chord_num = -1;
       j = j + 1;
+      chord_start = j;
+      break;
+    case CHORDOFFEX:
+      fix_enclosed_note_lengths(chord_start,j);
+      inchord = 0;
+      j = j + 1;
       break;
     case CHORDOFF:
       if (!((!inchord) || (chord_num == -1))) {
-        num[j] = chord_num;
-        denom[j] = chord_denom;
+        num[j] = chord_num; 
+        denom[j] = chord_denom; 
       };
       inchord = 0;
       j = j + 1;
@@ -2614,6 +2722,8 @@ static void tiefix()
       if ((inchord) && (chord_num == -1)) {
         chord_num = num[j];
         chord_denom = denom[j];
+        /* use note length in num,denom as chord length */
+        /* if chord length is not set outside []        */
       };
       j = j + 1;
       break;
@@ -2769,7 +2879,6 @@ int place;
  */
 {
   int start, end, p;
-  int next_num, next_denom;
   int fact_num, fact_denom;
   int grace_num, grace_denom;
   int j;
@@ -2846,7 +2955,7 @@ int place;
 /* is the following note long enough */
    adjusted_num = num[p]*grace_denom*gfact_denom - denom[p]*grace_num;
    adjusted_den = denom[p]*grace_denom*gfact_denom;
-   if (adjusted_den <0.0) /* not long enough*/
+   if (adjusted_den <=0.0) /* not long enough*/
       {
       p = start;
       while (p <= end)
@@ -2953,9 +3062,11 @@ int j;
   switch(feature[j]) {
   case REP_BAR:
     feature[j] = DOUBLE_BAR;
+    event_warning("replacing :| with double bar ||");
     break;
   case DOUBLE_REP:
     feature[j] = BAR_REP;
+    event_warning("replacing :: with |:");
     break;
   default:
     break;
@@ -2976,6 +3087,7 @@ int j;
     break;
   case BAR_REP:
     feature[j] = DOUBLE_REP;
+    event_warning("replacing with double repeat (::)");
     break;
   default:
     event_error("Internal error - please report");
@@ -2996,6 +3108,7 @@ int j;
     feature[j] = BAR_REP;
     break;
   case REP_BAR:
+    event_warning("replacing |: with double repeat (::)");
     feature[j] = DOUBLE_REP;
     break;
   case BAR_REP:
@@ -3017,85 +3130,59 @@ static void fixreps()
 {
   int j;
   int rep_point; /* where to assume a repeat starts */
-  int expect_repeat;
-  int expect_norepeat;
-  int use_next;
+  int expect_repeat;   /* = 1 after |: or ::  otherwise 0*/
+  int use_next; /* if 1 set next bar line as ref_point */
+  int nplays; /* counts PLAY_ON_REP associated with a BAR_REP*/
 
-  expect_repeat = 0;
-  expect_norepeat = 0;
+  expect_repeat = 0; 
   use_next = 0;
+  nplays=0;
   j = 0;
   while (j < notes) {
     switch(feature[j]) {
-    case SINGLE_BAR:
+    case SINGLE_BAR:           /*  |  */
       if (use_next) {
         rep_point = j;
         use_next = 0;
       };
       break;
-    case DOUBLE_BAR:
+    case DOUBLE_BAR:           /*  || */
       rep_point = j;
       use_next = 0;
       break;
-    case BAR_REP:
+    case BAR_REP:              /* |:  */
+/* if |:  .. |: encountered. Report error and change second |: to :: */
       if (expect_repeat) {
-        event_error("|: found when end repeat expected");
-        placeendrep(j);
+          event_error(" found another |: after a |:");
+          placeendrep(j);
       };
       expect_repeat = 1;
-      expect_norepeat = 0;
       use_next = 0;
       break;
-    case REP_BAR:
-      if (expect_norepeat) {
-        delendrep(j);
-      } else {
-        if (!expect_repeat) {
+    case REP_BAR:                /* :| */
+/* if :| encountered before |: place  "|:" at reference point */
+       if ((!expect_repeat) && (nplays < 1)) {
           placestartrep(rep_point);
         };
-      };
-      expect_repeat = 0;
-      expect_norepeat = 0;
+      expect_repeat = 0; 
       rep_point = j;
       use_next = 0;
       break;
-    case PLAY_ON_REP:
-      if (denom[j] == 1) {
-        /* case REP1: */
-        if (!expect_repeat) {
-          placestartrep(rep_point);
-        };
-        expect_repeat = 1;
-        expect_norepeat = 0;
-        break;
-      };
-      if (denom[j] == 2) {
-        /* case REP2: */
-        if (expect_repeat) {
-          event_error("require :|2 for second ending");
-        };
-        expect_repeat = 0;
-        expect_norepeat = 1;
-        break;
-      };
-    case REP_BAR2:
-      /* cannot happen! */
+
+    case PLAY_ON_REP:         /*  [1 or [2 or [1,3 etc  */
+       if(nplays == 0 && !expect_repeat) {
+           event_error(" found [1 or like before |:");
+           placestartrep(rep_point);
+           }
+       nplays++;
+       break;
+
+    case DOUBLE_REP:           /*  ::  */
       if (!expect_repeat) {
-        placestartrep(rep_point);
-      };
-      expect_repeat = 0;
-      use_next = 1;
-      break;
-    case DOUBLE_REP:
-      if (expect_norepeat) {
-        delendrep(j);
-      } else {
-        if (!expect_repeat) {
+          event_error(" found :: before |:");
           placestartrep(rep_point);
-        };
-      };
+       };
       expect_repeat = 1;
-      expect_norepeat = 0;
       break;
     default:
       break;
@@ -3103,6 +3190,7 @@ static void fixreps()
     j = j + 1;
   };
 }
+
 
 static void startfile()
 /* called at the beginning of an abc tune by event_refno */
@@ -3131,7 +3219,7 @@ static void startfile()
   timesigset = 0;
   barchecking = 1;
   global.default_length = -1;
-  event_tempo(120, 1, 4, 0, NULL, NULL);
+  event_tempo(default_tempo, 1, 4, 0, NULL, NULL);
   notes = 0;
   ntexts = 0;
   gfact_num = 1;
@@ -3153,7 +3241,6 @@ static void startfile()
     part_start[j] = -1;
   };
   headerpartlabel = 0;
-  additive = 1;
   initvstring(&part);
   for (j=0; j<16;j++) {
     channels[j] = 0;
@@ -3183,6 +3270,9 @@ void setbeat()
   };
   if ((time_num == 9) && (time_denom == 8)) {
     set_gchords("fzcfzcfzc");
+  };
+  if ((time_num == 12) && (time_denom == 8)) {
+    set_gchords("fzcfzcfzcfzc");
   };
 }
 

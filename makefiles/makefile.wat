@@ -27,7 +27,7 @@ LDFLAGS=sys nt name
 LDFLAGS2=d all op inc op st=200000 op maxe=25 op q op symf 
 LNK=wlink
 
-all : abc2midi.exe midi2abc.exe abc2abc.exe mftext.exe yaps.exe
+all : abc2midi.exe midi2abc.exe abc2abc.exe mftext.exe yaps.exe midicopy.exe
 
 abc2midi.exe : parseabc.obj store.obj genmidi.obj queues.obj midifile.obj parser2.obj
 	$(LNK) $(LDFLAGS) abc2midi.exe $(LDFLAGS2) FILE parseabc.obj FILE genmidi.obj FILE store.obj \
@@ -41,6 +41,9 @@ midi2abc.exe : midifile.obj midi2abc.obj
 
 mftext.exe : midifile.obj mftext.obj crack.obj
 	$(LNK) $(LDFLAGS) mftext.exe $(LDFLAGS2) FILE midifile.obj FILE mftext.obj FILE crack.obj
+
+midicopy.exe : midicopy.obj
+	$(LNK) $(LDFLAGS) midicopy.exe $(LDFLAGS2) FILE midicopy.obj
 
 yaps.exe : parseabc.obj yapstree.obj drawtune.obj debug.obj pslib.obj position.obj parser2.obj
 	$(LNK) $(LDFLAGS) yaps.exe $(LDFLAGS2) FILE parseabc.obj FILE yapstree.obj FILE drawtune.obj FILE debug.obj FILE position.obj FILE pslib.obj FILE parser2.obj 
@@ -108,6 +111,11 @@ crack.obj : crack.c
 
 mftext.obj : mftext.c midifile.h
 	$(CC) $(CFLAGS) mftext.c
+
+# objects for midicopy
+#
+midicopy.obj : midicopy.c midicopy.h
+	$(CC) $(CFLAGS) midicopy.c
 
 clean:
 	rm *.obj

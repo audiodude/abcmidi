@@ -33,8 +33,13 @@
 #include "abc.h"
 #include "parseabc.h"
 #include <stdio.h>
+#include <stdlib.h>
 
 #define SIZE_ABBREVIATIONS ('Z' - 'H' + 1)
+
+#ifdef _MSC_VER
+#define ANSILIBS
+#endif
 
 #ifdef __MWERKS__
 #define __MACINTOSH__ 1
@@ -77,6 +82,10 @@ int decorators_passback[DECSIZE];
  * from event_instruction to parsenote.
 */
  
+
+int nokey=0;  /* K: none was encountered */
+int chord_n,chord_m ; /* for event_chordoff */
+
 
 int* checkmalloc(bytes)
 /* malloc with error checking */
@@ -663,6 +672,56 @@ if (**s != '=') {
 };
 
 
+int parsename(s,word,gotname,namestring,maxsize)
+/* parses string name= "string" in V: command 
+   for compatability of abc2abc with abcm2ps
+*/
+char **s;
+char * word;
+int *gotname;
+char namestring[];
+int maxsize;
+{
+int i;
+i = 0;
+if  (casecmp(word, "name") != 0) return 0;
+skipspace(s);
+if (**s != '=') {
+   event_error("name must be followed by '='");
+   } else {
+       *s = *s + 1;
+       skipspace(s);
+       if (**s == '"')   /* string enclosed in double quotes */
+          {
+          namestring[i] = (char) **s; 
+          *s = *s + 1;
+          i++;
+          while (i < maxsize && **s != '"' && **s != '\0') 
+           {namestring[i] = (char) **s;
+            *s = *s +1;
+            i++;
+            }
+           namestring[i] = (char) **s; /* copy double quotes */
+           i++;
+           namestring[i]= '\0'; 
+          } else      /* string not enclosed in double quotes */
+           {
+           while (i < maxsize && **s != ' ' && **s != '\0')
+            {
+            namestring[i] = (char) **s;
+            *s = *s +1;
+            i++; 
+            }
+           namestring[i] = '\0'; 
+           }
+       *gotname = 1;
+        }
+  return 1;
+};
+
+
+
+
 
 int parsekey(str)
 /* parse contents of K: field */
@@ -719,6 +778,14 @@ char* str;
       gotkey = 1;
       parsed = 1;
     };
+
+    if ((parsed == 0) && (casecmp(word,"none") ==0)) {
+       gotkey =1;
+       parsed = 1;
+       nokey = 1;
+       minor =0;
+       sf = 0;
+       }
 
     if ((parsed == 0) && ((word[0] >= 'A') && (word[0] <= 'G'))) {
       gotkey = 1;
@@ -811,10 +878,11 @@ static void parsevoice(s)
 char *s;
 {
 int num;
-int gotclef, gotkey, gotoctave, gottranspose;
+int gotclef, gotkey, gotoctave, gottranspose, gotname;
 int transpose, octave;
 char clefstr[30];
 char word[30];
+char namestring[64];
 int parsed;
 int coctave,cgotoctave;
 transpose = 0;
@@ -832,7 +900,7 @@ if ((*s >= '0') && (*s <= '9')) {
   num = interpret_voicestring(s);
   if(num == 0) event_error("No voice number or string in V: field");
   if(num == -1) {event_error("More than 16 voices encountered in V: fields");
-    num ==0;}
+    num =0;}
    skiptospace(&s);
   };
 skipspace(&s);
@@ -840,13 +908,15 @@ while (*s != '\0') {
   parsed = parseclef(&s,word,&gotclef,clefstr,&cgotoctave,&coctave);
   if (!parsed) parsed = parsetranspose(&s,word,&gottranspose,&transpose);
   if (!parsed) parsed = parseoctave(&s,word,&gotoctave,&octave);
+  if (!parsed) parsed = parsename(&s,word,&gotname,namestring,60);
   }
 if (cgotoctave) {gotoctave=1; octave=coctave;}
-event_voice(num, s,gotclef,gotoctave,gottranspose,clefstr,octave,transpose);
+event_voice(num, s,gotclef,gotoctave,gottranspose,gotname,clefstr,octave,transpose,namestring);
 /*
 if (gottranspose) printf("transpose = %d\n",transpose);
  if (gotoctave) printf("octave= %d\n",octave);
  if (gotclef) printf("clef= %s\n",clefstr);
+if (gotname) printf("parsevoice: name= %s\n",namestring);
 */
 }
 
@@ -1392,6 +1462,7 @@ char* field;
   int i;
   char playonrep_list[80];
   int decorators[DECSIZE];
+  int n,m;
 
   event_startmusicline();
   endchar = ' ';
@@ -1565,7 +1636,8 @@ char* field;
         break;
       case ']':
         p = p + 1;
-        event_chordoff();
+        readlen(&chord_n, &chord_m, &p);
+        event_chordoff(chord_n,chord_m);
         parserinchord = 0;
         for (i = 0; i<DECSIZE; i++) chorddecorators[i] = 0;
         break;

@@ -58,6 +58,7 @@
 /*#define NULL 0 */
 
 #include <stdio.h>
+#include <stdlib.h>
 #ifdef ANSILIBS
 #include <string.h>
 #include <stdlib.h>
@@ -104,7 +105,9 @@ int Mf_nomerge = 0;    /* 1 => continue'ed system exclusives are */
 long Mf_currtime = 0L;    /* current time in delta-time units */
 
 /* private stuff */
-static long Mf_toberead = 0L;
+long Mf_toberead = 0L;
+long Mf_bytesread = 0L;
+
 static long Mf_numbyteswritten = 0L;
 
 static long readvarinum();
@@ -134,7 +137,7 @@ void mfread()     /* The only non-static function in this file. */
 }
 
 /* for backward compatibility with the original lib */
-int midifile()
+void midifile()
 {
     mfread();
 }
@@ -166,6 +169,7 @@ egetc()      /* read a single character and abort on EOF */
   if ( c == EOF )
     mferror("premature EOF");
   Mf_toberead--;
+  Mf_bytesread++;
   return(c);
 }
 
@@ -178,6 +182,7 @@ readheader()    /* read a header chunk */
     return;
 
   Mf_toberead = read32bit();
+  Mf_bytesread = 0;
   format = read16bit();
   ntrks = read16bit();
   division = read16bit();
@@ -213,6 +218,7 @@ readtrack()     /* read a track chunk */
 
   Mf_toberead = read32bit();
   Mf_currtime = 0;
+  Mf_bytesread =0;
 
   if ( Mf_trackstart )
     (*Mf_trackstart)();
@@ -1019,5 +1025,9 @@ char c;
   };
 #endif                        
   Mf_numbyteswritten++;
+  if(Mf_numbyteswritten > 500000) {
+     printf("eputc: aborting because of file runaway (infinite loop)\n");
+     exit(1);
+     }
   return(return_val);
 }

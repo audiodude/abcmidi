@@ -3,8 +3,15 @@
 
 /* abc.h must be #included before this file */
 /* functions and variables provided by parseabc.c */
+
+/* for Microsoft Visual C++ 6 */
+#ifdef _MSC_VER
+#define KANDR
+#endif
+
 #ifndef KANDR
 extern int readnump(char **p);
+extern int readsnump(char **p);
 extern int readnumf(char *num);
 extern void skipspace(char **p);
 extern int readsnumf(char *s);
@@ -15,6 +22,7 @@ extern char *addstring(char *s);
 extern char *lookup_abbreviation(char symbol);
 #else
 extern int readnump();
+extern int readsnump();
 extern int readnumf();
 extern void skipspace();
 extern int readsnumf();
@@ -48,8 +56,8 @@ extern void event_field(char k, char *f);
 extern void event_words(char *p, int continuation);
 extern void event_part(char *s);
 extern void event_voice(int n, char *s, int gotclef, int gotoctave,
-		int gottranspose, char *clefname, int octave,
-		int transpose);
+		int gottranspose, int gotname, char *clefname, int octave,
+		int transpose, char *namestring);
 extern void event_length(int n);
 extern void event_blankline(void);
 extern void event_refno(int n);
@@ -80,12 +88,13 @@ extern void event_broken(int type, int mult);
 extern void event_tuple(int n, int q, int r);
 extern void event_chord(void);
 extern void event_chordon(void);
-extern void event_chordoff(void);
+extern void event_chordoff(int, int);
 extern void event_instruction(char *s);
 extern void event_gchord(char *s);
 extern void event_note(int decorators[DECSIZE], char accidental, int mult, 
                        char note, int xoctave, int n, int m);
 extern void event_abbreviation(char symbol, char *string, char container);
+extern void print_voicecodes(void);
 #else
 extern void event_init();
 extern void event_text();

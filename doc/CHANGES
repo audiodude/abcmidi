@@ -1994,3 +1994,447 @@ abc2midi.c: For the -sr option to swallow rests, you can
 specify the size of the rest in quantum units. Quantum unit
 is defined in readme.txt updated today.
 
+July 3 2004
+
+midifile.c: added new global Mf_bytesread (number of
+bytes read in track).
+
+July 4 2004
+
+midi2abc: added new runtime option -Midigram. If it
+is selected, all other options are ignored and no
+abc file is created. Instead, a new function midigram()
+is called and the program lists all the notes occurring
+in the file where each line represents a note on/note off
+event. The line is in the following format.
+on_time off_time track channel midi_pitch midi_vol.
+The on/off time is given in quarter beat units (ie.
+midipulses/ppqn where ppqn is pulses per quarter note
+specified in the MIDI header). The last record indicates
+the duration of the MIDI file in MIDI pulse units.
+Though in theory, this feature should be put into a separate 
+program, it was felt there were enough programs in the abcmidi
+package.
+
+The code to convert the midi file to an abc file in
+main() was stuffed into a new function called midi2abc.
+New functions (no_op0,,no_op5, print_txt_noteon,
+print_txt_noteoff, init_notechan, open_note, close_note
+and initfunc_for_midinotes were created.
+
+
+July 11 2004
+
+abc2midi, yaps, abc2abc, midi2abc. Introduced a new
+parameter -ver which prints out the current version number
+of the program.
+
+Added a new program, midicopy to the abcmidi package.
+(Documentation put in midicopy.1 and readme.txt.)
+All the makefiles were updated, however I am unable to
+check out the ones in the makefile subdirectory.
+
+July 17 2004
+
+abc2midi (store.c), yaps (yapstree.c), abc2abc (toabc.c),
+midi2abc (midi2abc.c) midicopy (midicopy.c) for -ver
+parameter changed exit(1) to exit(0) after printing
+out version number.
+
+
+August 21 2004
+
+A lot of abc files indicate ornamentations using the tilde
+operator ~. Abc2midi has been substituting a roll for the
+ornamentation. Guido Gonzato has suggested that it should
+be replaced with an acciaccatura for all notes except
+dotted quarter notes. The dotted quarter note should
+be replaced with three eight notes where the second
+note is preceded with an acciacatura and the third note
+is preceded with an appoggiatura.
+
+Two new procedures were introduced in store.c.
+Doornament applies the action when decorator[ORNAMENTATION]
+is encountered. The function doornament calls the new function
+makecut which inserts a grace note. (Unfortunately the length of 
+the grace notes cannot be adjusted using the %%MIDI gracedivider
+as described on June 12 2004 since the %%MIDI commands are
+processed later.)  The procedure event_note was modified 
+to call doornament instead of doroll when an ornament is encountered. 
+
+September 05 2005
+
+A new feature was introduced in the abcmidi package.
+Abc2abc: a new run time parameter, -nokey was introduced.
+It will suppress the key signature and place all the
+necessary accidentals. Abc2midi, abc2abc, yaps understand
+the key signature K: none. For such key signature, no 
+sharps or flats will be assumed. The -t (transpose) function
+in abc2abc should work with K: none.
+
+
+Changes were made to parsekey in parseabc.c and to
+event_key and event_note in toabc.c (search for nokey)
+to recognize K: none. When K: none is encountered,
+abc2midi, yaps and abc2abc assumes no key signature
+is supplied.
+
+September 06 2005
+
+Yaps does not display the note length correctly when no
+L: is declared in the abc header. Fix: in start_body (yastree.c)
+replace 
+   setfract(&thetune.unitlen, 1, 16); 
+with
+    event_length(16);
+etc.
+
+
+September 12 2005
+
+More work was needed to the -nokey option working correctly.
+In order to ensure that toabc.c works the same way without
+the new feature, event_note was divided into two functions
+event_note1 and event_note2. Event_note1 is an exact copy
+of the original event_note and is called when nokey is not
+set. Event_note2 contains all the new code for transposing
+notes when nokey is set. When event_note is called it either
+calls event_note1 or event_note2 depending upon the status
+of the flag nokey.
+
+Event_note2 performs the transposition in a different
+fashion. The note is converted to a midi representation.
+The number of semitones is added to the midi representation
+and the midi representation is converted back to the
+note representation. Code for converting to the midi
+representation was borrowed from store.c and code for
+converting the midi representation back to the note
+representation was borrowed from midi2abc. There was
+a small incompatiblity between setmap representation
+(character versus numeric representation) which had
+to be fixed.
+
+The -nokey option was split into two options.
+-nokeys will use sharps. -nokeyf will use flats.
+
+September 13 2004
+
+Added gchord default for 12/8 time (fzcfzcfzcfzc).
+
+September 17 2004
+
+Cleaned up all source code to reduce the number of compiler
+warnings reported by Microsoft Visual C++.  ANSILIBS 
+is now defined when compiling with Visual C++.
+
+September 19 2004
+
+Many abc tunes do not specify the tempo with the Q: command.
+By default abc2midi uses a tempo of 120 quarters notes per
+minute. For many tunes, this is too slow. A new run
+time parameter -Q was introduced into abc2midi, allowing
+you to specify the default tempo in the event that no tempo
+was specified. If the tempo is specified in the abc file,
+this parameter is ignored.
+
+A new global default_tempo (initialized to 120) was introduced
+in store.c. This parameter can be changed using the -Q run
+time option added to event_init.
+
+September 20 2004
+
+Fixed bug in applygrace_new which causes floating point
+exception (divide by zero) for some abc files.
+
+
+
+September 26 2004
+
+abc2abc does not recognize the parameter name="some string" eg.
+in the multivoice command. For example,
+V: 1 name="alto 1"
+instructs abcm2ps to print "alto 1" on the staff. Unfortunately,
+abc2abc does not show this parameter in the output file.
+This is part of the proposed abc 2 standard. 
+
+Fix, parsevoice in parseabc.c now extracts the name= parameter
+in the V: command. The event_voice command (which appears
+in store.c, yapstree.c and toabc.c) now has two extra parameters
+for passing the name string. In toabc.c, event_voice prints out
+the name string when it is found in the voice command. I introduced
+a new function parsename, which processes the "name= ..." parameter.
+In addition I fixed a bug which causes V: transpose=1 to produce
+a segmentation error.
+
+
+October 2 2004
+
+As mentioned above on August 21 the new implementation of
+dooranment did not allow configuring the length of the grace
+note using the %%MIDI gracedivider command. This was fixed
+by replacing the implementation of the procedure makecut.
+Initially gracedivider was alway 4 (the default when it
+is not specified).
+
+October 8 2004
+
+The abcguide.txt and proposed abc standard 2 includes the use
+of  multirepeats (i.e |:  ..|[1,3 .. :|[2,4.. :| ).
+Though yaps and abc2abc can handle this syntax, 
+abc2midi fails to handle it despite some earlier effort to
+introduce it.  For example, some of the code added to in genmidi.c
+to handle multirepeats includes (eg. inlist(j, passnum)).
+Furthermore, the old feature codes REP1 and REP2 was replaced
+with PLAY_ON_REP.  Nevertheless, the code does not process 
+correctly multirepeats.
+
+For reference the parser (parseabc.c) maps the repeat symbols
+into the features in the following manner.
+
+|:    BAR_REP
+:|    REP_BAR
+::    DOUBLE_REP
+[1, [2 etc PLAY_ON_REP and places the count in pitch[] or
+a text string.
+
+The problems occur in two places: (1) writetrack in genmidi.c and
+(2) fixreps in store.c. Writetrack needs to keep track of the number
+of times the section has been repeated using the variable "pass"
+so that it knows which bars to play. However, for both case REP_BAR:
+and case DOUBLE_BAR: the pass variable is allowed to assume only values
+of 1 and 2. Therefore, it cannot handle |[3 or whatever. If more
+than one :| (REP_BAR) is associated with a |: (BAR_REP) this
+causes an event_error.
+
+To make things more confusing there is another variable 'additive'
+which refers to an undocumented feature in  the P: command where the 
+symbol + and - indicates whether repeat marks in a part section are
+to be processed or ignored. I don't beleive this feature has ever 
+been used.  I have therefore removed this feature to make the code easier
+to support. From now on additive is always assumed. In other words
+if a repeat section occurs in a PART it is always repeated. There
+is now no way to ignore the repeat command.
+
+
+Fixreps was primarily designed to insert a BAR_REP (|:) when
+it is missing in the beginning of the tune. However, it tries
+to do much more. It checks for syntactical errors such as two
+or more closing repeats associated with an opening repeat as an error.
+If it finds an extra closing repeat, it attempts to insert a matching
+opening repeat (which is not desirable for multirepeats). If it
+finds two opening repeats a row, it attempts to correct the situation
+by changing the second opening repeat into a double repeat ::. 
+Unfortunately, these checks get in the way when you have multirepeats.
+
+The multirepeats syntax appears to allow the use of either
+a :| or || for separating sections. This does not seem to
+be built into the writetrack code.
+
+This seems to more than a weekend project.
+ 
+
+October 15 2004
+
+In order to handle multirepeats, several changes were
+introduced into the writetrack code in genmidi.c
+
+First a new variable, maxpass, which specifies the
+maximum number of repeats was introduced. It is
+initialized to 2 and reset to 2 any time a left
+repeat symbol is encountered. The code for the
+switch block REP_BAR (:|) was changed so that
+the variable pass can be incremented until it
+reaches maxpass. A check for whether a right repeat
+was expected (i.e. a left repeat was found), is
+only made on the first pass. (The flag expect_repeat
+is cleared after the first pass.)
+
+More changes were made to the switch block code for
+PLAY_ON_REP which handles any of the indications such
+as |1 , |[1, |[1,3 etc. The code
+... parts !=-1) {
+    passnum = partrepno = 1;
+was removed since it was a remnant of the undocumented
+additivity feature. The error "Cannot find :| || [1 ..."
+is not invoked when encountering PLAY_ON_REP while
+skipping a variant ending. When a variant ending is
+found maxpass is set to pass+1 in case this is not
+the last variant ending.
+
+The fixreps code in store.c also required changes.
+The code mainly inserts a |: in the beginning
+of the tune in case it is needed. Unfortunately,
+the code can make other unexpected changes
+and does not understand multiple repeats.
+For example, if it encounters two left repeats (|:)
+without intervening right repeats, i.e.
+|: some stuff |: some stuff etc.
+then it assumes the second left repeat was a
+mistake and changes it to a double repeat :: without
+any warning. If fixreps finds two right repeats (:|) in a
+sequence, then it returns a message that a spurious
+right repeat was found and inserts a new left repeat
+at a previous bar line.
+
+For the case PLAY_ON_REP, fixreps identifies
+two situations, denom[j] == 1 corresponding to [1 and
+denom[j] == 2 corresponding to [2. For the second case,
+it was assumed that no more REP_BAR (i.e :|) would be
+encountered so the flags expect_repeat was cleared.
+This is not correct for multirepeats, so those lines were
+commented. Furthermore, when a [1,3 or something similar
+is encountered, denom[j] is now 0 and the code falls into 
+the next case statement BAR_REP2 which should never happen.
+Another break statement was added to prevent this from occurring.
+
+Major changes were made to fixreps. Now it only checks
+for missing |: before [1 :| or ::. It also checks
+for two |: |: in a row. If you use multirepeats, i.e. 
+more than 1, be sure to end last variant with a double
+bar line.
+
+
+Other related changes to store.c: got rid of the obsolete
+functions event_rep1 and event_rep2. They are no longer
+used.
+
+Corrected abcguide.txt on the handling variant endings.
+
+Added protection for file runaway in eputc in midifile.c.
+abc2midi.exe will abort if it attempts to create a midifile
+larger than 500000 bytes.
+
+
+October 24 2004
+
+More work was needed to correct problems with the abc2abc
+-nokeys option. Propogation of accidentals across bars was
+not working.
+
+Fix for toabc.c: the pitchof() function was changed. The
+function setupkey() was eliminated and printpitch() was
+rewritten. It now handles propogation of accidentals 
+across bar lines but not between bar lines in event
+of a tied note. The latter case would involve considerable
+more development since no code for linking tied notes
+is present in toabc.c. (Store.c, for abc2midi, does the linking
+in a separate pass -- dotie, but toabc.c does everything in
+a single pass. The code can get quite hairy if we have 
+interleaved voices.)
+
+October 29 2004
+
+For K:none, abc2abc uses flats or sharps depending upon the
+variable useflats in the function printpitch (toabc.c).
+The variable useflats is set by the run time parameter
+-nokeyf. For some music, one might want to have the
+variable useflats be adaptive to the type of guitar
+chords (gchords) transposed by abc2abc.  I introduced
+as an experiment the option of adapting useflats to
+the presence of flats or sharps in the guitar chord.
+When the variable adapt_useflats_to_gchords is set,
+some adaption is done after the guitar chord is processed.
+In general for K:none, abc2abc tends to use sharps
+in the guitar chords for any transpositions unless
+flats have been written into the guitar chords.
+
+
+November 4 2004
+
+Chord syntax extension: it is convenient to express a chord
+as [CEG]3 instead of [C3E3G3] which is part of the proposed
+abc standard version 2. Presently the abcmidi parser will consider
+the 3 after the ] as a stray number however other software
+such as abcm2ps allows this extension.
+
+Current practice: the parser run differently in each
+application (abc2midi, abc2abc, and yaps) so each has
+to be examined separately.
+
+abcmidi:
+writetrack in genmidi.c checks whether a note
+is inside a chord. If it is in a chord, a midi_noteon is sent
+to the MIDI file and a midi_noteoff based on the feature/num/denom
+information is sent to the queue. The delay time is not advanced,
+so that all remaining notes in the chord will start at the
+same time. When the end of chord marker is encountered, the
+delay time is advanced by the amount in the feature/num/denom 
+arrays so that the next note will start at the right time.
+at the right time. This amount recorded with feature CHORDOFF
+is (modified) by tiefix to be the last note length encountered
+in the chord.
+
+Fix: 
+
+Parseabc.c was modified to pick up the chord length placed
+after the clocking bracket "]". If it is not indicated, it
+gets 1/1. The chord length is passed to event_chordoff
+via new parameters chord_n and chord_m. 
+
+abc2midi:
+In store.c, the event_chordoff handler checks the chord_n,chord_m
+values. If they are 1,1 then addfeature sends a CHORDOFF feature
+and everything runs the same; otherwise addfeature sends a
+CHORDOFFEX and chord_n*4,chord_m*v->default_length is placed in
+num, denom storage. CHORDOFFEX is a new feature type added
+to abc.h for handling this situation. Genmidi.c treats
+CHORDOFF and CHORDOFFEX the same way.
+
+A new function fix_enclosed_note_lengths was introduced to 
+readjust the note lengths of all the notes in the chord in
+the event that it is set outside the enclosing brackets
+(i.e. CHORDOFFEX).
+
+The function tiefix now keeps track of the chord start ([)
+in the variable chord_start. When it encounters a CHORDOFFEX, 
+it calls fix_enclosed_note_lengths.
+
+
+November 07 2004: -chord extension continued
+
+yaps:
+
+Unlike abc2midi, yaps only performs one pass through the
+abc file while preparing a very detailed layout of the music
+in a complex data tune data structure. You can view part
+of this structure by running yaps with the -d parameter.
+This data structure is passed to printtune() in drawtune.c.
+
+A new function fix_enclosed_note_lengths was created in the 
+file yapstree.c to adjust the note durations. This function
+is called by event_chordoff when the parser encounters 
+the end of a chord (']'). The new function does nothing
+if ] is not followed by a note length. Otherwise it corrects
+cv->barcount in order to avoid warnings regarding the
+number of beats in the bar. It replaces the note duration
+of each note in the chord with the new note duration.
+The function count_dots is called to replace the note
+duration representation. (There still seems to be a
+problem here.)
+
+abc2abc:
+
+Minimal changes in toabc.c were made. The function event_chordoff
+was modified to output the note length information following
+the chord if any and to correct the bar count. 
+
+
+November 20 2004
+
+The fix for handling chord extensions in yaps did not work
+properly and would frequently place tails on notes which
+should not have tails. It was discovered that chords have
+their own structure for indicating their PostScript representation
+and their tail is drawn by a function called drawchordtail.
+The yapstree.c function event_chordoff was modified to also
+update the chord structure when the chord extension occurs.
+
+Introduced a new folder called programming in the doc subdirectory
+and moved abc2midi.txt, midi2abc.txt and coding.txt into this
+folder. The folder contains some program implementation details.
+The file yaps.txt was renamed to yapshelp.txt. A new file
+yaps.txt describing the implementation of yaps was prepared.
+
+
+
+

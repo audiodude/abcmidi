@@ -17,6 +17,7 @@ extern void reduce();
 extern void set_meter();
 extern void set_gchords();
 extern void addunits();
+extern void set_drums();
 /* required by queues.c */
 extern void midi_noteoff();
 extern void progress_sequence();

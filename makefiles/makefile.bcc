@@ -30,7 +30,7 @@ LNK=ilink32
 LDFLAGS=/ap  /L\bcc55\lib c0x32.obj
 LDFLAGS2=import32.lib cw32.lib
 
-all : abc2midi.exe midi2abc.exe abc2abc.exe mftext.exe yaps.exe
+all : abc2midi.exe midi2abc.exe abc2abc.exe mftext.exe yaps.exe midicopy.exe
 
 abc2midi.exe : parseabc.obj store.obj genmidi.obj queues.obj midifile.obj parser2.obj
 	$(LNK) $(LDFLAGS) parseabc.obj genmidi.obj store.obj \
@@ -48,6 +48,9 @@ mftext.exe : midifile.obj mftext.obj crack.obj
 yaps.exe : parseabc.obj yapstree.obj drawtune.obj debug.obj pslib.obj position.obj parser2.obj
 	$(LNK)  $(LDFLAGS)  parseabc.obj yapstree.obj drawtune.obj debug.obj \
 	position.obj pslib.obj parser2.obj, yaps.exe,,  $(LDFLAGS2)
+
+midicopy.exe: midicopy.obj
+	$(LNK)  $(LDFLAGS) midicopy.obj, midicopy.exe,, $(LDFLAGS2)
 
 # common parser object code
 #
@@ -113,9 +116,14 @@ crack.obj : crack.c
 mftext.obj : mftext.c midifile.h
 	$(CC) $(CFLAGS) mftext.c
 
+# objects for midicopy
+#
+midicopy.obj :midicopy.c midicopy.h
+	$(CC) $(CFLAGS) midicopy.c
+
 clean:
 	rm *.obj
 	rm *.exe
 
-zipfile: midi2abc.exe abc2midi.exe mftext.exe yaps.exe abc2abc.exe
+zipfile: midi2abc.exe abc2midi.exe mftext.exe yaps.exe abc2abc.exe midicopy.exe
 	zip pcexe2.zip *.exe readme.txt abcguide.txt demo.abc yaps.txt

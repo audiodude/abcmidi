@@ -95,7 +95,7 @@ static void advance(struct voice* v, int phase, int* items, double* itemspace, d
   };
   done = 0;
   while ((p != NULL) && (done==0)) {
-    p->x = x + p->xleft;
+    p->x = (float) (x + p->xleft);
     stepon = 1;
     switch(p->type) {
     case MUSICLINE:
@@ -433,7 +433,7 @@ static int spaceline(struct voice* v)
       inmusic = 0;
       break;
     case CHORDNOTE:
-      p->x = lastx;
+      p->x = (float) lastx;
       break;
     case CLEF:
     case KEY:
@@ -453,7 +453,7 @@ static int spaceline(struct voice* v)
     case REST:
     case NOTE:
       x = x + p->xleft;
-      p->x = x;
+      p->x = (float) x;
       lastx = x;
       x = x + p->xright + gap;
       break;

@@ -1,8 +1,8 @@
-.TH ABC2MIDI 1 "12 June 2004"
+.TH ABC2MIDI 1 "20 September 2004"
 .SH NAME
 \fBabc2midi\fP \- converts abc file to MIDI file(s)
 .SH SYNOPSIS
-abc2midi \fIinfile\fP [\fIrefnum\fP] [-c] [-v] [-t] [-n limit] [-RS] [-NAR] [-o outfile]
+abc2midi \fIinfile\fP [\fIrefnum\fP] [-c] [-v] [-ver] [-t] [-n limit] [-RS] [-NAR] [-Q tempo] [-o outfile]
 .SH DESCRIPTION
  The default action is to write a MIDI file for each abc tune
  with the filename <stem>N.mid, where <stem> is the filestem
@@ -21,6 +21,9 @@ selects checking only
 .B -v
 selects verbose option
 .TP
+.B -ver
+prints version number and exits
+.TP
 .B -t
 selects filenames derived from tune titles
 .TP
@@ -32,6 +35,10 @@ Suppresses the warning 'Assuming repeat'
 .TP
 .B -n \fI X\fP
 limits the length of the file name stem to X characters
+.TP
+.B -Q \fI tempo\fP
+sets the default tempo in quarter notes per minute if it was not
+specified in the abc header.
 .TP
 .B -o \fIoutfile\fP
 write output to \fIoutfile\fP
@@ -339,7 +346,7 @@ James Allwright <J.R.Allwright@westminster.ac.uk>
 .SH SUPPORTED
  by Seymour Shlien <seymour.shlien@crc.ca>
 .SH VERSION
-This man page describes abc2midi version 1.44,  June 12 2004.
+This man page describes abc2midi version 1.50  September 20 2004.
 .SH COPYRIGHT
 Copyright 1999 James Allwright
 .PP

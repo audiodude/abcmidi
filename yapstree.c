@@ -22,10 +22,17 @@
 /* yapstree.c - back-end for abc parser. */
 /* generates a data structure suitable for typeset music */
 
+#define VERSION "1.30 November 20 2004"
 #include <stdio.h>
 #ifdef USE_INDEX
 #define strchr index
 #endif
+
+/* for Microsoft VC 6++ or higher */
+#ifdef _MSC_VER
+#define ANSILIBS
+#endif
+
 #ifdef ANSILIBS
 #include <ctype.h>
 #include <stdlib.h>
@@ -752,6 +759,17 @@ int n, m;
   reducef(f);
 }
 
+static void addfractions(f,n,m)
+struct fract* f;
+int n,m;
+{
+  f->num = n*f->denom + f->num*m;
+  f->denom = m*f->denom;
+  reducef(f);
+}
+
+
+
 static struct voice* newvoice(int n)
 /* create and set up a new voice data structure */
 {
@@ -889,7 +907,6 @@ static void freefeature(void* item, featuretype type)
 {
   struct note *n;
   struct rest *r;
-  struct atempo *t;
 
   switch(type) {
   case NOTE:
@@ -1067,6 +1084,10 @@ char** filename;
   int papsize, margins, newscale;
   int ier;
 
+  if (getarg("-ver",argc, argv) != -1) {
+	  printf("%s\n",VERSION);
+	  exit(0);
+  }
   if (getarg("-d", argc, argv) != -1) {
     debugging = 1;
   } else {
@@ -1132,9 +1153,10 @@ char** filename;
     };
   };
   if ((getarg("-h", argc, argv) != -1) || (argc < 2)) {
-    printf("yaps version 1.24\n");
+    printf("yaps version %s\n",VERSION);
     printf("Usage:  yaps <abc file> [<options>]\n");
     printf("  possible options are -\n");
+    printf("  -ver          :prints version number and exits\n");
     printf("  -d            : debug - display data structure\n");
     printf("  -e <list>     : draw tunes with reference numbers in list\n");
     printf("     list is comma-separated and may contain ranges\n");
@@ -1703,12 +1725,13 @@ char* s;
   };
 }
 
-void event_voice(n, s, gotclef, gotoctave,gottranspose,
-	       	clefname, octave, transpose)
+void event_voice(n, s, gotclef, gotoctave,gottranspose,gotname,
+	       	clefname, octave, transpose, namestring)
 int n;
 char *s;
 int gotclef,gotoctave,gottranspose;
 char *clefname;
+char *namestring;
 int transpose,octave;
 /* A voice field (V: ) has been encountered */
 {
@@ -1979,9 +2002,11 @@ static void start_body()
   if (thetune.unitlen.num == 0) {
     event_warning("no L: field, using default rule");
     if ((double) thetune.meter.num / (double) thetune.meter.denom < 0.75) {
-      setfract(&thetune.unitlen, 1, 16);
+      /*setfract(&thetune.unitlen, 1, 16); [SS] 2004-09-06 */
+      event_length(16);
     } else {
-      setfract(&thetune.unitlen, 1, 8);
+     /* setfract(&thetune.unitlen, 1, 8); */
+      event_length(8);
     };
   };
   if (thetune.tempo != NULL) {
@@ -2644,7 +2669,7 @@ void event_chord()
 /* handles old '+' notation which marks the start and end of each chord */
 {
     if (cv->inchord) {
-      event_chordoff();
+      event_chordoff(1,1);
     } else {
       event_chordon();
     };
@@ -2663,12 +2688,43 @@ void event_chordon()
   cv->chordplace = addfeature(CHORDON, cv->thischord);
 }
 
-void event_chordoff()
+
+void fix_enclosed_note_lengths(struct feature* chordplace,
+      int chord_n, int chord_m, int * base, int * base_exp)
+{
+struct feature* f;
+struct note* anote;
+if (chord_n ==1 && chord_m ==1) return;
+f = chordplace->next;
+anote = f->item;
+/* remove old note length from barcount */
+addfractions(&cv->barcount, -anote->len.num, anote->len.denom);
+while ((f != NULL)&&((f->type==NOTE)||(f->type=CHORDNOTE))) {
+   anote = f->item;
+   /* remove old note length from barcount */
+   setfract(&anote->len, chord_n*cv->unitlen.num, chord_m*cv->unitlen.denom);
+   reducef(&anote->len);
+   /*printf("NOTE %c%c %d / %d\n", anote->accidental, anote->pitch, 
+               anote->len.num, anote->len.denom);                 
+   */
+   anote->dots = count_dots(&anote->base, &anote->base_exp,
+         anote->len.num, anote->len.denom);
+   f = f->next;
+   *base = anote->base;
+   *base_exp = anote->base_exp;
+   }
+   /* and new note length to barcount */
+   addfractions(&cv->barcount, anote->len.num, anote->len.denom);
+}
+
+
+void event_chordoff(int chord_n, int chord_m)
 /* end of a chord */
 {
   struct feature* ft;
   struct chord* thechord;
   struct note* firstnote;
+  int base,base_exp;
 
   if (!cv->inchord) {
     event_error("no chord to close");
@@ -2686,6 +2742,14 @@ void event_chordoff()
   } else {
     event_error("mis-formed chord");
   };
+  
+  if (cv->chordplace) {
+      fix_enclosed_note_lengths(cv->chordplace,chord_n,chord_m,&base,&base_exp);
+      if (chord_n != 1 || chord_m != 1) {
+         thechord->base = base;
+         thechord->base_exp = base_exp;
+         }
+      }
   cv->inchord = 0;
   cv->thischord = NULL;
   cv->chordplace = NULL;

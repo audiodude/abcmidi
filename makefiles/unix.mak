@@ -35,7 +35,7 @@ CC=gcc
 CFLAGS=-c -DANSILIBS
 LNK=gcc
 
-all : abc2midi midi2abc abc2abc mftext yaps
+all : abc2midi midi2abc abc2abc mftext yaps midicopy
 
 abc2midi : parseabc.o store.o genmidi.o midifile.o queues.o parser2.o
 	$(LNK) -o abc2midi parseabc.o store.o genmidi.o queues.o \
@@ -53,6 +53,9 @@ mftext : midifile.o mftext.o crack.o
 yaps : parseabc.o yapstree.o drawtune.o debug.o pslib.o position.o parser2.o
 	$(LNK) -o yaps parseabc.o yapstree.o drawtune.o debug.o \
 	position.o pslib.o parser2.o
+
+midicopy : midicopy.o
+	$(LNK) -o midicopy midicopy.o
 
 parseabc.o : parseabc.c abc.h parseabc.h
 	$(CC) $(CFLAGS) parseabc.c 
@@ -80,6 +83,9 @@ midifile.o : midifile.c midifile.h
 midi2abc.o : midi2abc.c midifile.h
 	$(CC) $(CFLAGS) midi2abc.c
 
+midicopy.o : midicopy.c midicopy.h
+	$(CC) $(CFLAGS) midicopy.c
+
 crack.o : crack.c
 	$(CC) $(CFLAGS) crack.c 
 
@@ -104,4 +110,4 @@ debug.o: debug.c structs.h abc.h
 	$(CC) $(CFLAGS) debug.c
 
 clean :
-	rm *.o abc2midi midi2abc abc2abc mftext
+	rm *.o abc2midi midi2abc abc2abc mftext midicopy

@@ -102,11 +102,17 @@ struct voice* v;
           astring = nextitem(anote->syllables);
         };
       };
-      printf("stemup=%d beaming=%d x=%.1f left=%.1f right=%.1f\n", 
-              anote->stemup, anote->beaming, ft->x, ft->xleft, ft->xright);
+      printf("stemup=%d beaming=%d base =%d base_exp=%d  x=%.1f left=%.1f right=%.1f\n", 
+              anote->stemup, anote->beaming, anote->base,  anote->base_exp,
+              ft->x, ft->xleft, ft->xright);
       break;
-    case CHORDNOTE: printf("CHORDNOTE\n");
+    case CHORDNOTE: 
       anote = ft->item;
+      printf("CHORDNOTE %c%c %d / %d\n", anote->accidental, anote->pitch,
+               anote->len.num, anote->len.denom);
+      printf("stemup=%d beaming=%d base =%d base_exp=%d x=%.1f left=%.1f right=%.1f\n", 
+              anote->stemup, anote->beaming, anote->base, anote->base_exp,
+              ft->x, ft->xleft, ft->xright);
       printf("x=%.1f\n", ft->x);
       break;
     case NONOTE: printf("NONOTE\n");

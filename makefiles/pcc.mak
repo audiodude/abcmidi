@@ -22,7 +22,8 @@ CC=pcc
 CFLAGS=-nPCCFIX -nNOFTELL -nUSE_INDEX -nKANDR
 LNK=pccl
 
-all : abc2midi.exe midi2abc.exe abc2abc.exe mftext.exe
+all : abc2midi.exe midi2abc.exe abc2abc.exe mftext.exe yaps.exe
+      midicopy.exe
 
 abc2midi.exe : parseabc.o store.o genmidi.o queues.o midifile.o parser2.o
 	$(LNK) -Lc:\bin\pcc\ -Oabc2midi parseabc.o store.o genmidi.o queues.o midifile.o parser2.o
@@ -35,6 +36,9 @@ midi2abc.exe : midifile.o midi2abc.o
 
 mftext.exe : midifile.o mftext.o crack.o
 	$(LNK) -Lc:\bin\pcc\ midifile.o mftext.o crack.o -Omftext
+
+midicopy.exe: midicopy.o
+	$(LNK) midicopy.c $(CFLAGS)
 
 parseabc.o : parseabc.c abc.h parseabc.h
 	$(CC) parseabc.c  $(CFLAGS)
@@ -70,5 +74,5 @@ clean:
 	del *.exe
 	del *.o
 
-zipfile: abc2midi.exe midi2abc.exe abc2abc.exe mftext.exe
+zipfile: abc2midi.exe midi2abc.exe abc2abc.exe mftext.exe midicopy.exe
 	zip pcexe.zip *.exe readme.txt abcguide.txt demo.abc

@@ -1,9 +1,10 @@
 abcMIDI :   abc <-> MIDI conversion utilities
 
-midi2abc version 2.73
-abc2midi version 1.45
-abc2abc  version 1.29
-yaps     version 1.24
+midi2abc version 2.75 July 17 2004
+abc2midi version 1.53 November 09 2004
+abc2abc  version 1.35 November 09 2004
+yaps     version 1.30 November 20 2004
+midicopy version 1.01 July 17 2004
 
 24th January 2002
 
@@ -104,6 +105,10 @@ midi2abc <options>
          -obpl one bar per line (deprecated)
          -bpl <number> of bars per printed line
          -bps <number> of bars per staff line
+         -Midigram   No abc file is created, but a list
+		of all notes is produced. Other parameters
+                are ignored.
+         -ver   Prints version number and exits
 
 Use only one of -u -gu -b and -Q or better none.
 If none of these is present, the program uses the PPQN header
@@ -173,12 +178,25 @@ It should be a power of 2 (eg. 1,2,4,8,16 ...) and by default
 it remains as 2 as before. The -aul specifies the L: value to use,
 for example, to get L: 1/32 you would put -aul 32.
 
+The -Midigram option runs midi2abc in a completely different
+mode. It does not produce any abc file but outputs a list
+of all the notes found in the MIDI file. Each line of output
+represents one note. For each line, the on and off time
+in quarter note units, the track number, the channel number, 
+midi pitch, and midi velocity are listed. The last line
+contains a single value equal to the duration of the file
+in MIDI pulses.  The output is designed to eventually go into a
+graphical user interface (runabc) which will display these events 
+in piano roll format.
+
+
+
 
 -------------------------------------------------------------------------
 
 abc2midi  - converts abc file to MIDI file(s).
 Usage : abc2midi <abc file> [reference number] [-c] [-v] [-o filename]
-        [-t] [-n <value>]
+        [-t] [-n <value>] [-ver]
         [reference number] selects a tune
         -c  selects checking only
         -v  selects verbose option
@@ -187,12 +205,16 @@ Usage : abc2midi <abc file> [reference number] [-c] [-v] [-o filename]
         -n <limit> set limit for length of filename stem
         -RS use 3:1 instead of 2:1 for broken rhythms
         -NAR suppress assuming repeat warning
+        -Q <tempo> in quarter notes/minute
+        -ver prints version number and exits
  The default action is to write a MIDI file for each abc tune
  with the filename <stem>N.mid, where <stem> is the filestem
  of the abc file and N is the tune reference number. If the -o
  option is used, only one file is written. This is the tune
  specified by the reference number or, if no reference number
- is given, the first tune in the file.
+ is given, the first tune in the file. The -Q parameter sets
+ the default tempo in event the Q: command is not given in the
+ abc header.
 
 Features :
 
@@ -249,21 +271,30 @@ Bugs and Limitations :
 abc2abc
 
 Usage: abc2abc <filename> [-s] [-n X] [-b] [-r] [-e] [-t X]
-       [-u] [-d] [-v] [-V X] [-X n]
+       [-u] [-d] [-v] [-V X] [-ver] [-X n]
   -s for new spacing
   -n X to re-format the abc with a new linebreak every X bars
   -b to remove bar checking
   -r to remove repeat checking
   -e to remove all error reports
   -t X to transpose X semitones
+  -nda No double accidentals in guitar chords
+  -nokeys No key signature (i.e. K: none). Use sharps.
+  -nokeyf No key signature (i.e. K: none). Use flats.
   -u to update notation ([] for chords and () for slurs)
   -d to notate with doubled note lengths
   -v to notate with halved note lengths
   -V X to output only voice X
+  -ver prints version number and exits
   -X n renumber the all X: fields as n, n+1, ..
 
 A simple abc checker/re-formatter/transposer. If the -n option is selected, 
 error checking is turned off. 
+
+The -nokeys or -nokeyf option will set "K: none" and place accidentals on
+all notes that should have accidentals for the expected key signature. 
+The first option will use only sharps; the second option will use
+only flats.
 
 If you want to check an abc tune, it is recommended that you use abc2midi 
 with the -c option as this performs extra checks that abc2abc does not do.
@@ -292,6 +323,55 @@ YAPS
 YAPS is an abc to PostScript converter which can be used as an alternative
 to abc2ps. See the file yaps.txt for a more detailed description of this
 program.
+
+-------------------------------------------------------------------------
+midicopy is a stand alone application which copies a midi file or part
+of a midi file to a new midi file. If you run it with no parameters, a
+short description shown below will appear.
+
+usage:
+midicopy <options> input.mid output.mid
+midicopy copies selected tracks, channels, time interval of the input midi file.options:
+-ver  version information
+-trks n1,n2,..(starting from 1)
+-chns n1,n2,..(starting from 1)
+-from n (in midi ticks)
+-to n   (in midi ticks)
+-replace trk,loc,val
+
+midicopy.exe -ver
+
+will print out something like 
+1.00 July 11 2004
+
+
+midicopy.exe input.mid output.mid
+does nothing interesting except copy the contents of input.mid to a
+new file output.mid.
+
+If you  include the -from parameter followed by a midi pulse number,
+then the program will select the appropriate data starting after the
+given midi pulse location so that will you play midi file it will start
+from that midi pulse number. In order to ensure that the right tempo,
+channel assignments are used, all of these commands prior to that
+pulse number are also copied, however the pulse number in the new file
+remains at zero for those commands.
+
+If you include the -to command followed by a midi  pulse number, the
+midi file is truncated beyond that point, so that when you play the file
+it will stop at this point.
+
+All the tracks will be copied unless you specify them in the list following
+keyword -trks. You start counting tracks from 1.
+
+Similarly, all channels will be copied unless you specify them following
+keyword -chns. You start counting channels from 1.
+
+The option -replace allows you to overwrite a specific byte given its
+track number and offset loc, by the byte whose value is val. This is
+used for changing the program number associated with a channel. The byte
+is replaced in the output file. If you use the -replace option, all
+other options like -from, -to, -chns etc. are ignored.
 
 -------------------------------------------------------------------------
 A Short Explanation of MIDI

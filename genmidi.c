@@ -28,6 +28,10 @@
  * James Allwright
  *
  */
+/* for Microsoft Visual C++ Ver 6 and higher */
+#ifdef _MSC_VER
+#define ANSILIBS
+#endif
 
 #include "abc.h"
 #include "parseabc.h"
@@ -73,7 +77,7 @@ int parts, partno, partlabel;
 int part_start[26], part_count[26];
 long introlen, lastlen, partlen[26];
 int partrepno;
-int additive;
+/* int additive;  not supported any more [SS] 2004-10-08*/
 int err_num, err_denom;
 
 extern int voicesused;
@@ -1708,6 +1712,7 @@ int xtrack;
   int inchord;
   int in_varend;
   int j, pass;
+  int maxpass;
   int expect_repeat;
   int slurring;
   int state[5];
@@ -1729,6 +1734,7 @@ int xtrack;
   drumson = 0;
   droneon = 0;
   in_varend = 0;
+  maxpass = 2;
   if (karaoke) {
     if (xtrack < 3)                  
        karaokestarttrack(xtrack);
@@ -1864,6 +1870,7 @@ int xtrack;
       inchord = 1;
       break;
     case CHORDOFF:
+    case CHORDOFFEX:
       if (wordson) {
         write_syllable(j);
       };
@@ -1919,50 +1926,67 @@ int xtrack;
       waitforbar = 0;
       checkbar(pass);
       break;
-    case DOUBLE_BAR:
+    case DOUBLE_BAR:  /* || */
       in_varend = 0;
       waitforbar = 0;
       softcheckbar(pass);
       break;
-    case BAR_REP:
+
+    case BAR_REP: /* |: */
+    /* ensures that two |: don't occur in a row                */
+    /* saves position of where to return when :| is encountered */
       in_varend = 0;
       waitforbar = 0;
       softcheckbar(pass);
       if ((pass==1)&&(expect_repeat)) {
         event_error("Expected end repeat not found at |:");
       };
-      if (additive == 1) {
-        save_state(state, j, barno, div_factor, transpose, channel);
-        expect_repeat = 1;
-      };
+      save_state(state, j, barno, div_factor, transpose, channel);
+      expect_repeat = 1;
       pass = 1;
+      maxpass=2;
       break;
-    case REP_BAR:
+
+    case REP_BAR:  /* :|  */
+    /* ensures it was preceded by |: so we know where to return */
+    /* returns index j to the place following |:                */ 
       in_varend = 0;
       waitforbar = 0;
       softcheckbar(pass);
       if (pass == 1) {
-        if (additive == 1) {
-          if (!expect_repeat) {
+         if (!expect_repeat) {
             event_error("Found unexpected :|");
           } else {
-            pass = 2;
+          /*  pass = 2;  [SS] 2004-10-14 */
+            pass++;   /* we may have multiple repeats */
             restore_state(state, &j, &barno, &div_factor, &transpose, &channel);
             slurring = 0;
             expect_repeat = 0;
           };
-        };
-      } else {
-        pass = 1;
-        expect_repeat = 0;
+
+      } 
+      else {
+     /* we could have multi repeats.                        */
+     /* pass = 1;          [SS] 2004-10-14                  */
+     /* we could have accidently have                       */
+     /*   |: .sect 1..  :| ...sect 2 :|.  We  don't want to */
+     /* go back to sect 1 when we encounter :| in sect 2.   */
+     /* We signal that we will expect |: but we wont't check */
+            if(pass < maxpass)
+              {
+              expect_repeat = 0;
+              pass++;   /* we may have multiple repeats */
+              restore_state(state, &j, &barno, &div_factor, &transpose, &channel);
+              slurring = 0;
+              }
       };
       break;
-    case PLAY_ON_REP:
-    /* case REP1: */
-/*
-      waitforbar = 0;
-      checkbar(pass);
-*/
+
+    case PLAY_ON_REP: /* |[1 or |[2 or |1 or |2 */
+    /* keeps count of the pass number and selects the appropriate   */
+    /* to be played for each pass. This code was designed to handle */ 
+    /* multirepeats using the inlist() function however the pass    */
+    /* variable is not set up correctly for multirepeats.           */
       {
         int passnum;
         char errmsg[80];
@@ -1971,19 +1995,27 @@ int xtrack;
           event_error("Need || |: :| or ::  to mark end of variant ending");
         };
         passnum = -1;
-        if ((additive) && ((expect_repeat)||(pass>1))) {
+        if (((expect_repeat)||(pass>1))) {
           passnum = pass;
-        } else {
+        }
+
+    /** else {                    // additivity remnants
           if (parts != -1) {
             passnum = partrepno+1;
           };
         };
+     ***/
         if (passnum == -1) {
           event_error("multiple endings do not follow |: or ::");
           passnum = 1;
         };
-        if (inlist(j, passnum) != 1) {
-          j = j + 1;  
+       if (inlist(j, passnum) != 1) {
+          j = j + 1;
+     /* if this is not the variant ending to be played on this pass*/
+     /* then skip to the end of this section watching out for voice*/
+     /* changes. Usually a section end with a :|, but the last     */
+     /* last section could end with almost anything including a    */
+     /* PART change.                                               */
           if(feature[j] == VOICE) j = findvoice(j, trackvoice, xtrack);
           while ((j<notes) && (feature[j] != REP_BAR) && 
                  (feature[j] != BAR_REP) &&
@@ -1996,7 +2028,9 @@ int xtrack;
             if(feature[j] == VOICE) j = findvoice(j, trackvoice, xtrack);
           };
           barno = barno + 1;
-          if ((j == notes) || (feature[j] == PLAY_ON_REP)) {
+          if ((j == notes) /* || (feature[j] == PLAY_ON_REP) */) { 
+          /* end of tune was encountered before finding end of */
+          /* variant ending.  */
             sprintf(errmsg, 
               "Cannot find :| || [| or |] to close variant ending");
             event_error(errmsg);
@@ -2006,36 +2040,43 @@ int xtrack;
             };
           };
         } else {
-          in_varend = 1;
+          in_varend = 1;   /* segment matches pass number, we play it */
+         /* printf("playing at %d for pass %d\n",j,passnum); */
+          maxpass = pass+1;
         };
       };
       break;
-    case REP_BAR2:
-      event_error("internal error : REP_BAR2 found!!");
-      break;
-    case DOUBLE_REP:
+
+    case DOUBLE_REP:     /*  ::  */
       in_varend = 0;
       waitforbar = 0;
       softcheckbar(pass);
-      if (pass == 2) {
+      if (pass > 1) {
+        /* Already gone through last time. Process it as a |:*/
+        /* and continue on.                                  */
         expect_repeat = 1;
         save_state(state, j, barno, div_factor, transpose, channel);
         pass = 1;
+        maxpass=2;
       } else {
-        if (additive != 0) {
+          /* should do a repeat unless |: is missing.       */
           if (!expect_repeat) {
+            /* missing |: don't repeat but set up for next repeat */
+            /* section.                                           */
             event_error("Found unexpected ::");
             expect_repeat = 1;
             save_state(state, j, barno, div_factor, transpose, channel);
             pass = 1;
           } else {
+            /* go back and do the repeat */
             restore_state(state, &j, &barno, &div_factor, &transpose, &channel);
             slurring = 0;
-            pass = 2;
+            /*pass = 2;  [SS] 2004-10-14*/
+            pass++;
           };
-        };
       };
       break;
+
     case GCHORD:
       basepitch = pitch[j];
       inversion = num[j];

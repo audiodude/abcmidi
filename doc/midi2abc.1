@@ -1,4 +1,4 @@
-.TH MIDI2ABC 1 "26 June 2004"
+.TH MIDI2ABC 1 "11 July 2004"
 .SH NAME
 \fBmidi2abc\fP \- program to convert MIDI format files to abc notation
 .SH SYNOPSIS
@@ -7,7 +7,8 @@ midi2abc -f \fIinfile\fP [-xa] [-ga]
 [-ppu \fiparts per unit\fP] [-aul \fidenominator of unit length\fP]
 [-gu] [-b \fIbars\fP] [-Q \fItempo\fP] [-u \fipulses\fp]
 [-k \fIkey\fP] [-c \fIchannel\fP] [-obpl] [-bpl \fibars\fp] [-bps \fpbars\fp]
-[-o \fIfilename\fP] [-s] [-sr \fiunits\fP] [-sum] [-nt] 
+[-o \fIfilename\fP] [-s] [-sr \fiunits\fP] [-sum] [-nt] [-Midigram]
+
 .SH DESCRIPTION
 \fImidi2abc\fP takes a MIDI format file and converts it to something as close
 as possible to abc text format. The user then has to add text fields not
@@ -122,6 +123,17 @@ Print nbars of music on every line followed by a backslash.
 .B -bps \finbars\fP
 When nbars have been printed (including those lines joined by
 a backslash continuation) go to a new line (with no backslash).
+.TP
+.B -Midigram
+When this option appears, all other options are ignored and
+no abc file is produced. Instead a list of all notes in the
+MIDI file are printed in a fixed format. Each line represents
+a pair of MIDI note on/off event. The line contains the
+on/off time of the note, its track number, channel number,
+midi pitch and midi velocity. The last record indicates
+the duration of the MIDI file in MIDI pulse units. The
+output is designed to go into a graphical user interface
+which will produce a graphical representation (piano roll).
 
 
 .SS FEATURES
@@ -181,7 +193,7 @@ James Allwright <J.R.Allwright@westminster.ac.uk>
 .SH SUPPORTED
 Seymour Shlien <seymour.shlien@crc.ca>
 .SH VERSION
-This man page describes midi2abc version 2.73 from June 26 2004.
+This man page describes midi2abc version 2.74 from July 11 2004.
 .SH COPYRIGHT
 Copyright 1999 James Allwright
 .PP
