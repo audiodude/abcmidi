@@ -394,6 +394,15 @@ marks e.g. !pizzicato! abc2midi currently supports the following :
 Default volume is equivalent to !f!. In both the " " and ! ! fields, 
 abc2midi allows multiple terms separated by semi-colons e.g. "Am;1".
 
+The !breath! instruction causes the note to be played half length
+followed by a rest of half its length (just like staccato).
+
+The !arpeggio! instruction affects the next chord and introduces
+a larger delay between the onset of each note in the chord. (See
+the text preceding %%MIDI chordattack in this file for more 
+explanations.)
+
+
 A line of music may contain any number of notes, barlines and guitar
 chords. Spaces may be used to separate these.
 
@@ -551,7 +560,12 @@ selects program n (in the range 1-128) on channel c. If c is not given, the
 program is selected on the current melody channel. Most modern tone
 generators follow the General MIDI standard which defines the instrument 
 type for each program number. These instrument types are listed at the end
-of this document.
+of this document. Note that for multivoiced files, the program command
+is placed in the track associated with the voice previously declared.
+If the %%MIDI indications affect channels in other tracks, it is
+recommended that they are placed in the first track or first declared voice.
+See the note in the CHANGES file for the date January 1 2005.
+
 
 %%MIDI beat a b c n
 

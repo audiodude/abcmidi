@@ -2682,3 +2682,167 @@ for the voice remains undefined and abc2midi runs unpredictably.
 
 Fix: headerprocess now sets default_length to global.default_length
 for any voices that have already been created.
+
+
+January 1 2005
+
+Abcmidi: does not handle a tie broken by a voice switch.
+In the following example,
+
+X:1
+T: tie
+M: 2/4
+L: 1/4
+K: G
+V:1
+AB-|
+V:2
+cd|
+V:1
+Bc|
+V:2
+G2|
+
+the tie joining B is interrupted by a voice change. Abc2midi fails
+to join the notes. Fix: the functions tiefix and dotie now check
+for a voice change and do not attempt to tie notes belonging to
+different voices.
+
+
+
+Abcmidi: abcmidi fails to assign the channel to correct program
+(musical instrument) for the first note in a multivoiced abc
+file. In the following example:
+
+X:1
+T: MIDI program
+M: 2/4
+L: 1/4
+V: S   clef=treble   name="Soprano"
+V: A   clef=treble   name="Alto"
+%%MIDI program 1 60
+%%MIDI program 2 60
+K: G
+V: S
+G A|B C|G A|F G|
+V: A
+z2|G A|F G|G A|
+
+The first note G is played on the piano instead of 
+the French Horn as indicated by the command %%MIDI program 1 60
+
+
+Analysis: the MIDI indications are inserted into the track
+number associated with the voice. In this example, voice A is
+mapped into track 2 and all the program indications are put
+into track 2. The midi player processes the tracks sequentially
+and does not see the program change in time to affect the first
+note in voice S so it is played on the default instrument,
+acoustic grand (piano). The simplest fix is to ensure all
+the MIDI indications go into the first voice as shown here.
+
+X:1
+T: MIDI program
+M: 2/4
+L: 1/4
+V: S   clef=treble   name="Soprano"
+V: A   clef=treble   name="Alto"
+V: S
+%%MIDI program 1 60
+%%MIDI program 2 60
+K: G
+V: S
+G A|B C|G A|F G|
+V: A
+z2|G A|F G|G A|
+
+Alternatively you can place the %%MIDI program indication
+in the voice that it affects. (The channel number is no
+longer needed then.) See below.
+
+
+X:1
+T: MIDI program
+M: 2/4
+L: 1/4
+V: S   clef=treble   name="Soprano"
+V: A   clef=treble   name="Alto"
+V: S
+K: G
+V: S
+%%MIDI program 60
+G A|B C|G A|F G|
+V: A
+%%MIDI program 60
+z2|G A|F G|G A|
+
+
+I shall update abcguide.txt regarding this issue.
+
+
+January 8 2004
+
+Another exploitable error in store.c was found by Anselm Lingnau
+which causes a buffer overflow for %%abc-copyright. A fix using
+the snprintf routine was suggested. The snprintf routine is a
+recent addition to the C compiler; for those running older
+compilers you will need to download a portable GPL implementation
+of snprintf() from http://www.ijs.si/software/snprintf in order
+to compile and link abc2midi. (In case the web site changes,
+search for snprintf portable implementation.) If you are running an
+old or nonstandard operating system for which there is little
+likelihood of a buffer overflow exploit taking over your computer
+and it is too cumbersome to include snprintf, then you can define
+NO_SNPRINTF (in store.c) and it will use sprintf.
+
+Michele has added an additional correction to the broken tie
+fix I made on January 1 2004. In order to handle the following
+example which includes a chord in voice 2.
+
+X:1
+T: tie
+M: 2/4
+L: 1/4
+K: G
+%
+V:1
+AB-|
+V:2
+[dA]c|
+V:1
+Bc|
+V:2
+GG|
+
+it is necessary to add 
+if(localvoiceno != voiceno) break;
+after case CHORDOFFEX:
+in the function dotie.
+
+
+January 9 2004
+
+Abc2midi:  new decorations !arpeggio! and !breath!
+are introduced.  When the !arpeggio! instruction precedes a
+chord, the notedelay time is temporarily set to three times
+its normal value. For the time being, the !breath! instruction
+is treated exactly the same as a staccato marking. (i.e.
+the length of the note is halved and followed by a 
+rest of the same value.)
+
+Implementation: a new decoration BREATH was added and a
+new feature ARPEGGIO was added in abc.h. In store.c,
+additional code was added to event_handle_instruction to 
+handle the !arpeggio!  and !breath! commands. In event_note,
+both STACCATO and BREATH decorator flags are checked and
+treated the same way.
+
+New global variables staticnotedelay and staticchordattack
+were added and linked to notedelay and chordattack in several
+places.  In writetrack, genmidi.c, a separate
+case statement in the main switch statement was introduced
+for ARPEGGIO. It changes the values of notedelay and noteattack
+to 3 times its nominal value. (They are restored back to
+their nominal values after a CHORDOFF or CHORDOFFEX feature.)
+
+

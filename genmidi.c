@@ -177,8 +177,10 @@ int drum_ptr, drum_on;
 
 int notecount=0;  /* number of notes in a chord [ABC..] */
 int notedelay=10;  /* time interval in MIDI ticks between */
-                  /*  start of notes in chord */
+                   /*  start of notes in chord */
 int chordattack=0;
+int staticnotedelay=10;  /* introduced to handle !arpeggio! */
+int staticchordattack=0;
 int totalnotedelay=0; /* total time delay introduced */
 
 void reduce(a, b)
@@ -1458,11 +1460,13 @@ char* s;
     done = 1;
   };
   if (strcmp(command,"chordattack") == 0) {
-    notedelay = readnump(&p);
+    staticnotedelay = readnump(&p);
+    notedelay = staticnotedelay;
     done = 1;
   };
   if (strcmp(command,"randomchordattack") == 0) {
-    chordattack = readnump(&p);
+    staticchordattack = readnump(&p);
+    chordattack = staticchordattack;
     done = 1;
   };
   if (done == 0) {
@@ -1754,6 +1758,8 @@ int xtrack;
   droneon = 0;
   in_varend = 0;
   maxpass = 2;
+  notedelay = staticnotedelay;
+  chordattack = staticchordattack;
   if (karaoke) {
     if (xtrack < 3)                  
        karaokestarttrack(xtrack);
@@ -1907,6 +1913,8 @@ int xtrack;
       delay(num[j], denom[j], 0);
       totalnotedelay=0;
       notecount=0;
+      notedelay = staticnotedelay;
+      chordattack = staticchordattack;
       addunits(num[j], denom[j]);
       break;
     case LINENUM:
@@ -2139,6 +2147,9 @@ int xtrack;
       if ((dronevoice != 0) && (xtrack == dronetrack)) 
          stop_drone();
       break;
+    case ARPEGGIO:
+       notedelay = 3*staticnotedelay;
+       chordattack=3*staticchordattack;
     case DYNAMIC:
       dodeferred(atext[pitch[j]]);
       break;

@@ -76,11 +76,12 @@ LEFT_TEXT,
 CENTRE_TEXT,
 VSKIP,
 COPYRIGHT,
-COMPOSER
+COMPOSER,
+ARPEGGIO
 } featuretype;
 
 /* note decorations */
-#define DECSIZE 9
+#define DECSIZE 10
 extern char decorations[];
 #define STACCATO 0
 #define TENUTO 1
@@ -91,6 +92,7 @@ extern char decorations[];
 #define TRILL 6
 #define BOWUP 7
 #define BOWDOWN 8
+#define BREATH 9
 
 /* The vstring routines provide a simple way to handle */
 /* arbitrary length strings */

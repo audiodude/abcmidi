@@ -1,9 +1,9 @@
 abcMIDI :   abc <-> MIDI conversion utilities
 
 midi2abc version 2.77 December 17 2004
-abc2midi version 1.55 December 18 2004
-abc2abc  version 1.35 November 09 2004
-yaps     version 1.31 December 17 2004
+abc2midi version 1.57 January 09 2005
+abc2abc  version 1.35 January 09 2005
+yaps     version 1.31 January 09 2005
 midicopy version 1.01 July 17 2004
 
 24th January 2002
@@ -13,7 +13,7 @@ J.R.Allwright@westminster.ac.uk
 University of Westminster,
 London, UK
 
-18 December 2004
+09 January 2005
 
 Seymour Shlien
 seymour.shlien@crc.ca
@@ -27,6 +27,12 @@ the Free Software Foundation (and elsewhere).
 This package is to be found on the web at
 
 http://abc.sourceforge.net/abcMIDI/
+(The latest versions for the time being is found on
+ ifdo.pugmarks.com/~seymour/runabc/top.html.)
+
+Note, if you have difficulty compiling the package because you do not have
+snprintf see the note in doc/CHANGES dated January 08 2005 (and also
+December 17 2004).
 
 These programs make use of the 'midifilelib' public domain MIDI file utilities,
 available from

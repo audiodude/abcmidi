@@ -31,7 +31,7 @@
  * Wil Macaulay (wil@syndesis.com)
  */
 
-#define VERSION "1.55 December 18 2004"
+#define VERSION "1.57 January 9 2005"
 /* enables reading V: indication in header */
 #define XTEN1 1
 /*#define INFO_OCTAVE_DISABLED 1*/
@@ -39,6 +39,10 @@
 /* for Microsoft Visual C++ 6.0 and higher */
 #ifdef _MSC_VER
 #define ANSILIBS
+#endif
+
+#ifdef WIN32
+#define snprintf _snprintf
 #endif
 
 #include "abc.h"
@@ -545,8 +549,11 @@ char *s;
 
   /* to prevent possible buffer overflow in sprintf, which is */
   /* a security risk,  we truncate s */
-  if (strlen(s) > 199) s[199] = '\0';
-  sprintf(msg, "Ignoring text: %s", s);
+#ifdef NO_SNPRINTF
+  sprintf(msg,  "Ignoring text: %s", s); /* SS 2005-01-09 */
+#else
+  snprintf(msg, sizeof(msg), "Ignoring text: %s", s); /* AL 2005-01-04 */
+#endif
   event_warning(msg);
 }
 
@@ -1037,34 +1044,43 @@ char *package, *s;
                   *ptr = *p;
                ptr++;
                p++;
+              lnth++;          /* Anselm Lingnau 2005-01-04 */
             }
             *ptr = '\0';
             textfeature(COPYRIGHT, msg);
+           if (*p != '\0') {   /* Anselm Lingnau 2005-01-04 */
+               event_warning("ABC copyright notice abridged");
+           }
         }
         else
         {
-           strcpy(msg, "%");
-           strcat(msg, package);
-           strcat(msg, s);
+           /* Changed by Anselm Lingnau, 2005-01-04, for security */
+#ifdef NO_SNPRINTF
+          if (sprintf(msg, "%%%s%s", package, s) > sizeof(msg)) {
+              event_warning("event_specific: comment too long");
+          }
+#else
+          if (snprintf(msg,sizeof(msg), "%%%s%s", package, s) > sizeof(msg)) {
+              event_warning("event_specific: comment too long");
+          }
+#endif
            event_comment(msg);
         }
       }
     if (done == 0)  
     {
-    strcpy(msg, "%");
-/* guard against buffer overflow - security risk */
-    if (strlen(package) > 200) {
-       event_warning("event_specific: possible buffer overflow");
-       return;
-       }
-    strcat(msg, package);
-    bytesleft = 200-strlen(msg);;
-    if(bytesleft < 0) return;
-    if (strlen(s)>bytesleft) {
-       event_warning("event_specific: possible buffer overflow");
-       return;
-       }
-    strcat(msg, s);
+
+/* changed by Anselm Lingnau on 2004-01-04, for security */
+#ifdef NO_SNPRINTF
+   if (sprintf(msg, "%%%s%s", package, s) > sizeof(msg)) {
+      event_warning("event_specific: message too long");
+   }
+#else
+   if (snprintf(msg, sizeof(msg), "%%%s%s", package, s) > sizeof(msg)) {
+      event_warning("event_specific: message too long");
+   }
+#endif
+
     event_comment(msg);
     }
   }
@@ -2343,7 +2359,7 @@ int xoctave, n, m;
      }; /* end of else block for not in chord */
    } /* end of if block for ROLL,ORNAMENT,TRILL */
    else {
-    if (decorators[STACCATO]) {
+    if (decorators[STACCATO] || decorators[BREATH]) {
       if (v->inchord) {
         if (v->chordcount == 1) {
           addfeature(REST, pitch, num*4, denom*(v->default_length));
@@ -2553,6 +2569,17 @@ if (nofnop == 0) {
     done = 1;
     };
 
+
+  if (strcmp(p, "arpeggio") == 0) {
+    addfeature(ARPEGGIO, 0, 0, 0);
+    done = 1;
+  };
+
+  if (strcmp(s, "breath") == 0) {
+    decorators_passback[BREATH] =1;
+    done = 1;
+    };
+
   if (done == 0) {
     sprintf(buff, "instruction !%s! ignored", s);
     event_warning(buff);
@@ -2635,18 +2662,22 @@ int a, b;
   reduce(xnum, xdenom);
 }
 
-static void dotie(j, xinchord)
+static void dotie(j, xinchord,voiceno)
 /* called in preprocessing stage to handle ties */
-int j, xinchord;
+/* we need the voiceno in case a tie is broken by a */
+/* voice switch.                                    */
+int j, xinchord,voiceno;
 {
   int tienote, place;
   int tietodo, done;
   int lastnote, lasttie;
   int inchord;
   int tied_num, tied_denom;
+  int localvoiceno;
 
   /* find note to be tied */
   tienote = j;
+  localvoiceno = voiceno;
   while ((tienote > 0) && (feature[tienote] != NOTE) &&
          (feature[tienote] != REST)) {
     tienote = tienote - 1;
@@ -2670,6 +2701,7 @@ int j, xinchord;
     while ((place < notes) && (tied_num >=0) && (done == 0)) {
       switch (feature[place]) {
         case NOTE:
+          if(localvoiceno != voiceno) break;
           lastnote = place;
           if ((tied_num == 0) && (tietodo == 0)) {
             done = 1;
@@ -2699,6 +2731,7 @@ int j, xinchord;
           };
           break;
         case REST:
+          if(localvoiceno != voiceno) break;
           if ((tied_num == 0) && (tietodo == 0)) {
             done = 1;
           };
@@ -2722,10 +2755,13 @@ int j, xinchord;
           break;
         case CHORDOFF:
         case CHORDOFFEX:
+          if(localvoiceno != voiceno) break;
           inchord = 0;
           /* subtract time from tied time */
           addfract(&tied_num, &tied_denom, -num[place], denom[place]);
           break;
+        case VOICE:
+          localvoiceno = pitch[place];
         default:
           break;
       };
@@ -2777,10 +2813,12 @@ static void tiefix()
   int chord_num, chord_denom;
   int chord_start,chord_end;
   int nochordfix;
+  int voiceno;
 
   j = 0;
   inchord = 0;
   nochordfix=0;
+  voiceno = 1;
   while (j<notes) {
     switch (feature[j]) {
     case CHORDON:
@@ -2830,13 +2868,15 @@ static void tiefix()
              /* make sure we don't run fix_enclosed_notes_again */
               nochordfix=1; 
               }
-      dotie(j, inchord);
+      dotie(j, inchord,voiceno);
       j = j + 1;
       break;
     case LINENUM:
       lineno = pitch[j];
       j = j + 1;
       break;
+    case VOICE:
+      voiceno = pitch[j];
     default:
       j = j + 1;
       break;
