@@ -1056,7 +1056,7 @@ prior to sending a backslash.
 
 December 7 2003
 
-Triplets containing chords are not handled correctly. In the
+Abcmidi does not handle triplets containing chords correctly. In the
 following example.
 
 X: 1
@@ -1078,7 +1078,30 @@ decremented in the function event_chordoff.
 I am grateful to Jim Russell who identified this bug and
 found the fix.
 
+January 3 2002
 
-~
+Yaps does not handle triplets containing chords correctly. In the
+following example,
+
+X: 1
+T: triplet chords
+M: 2/4
+L: 1/8
+K: C
+(3 [CEG] [DFA] [ceg] (3[CEG] [DFA] [ceg]|\
+(3 [CEG] [DFA] [ceg] (3[CEG] [DFA] [ceg]|\
+(3 [CEG] [DFA] [ceg] (3[CEG] [DFA] [ceg]|
+
+yaps fails to group the chords into triplets.
+
+Analysis: in printvoiceline (in drawtune.c) notes and chordnotes
+are distinguished and are processed differently. For notes, the
+function contains extra code to check for tuples and to process
+them; however, this is missing for chordnotes.
+
+Fix: the code for treating tuples (in the event that they may
+be present) was introduced after a chordoff signal was detected 
+in printvoiceline.
+
 ~
 ~

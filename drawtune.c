@@ -2973,7 +2973,7 @@ static int printvoiceline(struct voice* v)
   /* now draw the line */
   printedline = 0;
   while ((ft != NULL) && (!printedline)) {
-    /* printf("type = %d\n", ft->type); */
+    /*  printf("type = %d\n", ft->type); */
     switch (ft->type) {
     case SINGLE_BAR: 
       fprintf(f, "%.1f bar\n", ft->x);
@@ -3189,6 +3189,17 @@ static int printvoiceline(struct voice* v)
       break;
     case CHORDOFF: 
       thischord = NULL;
+      if (v->tuple_count > 0) {
+         if (v->tuple_count == v->tuplenotes) {
+             v->tuple_xstart = ft->x - ft->xleft;
+            };
+         if (v->tuple_count == 1) {
+             v->tuple_xend = ft->x + ft->xright;
+             drawhtuple(v->tuple_xstart, v->tuple_xend, v->tuplelabel,
+                  v->tuple_height+4.0);
+            };
+         v->tuple_count = v->tuple_count - 1;
+        };
       break;
     case SLUR_TIE: 
       break;
