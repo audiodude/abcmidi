@@ -135,8 +135,8 @@ int got_titlename;
 int namelimit;
 int xmatch;
 int sf, mi;
-int gchordvoice, wordvoice, drumvoice;
-int gchordtrack, drumtrack;
+int gchordvoice, wordvoice, drumvoice, dronevoice;
+int gchordtrack, drumtrack, dronetrack;
 int ratio_standard = -1; /* flag corresponding to -RS parameter */
 /* when ratio_standard != -1 the ratio for a>b is 3:1 instead of 2:1 */
 int assume_repeat_warning = -1; /* if not -1 Assuming rest warning is */
@@ -431,7 +431,7 @@ char **filename;
   atext = (char**) checkmalloc(maxtexts*sizeof(char*));
   words = (char**) checkmalloc(maxwords*sizeof(char*));
   if ((getarg("-h", argc, argv) != -1) || (argc < 2)) {
-    printf("abc2midi version 1.37\n");
+    printf("abc2midi version 1.39\n");
     printf("Usage : abc2midi <abc file> [reference number] [-c] [-v] ");
     printf("[-o filename]\n");
     printf("        [-t] [-n <value>] [-RS]\n");
@@ -850,6 +850,24 @@ char *package, *s;
        addfeature(DRUMOFF, 0, 0, 0);
        done = 1;
     }
+
+    if (strcmp(command,"droneon") == 0) {
+      addfeature(DRONEON, 0, 0, 0);
+      if ((dronevoice != 0) && (dronevoice != v->indexno)) {
+        event_warning("Implementation limit: drones only supported in one voice");
+       };
+      if (v == NULL) event_error("%%MIDI droneon must occur after the first K: header");
+      else {
+           dronevoice = v->indexno;
+           done = 1;
+           }
+    }
+    if (strcmp(command,"droneoff") == 0) {
+       addfeature(DRONEOFF, 0, 0, 0);
+       done = 1;
+    }
+
+
     if (done == 0) {
       /* add as a command to be interpreted later */
       textfeature(DYNAMIC, s);
@@ -3105,7 +3123,7 @@ static void finishfile()
       fixreps();
     };
     if ((voicesused == 0) && (!karaoke) && (gchordvoice == 0) && 
-        (drumvoice == 0)) {
+        (drumvoice == 0) && (dronevoice==0)) {
       ntracks = 1;
     } else {
       ntracks = voicecount + karaoke + 1;
@@ -3116,6 +3134,10 @@ static void finishfile()
       if (drumvoice != 0) {
         drumtrack = ntracks;
         ntracks = ntracks + 1;
+      };
+      if (dronevoice != 0) {
+	dronetrack = ntracks;
+	ntracks = ntracks + 1;
       };
     };
     if (check) {

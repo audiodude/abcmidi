@@ -686,6 +686,27 @@ tune).
 
 Turns off guitar chords.
 
+%%MIDI droneon
+
+This turns on a continuous drone used in bagpipe music. The
+drone consists of two notes (by default A, and A,,) played
+on a bassoon at a MIDI loudness (velocity) 80. If you
+can configure the drone sound using the %%MIDI drone command
+described below.
+
+%%MIDI droneoff
+
+This turns off the drone.
+
+%%MIDI drone n1 n2 n3 n4 n5
+
+Configures the drone chord. n1 = MIDI program,
+n2 = MIDI pitch 1, n2 = MIDI pitch 2, n4 = MIDI velocity 1, 
+and n5 = MIDI velocity 2. By default they have already
+been set to 70 45 33 80 80.
+
+
+
 %%MIDI drum string [drum programs] [drum velocities]
 
 This sets up a drum pattern. The string determines when there is a drum beat

@@ -65,8 +65,8 @@ extern int notes;
 
 extern int verbose;
 extern int sf, mi;
-extern int gchordvoice, wordvoice, drumvoice;
-extern int gchordtrack, drumtrack;
+extern int gchordvoice, wordvoice, drumvoice, dronevoice;
+extern int gchordtrack, drumtrack, dronetrack;
 
 /* Part handling */
 extern struct vstring part;
@@ -126,7 +126,7 @@ int waitforbar;
 int wlineno, syllcount;
 int lyricsyllables, musicsyllables;
 /* the following are booleans to select features in current track */
-int wordson, noteson, gchordson, temposon, drumson;
+int wordson, noteson, gchordson, temposon, drumson, droneon;
 
 /* Generating accompaniment */
 int gchords, g_started;
@@ -142,6 +142,19 @@ int g_next;
 char gchord_seq[40];
 int gchord_len[40];
 int g_ptr;
+
+
+struct dronestruct {
+   int chan;  /* MIDI channel assigned to drone */
+   int event; /* stores time in MIDI pulses when last drone event occurred*/
+   int prog;  /* MIDI program (instrument) to use for drone */
+   int pitch1;/* MIDI pitch of first drone tone */
+   int vel1;  /* MIDI velocity (loudness) of first drone tone */
+   int pitch2;/* MIDI pitch of second drone tone */
+   int vel2;  /* MIDI velocity (loudnress) of second drone tone */
+} drone;
+
+
 
 /* Generating drum track */
 int drum_num, drum_denom;
@@ -1238,6 +1251,7 @@ char* s;
   char* p;
   char command[40];
   int done;
+  int val;
 
   p = s;
   skipspace(&p);
@@ -1296,6 +1310,30 @@ char* s;
     fun.vel = readnump(&p);
     done = 1;
   };
+  if (strcmp(command, "drone") == 0) {
+    skipspace(&p);
+    val = readnump(&p);
+    if (val > 0) drone.prog = val;
+    skipspace(&p);
+    val = readnump(&p);
+    if (val >0 ) drone.pitch1 = val;
+    skipspace(&p);
+    val = readnump(&p);
+    if (val >0)  drone.pitch2 = val;
+    skipspace(&p);
+    val = readnump(&p);
+    if (val >0) drone.vel1 = val;
+    skipspace(&p);
+    val = readnump(&p);
+    if (val >0) drone.vel2 = val;
+    if (drone.prog > 127) event_error("drone prog must be in the range 0-127");
+    if (drone.pitch1 >127) event_error("drone pitch1 must be in the range 0-127");
+    if (drone.vel1 >127) event_error("drone vel1 must be in the range 0-127");
+    if (drone.pitch2 >127) event_error("drone pitch1 must be in the range 0-127");
+    if (drone.vel2 >127) event_error("drone vel1 must be in the range 0-127");
+    done = 1;
+  }
+
   if (strcmp(command, "beat") == 0) {
     skipspace(&p);
     loudnote = readnump(&p);
@@ -1479,6 +1517,32 @@ int i;
   };
 }
 
+void start_drone()
+{
+    int delta;
+/*    delta = tracklen - drone.event; */
+    delta = delta_time - drone.event;    
+    if (drone.event == 0)  write_program(drone.prog, drone.chan);
+    midi_noteon(delta,drone.pitch1+global_transpose,drone.chan,drone.vel1);
+    midi_noteon(delta,drone.pitch2+global_transpose,drone.chan,drone.vel2);
+/*    drone.event = tracklen;*/
+    drone.event = delta_time;
+}
+
+
+void stop_drone()
+{
+    int delta;
+/*    delta = tracklen - drone.event; */
+    delta = delta_time - drone.event;
+    midi_noteoff(delta,drone.pitch1+global_transpose,drone.chan);
+    midi_noteoff(0,drone.pitch2+global_transpose,drone.chan);
+/*    drone.event = tracklen; */
+    drone.event = delta_time;
+}
+
+
+
 void progress_sequence(i)
 int i;
 {
@@ -1536,6 +1600,16 @@ static void starttrack()
       channels[channel] = 0;
     };
   };
+  if (droneon) {
+    drone.event =0;
+    drone.chan = findchannel();
+    drone.prog  = 70; /* bassoon */
+    drone.vel1 =  80;
+    drone.pitch1 = 45;
+    drone.vel2  = 80;
+    drone.pitch2=  33;
+    }
+
   g_next = 0;
   partrepno = 0;
   thismline = -1;
@@ -1576,6 +1650,7 @@ int xtrack;
   temposon = 0;
   texton = 1;
   drumson = 0;
+  droneon = 0;
   in_varend = 0;
   if (karaoke) {
     if (xtrack < 3)                  
@@ -1601,6 +1676,7 @@ int xtrack;
     noteson = 0; 
     gchordson = 1;
     drumson = 0;
+    droneon = 0;
     temposon = 0;
     trackvoice = gchordvoice;
 /* be sure set_meter is called before setbeat even if we
@@ -1614,9 +1690,19 @@ int xtrack;
     noteson = 0;
     gchordson = 0;
     drumson = 1;
+    droneon =0;
     temposon = 0;
     trackvoice = drumvoice;
   };
+  /* is this drone track ? */
+  if ((dronevoice != 0) && (xtrack == dronetrack)) {
+    noteson = 0;
+    gchordson = 0;
+    drumson = 0;
+    droneon = 1;
+    temposon = 0;
+    trackvoice = drumvoice;
+   };
   if (verbose) {
     printf("track %d, voice %d\n", xtrack, trackvoice);
   };
@@ -1894,6 +1980,14 @@ int xtrack;
       break;
     case DRUMOFF:
       drum_on = 0;
+      break;
+    case DRONEON:
+      if ((dronevoice != 0) && (xtrack == dronetrack)) 
+         start_drone();
+      break;
+    case DRONEOFF:
+      if ((dronevoice != 0) && (xtrack == dronetrack)) 
+         stop_drone();
       break;
     case DYNAMIC:
       dodeferred(atext[pitch[j]]);

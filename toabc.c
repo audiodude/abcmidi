@@ -434,7 +434,7 @@ char** filename;
   int targ, narg;
 
   if ((getarg("-h", argc, argv) != -1) || (argc < 2)) {
-    printf("abc2abc version 1.24\n");
+    printf("abc2abc version 1.25\n");
     printf("Usage: abc2abc <filename> [-s] [-n X] [-b] [-r] [-e] [-t X]\n");
     printf("       [-u] [-d] [-v] [-V X] [-X n]\n");
     printf("  -s for new spacing\n");

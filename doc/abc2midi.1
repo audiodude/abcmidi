@@ -223,6 +223,26 @@ tune).
 .PP
 Turns off guitar chords.
 .PP
+%%MIDI droneon
+.PP
+Turns on a continuous drone (used in bagpipe music) consisting
+of two notes. By default the notes are A, and A,, played
+on a bassoon at a velocity of 80. This can be configured
+by the %%MIDI drone command described below.
+.PP
+%%MIDI droneoff
+.PP
+Turns off the continous drone.
+.PP
+%%MIDI drone n1 n2 n3 n4 n5
+.PP
+Sets the drone parameters where n1 is the MIDI program, n2 and
+n3 specify the MIDI pitches of the two notes in the chord, and n4 
+and n5 specify the MIDI velocities of the two notes.
+If you do not set these parameters they are by default
+70 45 33 80 80. A value of zero or less indicates that
+the setting of this parameter should be left as it is.
+.PP
 %%MIDI drum string [drum programs] [drum velocities]
 .PP
 This sets up a drum pattern. The string determines when there is a drum beat

@@ -1132,7 +1132,7 @@ char** filename;
     };
   };
   if ((getarg("-h", argc, argv) != -1) || (argc < 2)) {
-    printf("yaps version 1.21\n");
+    printf("yaps version 1.22\n");
     printf("Usage:  yaps <abc file> [<options>]\n");
     printf("  possible options are -\n");
     printf("  -d            : debug - display data structure\n");

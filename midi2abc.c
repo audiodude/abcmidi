@@ -101,6 +101,7 @@ int gotkeysig=0; /*set to 1 if keysignature found in MIDI file */
 int xunit;    /* pulses per abc unit length                     */
 int tsig_set; /* flag - time signature already set by user      */
 int ksig_set; /* flag - key signature already set by user       */
+int xunit_set;/* flat - xunit already set by user               */
 int extracta; /* flag - get anacrusis from strong beat          */
 int guessu;   /* flag - estimate xunit from note durations      */
 int guessa;   /* flag - get anacrusis by minimizing tied notes  */
@@ -668,7 +669,7 @@ setup_timesig(int nn, int denom, int bb)
       unitlen = 16;
       };
 /* set xunit for this unitlen */
-  xunit = (division*bb*4)/(8*unitlen);
+  if(!xunit_set) xunit = (division*bb*4)/(8*unitlen);
     }
   barsize = 2*asig*unitlen/bsig;
 /*  printf("setup_timesig: unitlen=%d xunit=%d barsize=%d\n",unitlen,xunit,barsize); */
@@ -1885,11 +1886,13 @@ int argc;
     Qval = 0;
   };
   arg = getarg("-u", argc,argv);
-  if (arg != -1) 
+  if (arg != -1) {
     xunit = readnum(argv[arg]);
+    xunit_set = 1;}
   else {
 	xunit = 0;
-  };
+	xunit_set = 0;
+       };
   arg = getarg("-bps",argc,argv);
   if (arg != -1)
    bars_per_staff = readnum(argv[arg]);
@@ -1964,7 +1967,7 @@ int argc;
     F = efopen(argv[arg],"rb");
 /*    fprintf(outhandle,"%% input file %s\n", argv[arg]); */
   } else {
-    printf("midi2abc version 2.69\n  usage :\n");
+    printf("midi2abc version 2.70\n  usage :\n");
     printf("midi2abc filename <options>\n");
     printf("         -a <beats in anacrusis>\n");
     printf("         -xa  extract anacrusis from file ");

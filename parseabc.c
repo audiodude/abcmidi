@@ -1071,8 +1071,8 @@ char* place;
     };
     p = p + 1;
   } else {
-    a = 0;
-    b = 0;
+    a = 1;
+    b = 4;
     p = place;
   };
   skipspace(&p);

@@ -1078,7 +1078,7 @@ decremented in the function event_chordoff.
 I am grateful to Jim Russell who identified this bug and
 found the fix.
 
-January 3 2002
+January 3 2004
 
 Yaps does not handle triplets containing chords correctly. In the
 following example,
@@ -1103,5 +1103,134 @@ Fix: the code for treating tuples (in the event that they may
 be present) was introduced after a chordoff signal was detected 
 in printvoiceline.
 
-~
+
+January 17 2004
+
+Bagpipe music does not sound right without the continuous
+drone. It would be useful to introduce new MIDI extensions
+(similar to drum and gchord) for producing a drone accompaniment.
+The drone accompaniment would be placed in a separate track
+and turned on or off using the commands
+%%MIDI droneon
+and
+%%MIDI droneoff
+
+It is desirable that the new code supporting the drone extension
+would follow the same style for producing drum and gchord track.
+Since that code was quite convoluted a little description is
+appropriate here.
+
+Drum and gchord tracks are produced by the functions dogchord()
+and dodrums() which are defined in the file genmidi.c. These
+functions are called for each beat by the function
+progress_sequence(beatnumber). It is not obvious where
+progress_sequence is called so this is described here.
+
+Writetrack is called separately for creating the drum and
+gchord tracks. These tracks are not represented as a separate
+voices in the feature structure array. Instead there are
+special flags GCHORDON, GCHORDOFF, DRUMON and DRUMOFF which
+signal that the gchord accompaniment or drum accompaniment
+should be started (or stopped) at this point in the music.
+I therefore introduced two new feature types DRUMON and
+DRUMOFF (see abc.h).
+
+For each track, writetrack rescans the entire feature
+structure array. If the track is a gchordvoice or a drumvoice,
+the noteson flag is not set and case NOTE: is treated differently.
+Noteon and add2Q are not called to create "MIDI on" and
+"MIDI off" commands; however the delay() and addunits() are
+still called to keep track of the beat when the note is
+note inside a chord. (A chord is represented in an abc file
+as several notes inside square brackets eg. [CEG]). Delay()
+calls timestep() and its associated functions which can be found
+in the file queues.c. The function timestep() keeps track
+of the beat and calls progress_sequence() which calls 
+dogchords or dodrums as mentioned above. 
+
+The handling of drone does not require all this complexity
+since we do not need to keep track of the beat. Therefore,
+it is not necessary to place the drone controls in the
+progress_sequence() function. Instead it is sufficient
+to just turn it on or off using new functions start_drone()
+and stop_drone() which follow the switch case: conditions
+DRONEON and DRONEOFF. However, like the drum track and
+the gchord track, we want the NOTE: cases to only generate
+timestep() calls so we are able to determine the length
+(in MIDI time units) of the drone note. Fortunately,
+timestep() also updates the global variables tracklen and
+delta_time which are used by the functions start_drone
+and stop_drone().
+
+Now there are a few details connecting all of this together.
+New global variables, dronevoice and dronetrack were introduced
+into the file store.c. In the function event_specific()
+(which handles the %%MIDI commands in the abc file), new key
+words, droneon and droneoff are introduced. They insert
+the DRONEON and DRONEOFF features into the feature array and
+set the dronevoice flag. In the function finishfile() (also
+in store.c), a dronetrack number is assigned if dronevoice
+has been set.  
+
+The new global variables dronetrack and dronevoice
+in store.c are linked to genmidi.c as extern int(s).
+A new boolean int droneon is also added. A new struct,
+dronestruct is introduced. This structure contains the
+drone characteristics (eg. MIDI instrument, pitch, velocity,
+channel) for the drone. Two tones may be defined,
+customarily an octave apart and typically the note A
+in the lower octaves.
+
+In starttrack(), the drone struct is initialized to default
+values if the flag droneon is set and findchannel() assigns
+a midi channel for the drone track..
+
+
+February 7 2004
+
+Introduced a new %%MIDI command
+%%MIDI drone val1 val2 val3 val4 val5
+It configures the drone. val1 to val5 should be numbers between
+1 and 127. val1 specifies the instrument (MIDI program number)
+for the drone; val2 and val3 specify the MIDI pitches for the
+two drone notes which are played as a chord; and val4 and val5 
+specify the MIDI velocities for the two drone notes 
+(played as a chord). A value of zero means do not change
+the setting for the current parameter.  By default the
+drone parameters are 
+drone.prog = 70   (bassoon)
+drone.pitch1 = 45 (A,)
+drone.pitch2 = 33 (A,,)
+drone.vel1 = 80;
+drone.vel2 = 80;
+If you specify a global transpose, the drone pitchws will
+also be transposed.
+
+The new code was added into the function dodeferred(s)
+in the file genmidi.c
+
+
+
+Modified the function parse_tempo in parseabc.c so that
+the syntax
+Q: 132
+is equivalent to 
+Q: 1/4=132
+This change applies to abc2midi, yaps and abc2abc.
+
+
+Fixed a bug I had introduced in the function stop_drone (genmidi.c).
+The second call  to midi_noteoff should have a delta of zero.
+
+
+22 February 2004
+
+The -u option in midi2abc.exe does not work.
+
+Problem: despite the fact that xunit was set by the user, 
+midi2abc changes it when it encounters a time signature
+MIDI command. Fix: a new parameter xunit_set was introduced
+and is set to 1 if the user sets xunit using the -u option.
+The function setup_timesig does not alter xunit if xnit_set 
+has been set to one.
 ~
