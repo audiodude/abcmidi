@@ -3115,21 +3115,223 @@ gotname = 0;
 
 February 21 2005
 
-I have started to introduce microtone note capability into abcMIDI.
+Microtone note capability has been introduced into abc2midi.
 A _/ means lower the pitch of the following note by a half a semitone. 
 A ^/ means raise the pitch of the following note by a half a semitone. 
 The microtone notation does not propogate across a measure but
 applies to only the immediate note. For chords in the same channel
 (voice), the microtone will apply to both notes no matter
 how it has been notated. For example [C_/E] is the same as
-[_/C_/E]. The abcm2ps program provides more flexibility, however
-I need more clarification before I can proceed.
+[_/C_/E].
+
+Following the convention in abcm2ps, (see features.txt in abcm2ps
+distribution), _3/4C will depress C by 3/4 of a semitone. It is
+assumed that the pitch range of the MIDI synthesizer pitch wheel
+is + or - two semitones in compliance with the General MIDI
+specifications. The maximum permissible pitchbend is therefore
+2 semitones.
 
 Implementation: added a new function ismicrotone() called by
 parsenote() in parseabc.c. I also introduced functions
 event_microtone() and event_normal_tone() in store.c, yapstree.c
-and toabc.c. This is presently an undocumented feature.
+and toabc.c. There has been no change to the operation of yaps
+or abc2abc.
+
+
+February 26 2005
+
+Finished microtone implementation and added microtone
+documentation in abcguide.txt.
+
+
+March 12 2005
+
+Abc2midi: There is a loss of synchrony in multivoiced files
+when a fermata is applied to notes of unequal lengths. For
+example:
+
+X:1
+T: Fermata
+M:2/4
+L:1/4
+K: G
+V:1
+cdef|B2 Hc2|gabc|
+V:2
+efga|DHe3|gabc|
+
+the fermata is applied to c2 and e3 for voices 1 and 2. The fermata
+doubles the length of the notes c2 and e3 and there is a loss of synchrony
+between the voices in the next bar.
+
+Solution: I introduced new MIDI commands which control how the
+fermata is applied.
+%%MIDI fermatafixed
+The fermata adds a unit lengths to the note so HC2 is played C3.
+%%MIDI fermataproportional
+(default) the unit length is doubled so HC2 is played C4.
+
+Implementation: added new global flag fermata_fixed and modified
+event_specific to set this flag. Modified FERMATA treatment
+in event_note and event_rest.
 
 
 
+March 18 2005
+
+Microtones in abc2midi. It is not clear whether the microtone
+notation should be treated as an accidental or a decoration.
+The abc2midi software treats it as a decoration. Thus in the
+following:
+
+X:1
+T:micro
+Q:60
+K:C
+=C ^/C ^C _/D  D _/D ^C ^/C =C
+
+the second to last note ^/C is played as ^^/C since the
+accidental in the previous note propogates across the measure.
+If you want =^/C you must specify it in this manner.
+If ^/ and _/ satisfy the rules of accidentals then,
+they would be interpreted the same way as double sharps and
+double flats. Thus if you wrote ^^F E ^F G: the first note
+would be played as G and the third note would be played as
+F#. (You would not write ^^F E ^=F G.) It is not clear from
+the abc standard, the meaning of the following:
+[K: G] ^/F D E G|
+Is the first note a F natural raised a quarter tone,
+or is it a F# (as indicated by the key signature) raised
+by a quarter tone? Presently abc2midi treats it as the
+latter.
+
+To treat the notation as accidentals would mean that the
+quarter tones would propogate across a measure like sharps
+and flats. This would require introducing more code into
+abc2midi. (Further there would be other issues relating
+to transposition in abc2abc.)
+
+March 19 2005
+
+abc2midi optional guitar chord syntax. The function
+event_handle_gchord in store.c was modified to ignore
+the parentheses in the guitar chord. (eg.  "(C)" CDEF etc. )
+The optional guitar chord is played.
+
+
+March 25 2005
+
+abc2midi: note tied to two notes. In the following sample
+the tied note is not played correctly in the repeat.
+
+X:1
+T: note tied to two notes
+M: 2/4
+L: 1/8
+K:G
+%%MIDI program 73
+|:G2D2|ABCD-|[1 D4 :|[2 D2 G2|
+
+Unfortunately this is a difficult problem to fix. Store.c
+creates a feature/pitch/num/denom arrays which tells writetrack
+in genmidi.c how to create the MIDI file. Repeat actions are encoded
+into the feature array using the instructions BAR_REP, REP_BAR,
+PLAY_ON_REP, etc, which instruct writetrack to backtrack
+in the feature array and repeat certain sections. In other words
+the repeats are not expanded until writetrack creates the MIDI
+track.  Tied notes are handled by the function dotie in store.c
+that determines which notes are tied and combines the tied notes into
+one note instruction in the feature array. In the above example, the
+tied note D-D4 in the first repeat and D-D2 in the second repeat
+have different durations. Dotie can only assign the D tied note
+one duration so it will be wrong in one of the repeats. To
+make things worse the code in dotie is unmanageable (see
+comments February 12 2005).
+
+To fix the problem the joining of ties, it would need to be
+done at the time that the repeats are expanded in writetrack
+rather than in a separate pass performed by dotie in store.c.
+The handling of ties is messy because they can also be embedded in
+chords; they cross barlines introducing problems with accidentals
+in music notation; interleaving of voices breaks up ties; we want
+abc2midi to gracefully handle tie syntax errors provide useful
+error message. Multiple repeats (eg |...|[1...|[2,3...|[4... :|)
+introduce another headache.
+
+One way of avoiding this problem is to notate the above sample
+differently as shown below.
+
+X:1
+T: better way of handling tied notes in repeats
+M: 2/4
+L: 1/8
+K:G
+%%MIDI program 73
+|:G2D2|[1 ABCD-| D4 :|[2 ABCD-| D2 G2|
+
+There is now five bars instead of four, but it avoids the above
+problem.
+
+
+
+Abc2midi: an alternative method for embedding %%MIDI commands.
+
+The syntax for placing %%MIDI instructions in the abc file
+requires that each command occupies a separate line in the
+abc file. This makes the resulting file look messy when
+you want to do drumon, drumoff, gchordon, gchordoff, in the
+middle of a line. The problem gets worse when the abc file
+also has lyrics included using the w: field command.
+
+It has been suggested that there should be an option
+to place MIDI instructions in the information field:
+eg.[I: MIDI drumon]. Abc2midi does have provision
+to parse inline I: fields using the function event_info.
+However, the code expects the field satisfy a specific
+syntax of the form [I: key1 = value1 key2 = value2 etc.]
+Thus you specify as many keys as you wish in the
+I: field.
+
+So far I have modified the function event_info_key in
+store.c so that it will now forward any info field commands
+of the form [I:MIDI = stuff] to the function event_specific
+which handles all %%MIDI commands. Thus you can now do
+the following.
+
+X:1
+T: event info used for MIDI
+M:4/4
+L:1/4
+K:G
+[I: MIDI =  program 70] DDEE|[I:MIDI=program 42] GEFG|
+
+instead of
+
+X:1
+T: event info used for MIDI
+M:4/4
+L:1/4
+K:G
+%%MIDI program 70
+DDEE|\
+%%MIDI program 42
+GEFG|
+
+Any %%MIDI command described in abcguide.txt may be embedded
+in the I: field; however the '=' is very important. Otherwise
+abc2midi will assume this field is just for the user's
+interest and just ignore it. Here is another example:
+
+X:1
+T: event info used for MIDI
+M:4/4
+L:1/4
+K:G
+[I: oboe MIDI = program 69 MIDI = gchord fzcz MIDI = chordprog 1] BAG2|\
+"G" EC GG|[I:MIDI= bassprog 100] DDDD|[I: MIDI =gchord ffffffff] G4|
+
+The I: field has rarely been used except for information to the
+user. Support for this syntax may be withdrawn at a later time
+as the abc standard evolves. I do not recommend making wide
+use of this feature at this point.
 

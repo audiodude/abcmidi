@@ -567,7 +567,9 @@ abc2midi supports a number of commands of the form
 
 %%MIDI command
 
-Each of these should appear on a line by itself. All of them are allowed 
+Each of these should appear on a line by itself; however there
+is now provision to pass the MIDI command in an inline I: field
+(see CHANGES file, March 25 2005 entry.)  All of them are allowed 
 within the abc tune body. By using these in combination with the part 
 notation, one can, for example, play a part transposed or in a different key.
 
@@ -757,6 +759,14 @@ tune).
 %%MIDI gchordoff
 
 Turns off guitar chords.
+
+%%MIDI fermatafixed
+Directs abc2midi to expand a fermata by one unit length.
+Thus HC3 becomes C4.
+
+%%MIDI fermataproportional
+This is the default. A fermata doubles the length of a
+note so HC3 becomes C6.
 
 %%MIDI droneon
 

@@ -31,7 +31,7 @@
  * Wil Macaulay (wil@syndesis.com)
  */
 
-#define VERSION "1.60 February 26 2005"
+#define VERSION "1.62 March 27 2005"
 /* enables reading V: indication in header */
 #define XTEN1 1
 /*#define INFO_OCTAVE_DISABLED 1*/
@@ -154,6 +154,7 @@ int ratio_standard = -1; /* flag corresponding to -RS parameter */
 /* when ratio_standard != -1 the ratio for a>b is 3:1 instead of 2:1 */
 int assume_repeat_warning = -1; /* if not -1 Assuming rest warning is */
                               /* suppressed.                        */
+int fermata_fixed = 0; /* flag on how to process fermata */
 
 /* Part handling */
 struct vstring part;
@@ -204,6 +205,7 @@ int header_time_num,header_time_denom;
 
 int dummydecorator[DECSIZE]; /* used in event_chord */
 
+static void addfract(int *xnum, int *xdenom, int a, int b);
 extern long writetrack();
 
 static struct voicecontext* newvoice(n)
@@ -850,6 +852,14 @@ char *package, *s;
     };
     if (strcmp(command, "barlines") == 0) {
       retain_accidentals = 1;
+      done = 1;
+    };
+    if (strcmp(command, "fermatafixed") == 0) {
+      fermata_fixed = 1;
+      done = 1;
+    };
+    if (strcmp(command, "fermataproportional") == 0) {
+      fermata_fixed = 0;
       done = 1;
     };
     if (strcmp(command, "ratio") == 0) {
@@ -1509,6 +1519,8 @@ char* value;
     num = readsnumf(value);
     event_octave(num,0);
   };
+  if (strcmp(key, "MIDI") == 0)
+     event_specific(key, value);
 }
 
 static void stack_broken(v)
@@ -2008,7 +2020,8 @@ int decorators[DECSIZE];
   num = n;
   denom = m;
   if (decorators[FERMATA]) {
-    num = num*2;
+    if (fermata_fixed) addfract(&num,&denom,1,1);
+    else num = num*2;
   };
   if (v == NULL) {
     event_fatal_error("Internal error : no voice allocated");
@@ -2343,7 +2356,8 @@ int xoctave, n, m;
   pitch = pitchof(note, accidental, mult, octave, 1);
   pitch_noacc = pitchof(note, 0, 0, octave, 0);
   if (decorators[FERMATA]) {
-    num = num*2;
+    if(fermata_fixed) addfract(&num,&denom,1,1);
+    else num = num*2;
   };
   if (v->chordcount == 1) {
     v->chord_num = num*4;
@@ -2448,6 +2462,7 @@ char* s;
     return;
   };
   p = s;
+  if (*p == '(') p = p+1; /* ignore leading ( [SS] 2005-03-19*/
   if ((*p >= 'A') && (*p <= 'G')) {
     note = *p - (int) 'A' + (int) 'a';
     bassnote = 0;
@@ -2468,7 +2483,9 @@ char* s;
   p = get_accidental(p, &accidental);
   basepitch = pitchof(note, accidental, 1, 0, 0) - middle_c;
   i = 0;
-  while ((i<9) && (*p != ' ') && (*p != '\0') && (*p != '(') && (*p != '/')) {
+  while ((i<9) && (*p != ' ') && (*p != '\0') && (*p != '(')
+               && (*p != '/') && (*p != ')')) {
+/* also ignore closing parentheses ')'  [SS] 2005-03-19*/
     name[i] = *p;
     i = i+1;
     p = p + 1;
@@ -2675,11 +2692,8 @@ char c;
   return (putc(c,fp));
 }
 
-static void addfract(xnum, xdenom, a, b)
+static void addfract(int *xnum, int *xdenom, int a, int b)
 /* add a/b to the count of units in the bar */
-int *xnum;
-int *xdenom;
-int a, b;
 {
   *xnum = (*xnum)*b + a*(*xdenom);
   *xdenom = (*xdenom) * b;
