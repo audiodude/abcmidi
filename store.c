@@ -434,7 +434,7 @@ char **filename;
   atext = (char**) checkmalloc(maxtexts*sizeof(char*));
   words = (char**) checkmalloc(maxwords*sizeof(char*));
   if ((getarg("-h", argc, argv) != -1) || (argc < 2)) {
-    printf("abc2midi version 1.41\n");
+    printf("abc2midi version 1.43\n");
     printf("Usage : abc2midi <abc file> [reference number] [-c] [-v] ");
     printf("[-o filename]\n");
     printf("        [-t] [-n <value>] [-RS]\n");

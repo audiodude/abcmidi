@@ -1,4 +1,3 @@
-
 /*
  * abc2midi - program to convert abc files to MIDI files.
  * Copyright (C) 1999 James Allwright
@@ -131,6 +130,8 @@ int wordson, noteson, gchordson, temposon, drumson, droneon;
 /* Generating accompaniment */
 int gchords, g_started;
 int basepitch, inversion, chordnum;
+int gchordnotes[6],gchordnotes_size;
+
 struct notetype {
   int base;
   int chan;
@@ -202,6 +203,41 @@ int a, b;
   reduce(&bar_num, &bar_denom);
 }
 
+void configure_gchord()
+/* creates a list of notes to played as chord for
+ * a specific guitar chord. Most of the code figures out
+ * how to order the notes when inversions are encountered.
+*/
+{
+ int j;
+ int inchord, note;
+ gchordnotes_size = 0;
+
+inchord = 0;
+if (inversion != -1) {
+/* try to match inversion with basepitch+chordnotes.. */
+  for (j=0; j<chordlen[chordnum]; j++) {
+       if ((basepitch + chordnotes[chordnum][j]) % 12 == inversion % 12) {
+            inchord = j;
+	    };
+       };
+  if ((inchord == 0) && (inversion > basepitch)) {
+        inversion = inversion - 12;
+        gchordnotes[gchordnotes_size] = inversion+gchord.base;
+        gchordnotes_size++;
+        };
+   };
+for (j=0; j<chordlen[chordnum]; j++) {
+    note = basepitch + chordnotes[chordnum][j]; 
+   if (j < inchord) 
+    note += 12;
+   gchordnotes[gchordnotes_size] = gchord.base+note;
+   gchordnotes_size++;
+   };
+}
+
+
+
 void set_gchords(s)
 char* s;
 /* set up a string which indicates how to generate accompaniment from */
@@ -215,7 +251,8 @@ char* s;
   p = s;
   j = 0;
   seq_len = 0;
-  while (((*p == 'z') || (*p == 'c') || (*p == 'f')) && (j<39)) {
+    while ((strchr("zcfbghijGHIJ", *p) != NULL) && (j <39)) {
+    if (*p == 0) break;
     gchord_seq[j] = *p;
     p = p + 1;
     if ((*p >= '0') && (*p <= '9')) {
@@ -1437,10 +1474,14 @@ int pitch, chan, vel;
         addtoQ(num, denom, pitch + transpose + global_transpose, chan, -1);}
 }
 
+
+
+
 void dogchords(i)
 /* generate accompaniment notes */
 int i;
 {
+int j;
   if ((i == g_ptr) && (g_ptr < strlen(gchord_seq))) {
     int len;
     char action;
@@ -1451,47 +1492,83 @@ int i;
       action = 'f';
     };
     switch (action) {
+
     case 'z':
       break;
-    case 'c':
-      /* do chord with handling of any 'inversion' note */
-      if (g_started && gchords) {
-        int j;
-	int inchord, note;
 
-	inchord = 0;
-	if (inversion != -1) {
-	  for (j=0; j<chordlen[chordnum]; j++) {
-            if (basepitch + chordnotes[chordnum][j] % 12 == inversion % 12) {
-              inchord = 1;
-	    };
-	  };
-	  if ((inchord == 0) && (inversion > basepitch)) {
-            inversion = inversion - 12;
-            save_note(g_num*len, g_denom, inversion + gchord.base, 
-                    gchord.chan, gchord.vel);
-	  };
-	};
-        for (j=0; j<chordlen[chordnum]; j++) {
-          note = basepitch + chordnotes[chordnum][j]; 
-	  if (inchord) {
-	    note = inversion + ((note + 12 - inversion) % 12);
-	  };
-          save_note(g_num*len, g_denom, gchord.base + note, 
-		    gchord.chan, gchord.vel);
-        };
-      };
-      break;
     case 'f':
       if (g_started && gchords) {
         /* do fundamental */
         save_note(g_num*len, g_denom, basepitch+fun.base, fun.chan, fun.vel);
       };
-    };
+      break;
+
+    case 'b':
+      if (g_started && gchords) {
+        /* do fundamental */
+        save_note(g_num*len, g_denom, basepitch+fun.base, fun.chan, fun.vel);
+      };
+/* There is no break here so the switch statement continues into the next case 'c' */ 
+
+    case 'c':
+      /* do chord with handling of any 'inversion' note */
+      if (g_started && gchords) {
+          for(j=0;j<gchordnotes_size;j++)
+          save_note(g_num*len, g_denom, gchordnotes[j], 
+		    gchord.chan, gchord.vel);
+        };
+      break;
+
+    case 'g':
+      if(gchordnotes_size>0 && g_started && gchords)
+        save_note(g_num*len, g_denom, gchordnotes[0],gchord.chan, gchord.vel); 
+      break;
+
+    case 'h':
+      if(gchordnotes_size >1 && g_started && gchords)
+        save_note(g_num*len, g_denom, gchordnotes[1],gchord.chan, gchord.vel); 
+      break;
+
+    case 'i':
+      if(gchordnotes_size >2 && g_started && gchords)
+        save_note(g_num*len, g_denom, gchordnotes[2],gchord.chan, gchord.vel); 
+      break;
+
+    case 'j':
+      if(gchordnotes_size >3 && g_started && gchords)
+        save_note(g_num*len, g_denom, gchordnotes[3],gchord.chan, gchord.vel); 
+      break;
+
+    case 'G':
+      if(gchordnotes_size>0 && g_started && gchords)
+        save_note(g_num*len, g_denom, gchordnotes[0]-12,gchord.chan, gchord.vel); 
+      break;
+
+    case 'H':
+      if(gchordnotes_size >1 && g_started && gchords)
+        save_note(g_num*len, g_denom, gchordnotes[1]-12,gchord.chan, gchord.vel); 
+      break;
+
+    case 'I':
+      if(gchordnotes_size >2 && g_started && gchords)
+        save_note(g_num*len, g_denom, gchordnotes[2]-12,gchord.chan, gchord.vel); 
+      break;
+
+    case 'J':
+      if(gchordnotes_size >3 && g_started && gchords)
+        save_note(g_num*len, g_denom, gchordnotes[3]-12,gchord.chan, gchord.vel); 
+      break;
+
+
+     default:
+       printf("no such gchord code %c\n",action);
+      };
+
+
     g_ptr = g_ptr + 1;
     addtoQ(g_num*len, g_denom, -1, g_ptr, 0);
-  };
-}
+    };
+};
 
 void dodrums(i)
 /* generate drum notes */
@@ -1964,6 +2041,7 @@ int xtrack;
       inversion = num[j];
       chordnum = denom[j];
       g_started = 1;
+      configure_gchord();
       break;
     case GCHORDON:
       if (gchordson) {

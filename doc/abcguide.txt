@@ -562,7 +562,7 @@ of this document.
 
 controls the way note velocities are selected. The first note in a bar has
 velocity a. Other "strong" notes have velocity b and all the rest have velocity
-c. a, b and c must be in the range 0-128. The parameter n determines which
+c. a, b and c must be in the range 0-127. The parameter n determines which
 notes are "strong". If the time signature is x/y, then each note is given
 a position number k = 0, 1, 2 .. x-1 within each bar. Note that the units for
 n are not the unit note length. If k is a multiple of n, then the note is 
@@ -627,10 +627,10 @@ m, 7, m7 and maj7 could be set up if they were not already defined.
 %%MIDI gchord string
 
 sets up how guitar chords are generated. The string is a sequence made of
-of z's, c's and f's for rests, chords and fundamental notes respectively.
-This specifies how each bar is to be played. An optional length is allowed
-to follow the z's, c's and f's  e.g. czf2zf3. If the abc contains guitar 
-chords, then abc2midi automatically adds chords and
+of z's, c's f's and b's for rests, chords,  fundamental and fundamental
+plus chord notes respectively. This specifies how each bar is to be played.
+An optional length is allowed to follow the z's, c's, f's and b's  e.g. czf2zf3.
+If the abc contains guitar chords, then abc2midi automatically adds chords and
 fundamentals after encountering the first guitar chord. It keeps using that
 chord until a new chord is specified in the abc. Whenever the M: field is
 encountered in the abc, an appropriate default string is set :
@@ -658,6 +658,30 @@ the time signature in order to set this back the way you want
 it. This is one of the changes introduced into abc2midi so
 that the accompaniment track always follows the meter of the
 music for the regular time signatures.
+
+The gchord command has been extended to allow you to play
+the individual notes comprising the guitar chord. This allows
+you to play broken chords or arpeggios. The new codes g,h,i,j,
+G,H,I,J reference the individual notes starting from the
+lowest note of the chord (not necessarily the root in the
+case of inverses). For example for the C major chord, g
+refers to C, h refers to E and i refers to G. For a gchord
+command such as,
+
+%%MIDI gchord ghih
+
+Abc2midi will arpeggiate the C major guitar chord to
+CEGE. The upper case letters G,H,I, and J refer to
+the same notes except they are transposed down one
+octave. Note for the first inversion of the C major 
+chord (indicated by "C/E"), E would be the lowest
+note so g would reference the note E.
+
+Like other gchord codes, you may append a numeral indicating
+the duration of the note. The same rules apply as before.
+You can use any combination of the gchord codes,
+(fcbghijGHIJz).
+
 
 %%MIDI chordprog n
 

@@ -1517,3 +1517,181 @@ must be preceded by clef=. This is not true for other
 indications like soprano+8. To fix this I inserted
 the condition strict==0 in the test for F or f in isclef(). 
 
+April 16 2004
+
+Abc2abc: demoted "No repeat expected" from an error to
+a warning in toabc.c
+
+
+April 21 2004
+
+Introduced a new gchord code b (both) which produces a fundamental
+and chord in the same beat. Thus b behaves like a combination
+of f and c. For example:
+
+%%MIDI gchord fbfc
+
+the second beat would be the fundamental and chord played together.
+The new code was introduced in dogchords() and set_gchords()
+in genmidi.c.
+
+
+April 22 2004
+
+Abc2midi: Guitar chord inversions do not work consistently.
+
+For the tune
+
+X:1
+T: gchords
+M: 4/4
+L: 1/1
+K: C
+"G" z|"G/B" z|"G/D" z|
+
+"G/B" specifies the first inversion of the G major guitar chord
+and "G/D" specifies the second inversion of the G major guitar
+chord. Running midi2abc on the output midi file we discover
+that the second inversion was not produced.
+
+%"G"
+G,,z [DB,G,]z G,,z [DB,G,]z| 
+%"G/B"
+G,,z [GDB,]z G,,z [GDB,]z| 
+%"G/D"
+G,,z [DB,G,]z G,,z [DB,G,]
+# second inversion not produced.
+
+Inversions are detected by the procedure event_handle_gchords
+in the file store.c. It passes the inversion flag to genmidi.c
+through the array num[], which is extracted by writetrack for
+the  GCHORD feature. The function dogchords in genmidi, generates
+the notes of the gchord. The value of inversion refers to
+the pitch of the note after the slash relative to the base
+note of the gchord.
+
+One problem was traced to the statements
+    for (j=0; j<chordlen[chordnum]; j++) {
+        if (basepitch + chordnotes[chordnum][j] % 12 == inversion % 12) {
+in dogchords.
+Parentheses are required in the if statement so that the
+modulo 12 acts on the sum of basepitch and chordnotes. Thus the
+statement was changed to
+       if ((basepitch + chordnotes[chordnum][j]) % 12 == inversion % 12) {
+
+The actual inversion (shifting up of a note in a gchord by one octave)
+is done in the statements which occurs in the last for loop prior
+to the break.
+
+if (inchord) {
+     note = inversion + ((note + 12 - inversion) % 12);
+     };
+
+I could not understand the logic in this statement
+and found that it does not perform the inversion consistently.
+
+I therefore made the following changes to the inversion algorithm.
+The local variable inchord now stores the position of the lowest
+note in the inverted chord. Thus for inverted chord G/B, inchord
+would be 1 because B is at index position 1 in the chord GBE.
+For G/E inchord would be 2. G/G does not represent an inverted
+chord so inchord set t0 0 which indicates to do nothing and is
+consistent with the logic. The last for loop before the break was
+replaced with.
+ for (j=0; j<chordlen[chordnum]; j++) {
+          note = basepitch + chordnotes[chordnum][j];
+         if (j < inchord)
+            note += 12;
+          save_note(g_num*len, g_denom, gchord.base + note,
+                    gchord.chan, gchord.vel);
+        };
+
+I tested the new code with the file
+
+X:1
+T: gchords
+M: 4/4
+L: 1/1
+K: C
+"G" z|"G/B" z|"G/D" z|
+"Am" z|"Am/C" z|"Am/E"z|
+"Bdim" z|"Bdim/D" z| "Bdim/F" z|
+
+The inversions now appear to be done correctly.
+
+
+
+April 23 2004
+
+Abc2abc does not place linebreaks on comments
+prior to X:
+
+For example for the file
+
+% comment 1
+% comment 2
+X: 1
+T: Precomments have no linebreaks
+M: 4/4
+L: 1/1
+K: C
+D|E|F|
+
+The ouput is
+
+% comment 1% comment 2X: 1
+T:Precomments have no linebreaks
+M:4/4
+L:1/1
+K:C
+D|E|F|
+
+Analysis: the problem was introduced by the changes
+I made on  2003 May 4 as described above. Linebreaks
+were suppressed to prevent the production of many
+blank lines for abc files with missing reference number
+(no X: field). This unfortunately introduced another
+problem which was discovered recently. The
+X: reference number is  absorbed by one of the
+comments appearing prior.
+
+Fix: An event_linebreak is executed after parse_precomment
+in parseline (parseabc.c) in event that the parsing flag
+is not set. Hopefully this has no impact on yaps and
+abc2midi.
+
+
+May 1 2004
+
+A new gchord feature introduced in abc2midi. It is now
+possible to arpeggiate the guitar chords. New gchord
+codes g,h,i,j,G,H,I,J were introduced. They reference the
+individual notes in the  guitar chord. g is the lowest
+note and j is the highest. For example for the
+G major chord, g references G, h references B and
+i references D. The upper case letters are the same
+notes one octave lower.
+
+If you specify a gchord,
+%%MIDI gchord ghighi 
+
+Then abc2midi would fit the notes GBDGBD in each bar.
+Same rules for length of notes apply as before.
+
+Implementation: All the changes were made in the genmidi.c
+file.  A new global array gchordnotes[] and global variable
+gchordnotes_size was introduced. The function set_gchords
+was extended to recognize the new codes hijk. A new
+function configure_gchord() was created from part of the
+body of dogchords() dealing with case 'c'. The function
+loads the gchordnotes array based on the global variables,
+basepitch,chordnum and inversion. The function is called
+by writetrack for the GCHORD feature (whenever a guitar
+chord name is detected). The dogchords() function was
+modified to process the new gchord codes and to use
+the gchordnotes[] list.
+
+The demo.abc file was extended with another example.
+
+
+

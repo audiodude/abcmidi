@@ -1,4 +1,4 @@
-.TH ABC2MIDI 1 "28 March 2004"
+.TH ABC2MIDI 1 "2 May 2004"
 .SH NAME
 \fBabc2midi\fP \- converts abc file to MIDI file(s)
 .SH SYNOPSIS
@@ -176,10 +176,10 @@ m, 7, m7 and maj7 could be set up if they were not already defined.
 %%MIDI gchord string
 .PP
 sets up how guitar chords are generated. The string is a sequence made of
-of z's, c's and f's for rests, chords and fundamental notes respectively.
-This specifies how each bar is to be played. An optional length is allowed
-to follow the z's, c's and f's  e.g. czf2zf3. If the abc contains guitar
-chords, then abc2midi automatically adds chords and
+of z's, c's  f's and b's for rests, chords, fundamental and fundamental
+plus chord notes respectively.  This specifies how each bar is to be played.
+An optional length is allowed to follow the z's, c's f's and b's  e.g. czf2zf3.
+If the abc contains guitar chords, then abc2midi automatically adds chords and
 fundamentals after encountering the first guitar chord. It keeps using that
 chord until a new chord is specified in the abc. Whenever the M: field is
 encountered in the abc, an appropriate default string is set :
@@ -195,6 +195,32 @@ For 6/8 time default is equivalent to :
 .P
 For 9/8 time default is equivalent to :
 %%MIDI gchord fzcfzcfzc
+.P
+
+The gchord command has been extended to allow you to play
+the individual notes comprising the guitar chord. This allows
+you to play broken chords or arpeggios. The new codes g,h,i,j,
+G,H,I,J reference the individual notes starting from the
+lowest note of the chord (not necessarily the root in the
+case of inversions). For example for the C major chord, g
+refers to C, h refers to E and i refers to G. For a gchord
+command such as,
+.P
+%%MIDI gchord ghih
+.P
+Abc2midi will arpeggiate the C major guitar chord to
+CEGE. The upper case letters G,H,I, and J refer to
+the same notes except they are transposed down one
+octave. Note for the first inversion of the C major
+chord (indicated by "C/E"), E would be the lowest
+note so g would reference the note E.
+.P
+Like other gchord codes, you may append a numeral indicating
+the duration of the note. The same rules apply as before.
+You can use any combination of the gchord codes,
+(fcbghijGHIJz).
+
+
 .PP
 %%MIDI chordprog n
 .PP
@@ -296,7 +322,7 @@ James Allwright <J.R.Allwright@westminster.ac.uk>
 .SH SUPPORTED
  by Seymour Shlien <seymour.shlien@crc.ca>
 .SH VERSION
-This man page describes abc2midi version 1.40,  March 27 2003.
+This man page describes abc2midi version 1.43,  May 02 2004.
 .SH COPYRIGHT
 Copyright 1999 James Allwright
 .PP

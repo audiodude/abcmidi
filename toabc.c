@@ -440,7 +440,7 @@ char** filename;
   int targ, narg;
 
   if ((getarg("-h", argc, argv) != -1) || (argc < 2)) {
-    printf("abc2abc version 1.28\n");
+    printf("abc2abc version 1.29\n");
     printf("Usage: abc2abc <filename> [-s] [-n X] [-b] [-r] [-e] [-t X]\n");
     printf("       [-u] [-d] [-v] [-V X] [-X n]\n");
     printf("  -s for new spacing\n");
@@ -1383,20 +1383,20 @@ char* replist;
   case REP_BAR:
     emit_string_sprintf(":|%s", replist);
     if ((!expect_repeat) && (repcheck)) {
-      event_error("No repeat expected, found :|");
+      event_warning("No repeat expected, found :|");
     };
     expect_repeat = 0;
     break;
   case BAR1:
     emit_string("|1");
     if ((!expect_repeat) && (repcheck)) {
-      event_error("found |1 in non-repeat section");
+      event_warning("found |1 in non-repeat section");
     };
     break;
   case REP_BAR2:
     emit_string(":|2");
     if ((!expect_repeat) && (repcheck)) {
-      event_error("No repeat expected, found :|2");
+      event_warning("No repeat expected, found :|2");
     };
     expect_repeat = 0;
     break;

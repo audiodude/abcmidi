@@ -1757,6 +1757,7 @@ char* line;
   };
   if ((int)*p == '%') {
     parse_precomment(p+1);
+    if (!parsing) event_linebreak();
     return;
   };
   if (strchr("ABCDEFGHIKLMNOPQRSTUVdwWXZ", *p) != NULL) {
