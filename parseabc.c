@@ -68,8 +68,8 @@ int chorddecorators[DECSIZE];
 char decorations[] = ".MLRH~Tuv";
 static char *abbreviation[SIZE_ABBREVIATIONS];
 
-static int voicecodes = 0;
-static char voicecode[16][30]; /*for interpreting V: string */
+int voicecodes = 0;
+char voicecode[16][30]; /*for interpreting V: string */
 
 int decorators_passback[DECSIZE];
 /* this global array is linked as an external to store.c and 

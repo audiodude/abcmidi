@@ -1233,4 +1233,55 @@ MIDI command. Fix: a new parameter xunit_set was introduced
 and is set to 1 if the user sets xunit using the -u option.
 The function setup_timesig does not alter xunit if xnit_set 
 has been set to one.
-~
+
+
+7 March 2004
+
+abc2abc incompatibility issue with abc2mps.
+In the event that voices are indicated by symbols rather
+than numerals, abc2abc converted them back to numerals
+so that a file
+
+X: 1
+T: abc2mps incompatibility
+M: 2/4
+L: 1/8
+K: G
+%%staves [S A T]
+V: S
+cdcd|egeg| cdcd|egeg| cdcd|egeg|
+V: A
+AGAG|GBGB| AGAG|GBGB| AGAG|GBGB|
+V: T
+A,CA,C|FDFD| A,CA,C|FDFD| A,CA,C|FDFD|
+
+becomes
+
+X: 1
+T: abc2mps incompatibility
+M: 2/4
+L: 1/8
+K: G
+%%staves [S A T]
+V: 1
+cdcd|egeg| cdcd|egeg| cdcd|egeg|
+V: 2
+AGAG|GBGB| AGAG|GBGB| AGAG|GBGB|
+V: 3
+A,CA,C|FDFD| A,CA,C|FDFD| A,CA,C|FDFD|
+
+This causes a problem for abc2mps.
+
+Abc2abc was modified so that it will preserve the
+symbolic codes for the voices. External links
+extern int voicecodes;
+extern char voicecode[16][32];
+were introduced into toabc.c and event_voice
+now checks voicecodes before emitting the
+voice command.
+
+Beware, the fix may not work correctly if there is
+a mixture of numeric and symbolic codes for voices.
+If you use symbols for voices, use them for all
+voices.
+

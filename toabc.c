@@ -78,6 +78,8 @@ int output_on = 1;  /* if 0 suppress output */
 int selected_voice = -1; /* no voice was selected */
 int newrefnos; /* boolean for -X option (renumber X: fields) */
 int newref; /* next new number for X: field */
+extern int voicecodes ;  /* from parseabc.c */
+extern char voicecode[16][30]; /*for interpreting V: string */
  
 struct voicetype { /* information needed for each voice */
   int number; /* voice number from V: field */
@@ -106,6 +108,7 @@ struct abctext{ /* linked list used to store output before re-formatting */
 };
 struct abctext* head;
 struct abctext* tail;
+
 
 static int purgespace(p)
 char* p;
@@ -434,7 +437,7 @@ char** filename;
   int targ, narg;
 
   if ((getarg("-h", argc, argv) != -1) || (argc < 2)) {
-    printf("abc2abc version 1.25\n");
+    printf("abc2abc version 1.26\n");
     printf("Usage: abc2abc <filename> [-s] [-n X] [-b] [-r] [-e] [-t X]\n");
     printf("       [-u] [-d] [-v] [-V X] [-X n]\n");
     printf("  -s for new spacing\n");
@@ -1050,7 +1053,8 @@ int octave, transpose;
     }; 
   }; 
   if (strlen(s) == 0) {
-    emit_int_sprintf("V:%d", n);
+    if(voicecodes >= n) emit_string_sprintf("V:%s",voicecode[n-1]);
+    else emit_int_sprintf("V:%d", n);
     if (gotclef) {sprintf(output," clef=%s",clefname);
 	    emit_string(output);}
     if (gotoctave) {sprintf(output," octave=%d",octave);
@@ -1058,6 +1062,7 @@ int octave, transpose;
     if (gottranspose) {sprintf(output," transpose=%d",transpose);
 	    emit_string(transpose);}
   } else {
+    if(voicecodes >= n) emit_string_sprintf("V:%s",voicecode[n-1]);
     emit_int_sprintf("V:%d ", n);
     if (gotclef) {sprintf(output," clef=%s",clefname);
 	    emit_string(output);}

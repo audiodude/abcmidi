@@ -2,7 +2,7 @@ abcMIDI :   abc <-> MIDI conversion utilities
 
 midi2abc version 2.70
 abc2midi version 1.39
-abc2abc  version 1.25
+abc2abc  version 1.26
 yaps     version 1.22
 
 24th January 2002
