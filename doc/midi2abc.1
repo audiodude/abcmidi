@@ -1,4 +1,4 @@
-.TH MIDI2ABC 1 "11 July 2004"
+.TH MIDI2ABC 1 "21 Jan 2005"
 .SH NAME
 \fBmidi2abc\fP \- program to convert MIDI format files to abc notation
 .SH SYNOPSIS
@@ -7,7 +7,7 @@ midi2abc -f \fIinfile\fP [-xa] [-ga]
 [-ppu \fiparts per unit\fP] [-aul \fidenominator of unit length\fP]
 [-gu] [-b \fIbars\fP] [-Q \fItempo\fP] [-u \fipulses\fp]
 [-k \fIkey\fP] [-c \fIchannel\fP] [-obpl] [-bpl \fibars\fp] [-bps \fpbars\fp]
-[-o \fIfilename\fP] [-s] [-sr \fiunits\fP] [-sum] [-nt] [-Midigram]
+[-o \fIfilename\fP] [-s] [-sr \fiunits\fP] [-sum] [-nt] [-Midigram] [-nogr]
 
 .SH DESCRIPTION
 \fImidi2abc\fP takes a MIDI format file and converts it to something as close
@@ -116,6 +116,10 @@ do not look for triplets or broken rhythm
 Print only one bar per line instead of 4. For complex music this
 improves the readability and avoids some problems with some abc
 to postscript converters. This option is deprecated.
+.TP
+.B -nogr
+(No note grouping.) Inserts a space between all notes. It makes
+a less pretty postscript file but it is easier to edit.
 .TP
 .B -bpl \finbars\fP
 Print nbars of music on every line followed by a backslash.

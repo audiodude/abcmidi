@@ -1,7 +1,7 @@
 abcMIDI :   abc <-> MIDI conversion utilities
 
-midi2abc version 2.77 December 17 2004
-abc2midi version 1.57 January 09 2005
+midi2abc version 2.78 January 22 2005
+abc2midi version 1.58 January 22 2005
 abc2abc  version 1.35 January 09 2005
 yaps     version 1.31 January 09 2005
 midicopy version 1.01 July 17 2004
@@ -13,7 +13,7 @@ J.R.Allwright@westminster.ac.uk
 University of Westminster,
 London, UK
 
-09 January 2005
+22 January 2005
 
 Seymour Shlien
 seymour.shlien@crc.ca
@@ -111,6 +111,7 @@ midi2abc <options>
          -obpl one bar per line (deprecated)
          -bpl <number> of bars per printed line
          -bps <number> of bars per staff line
+         -nogr No note grouping. Space put between every note.
          -Midigram   No abc file is created, but a list
 		of all notes is produced. Other parameters
                 are ignored.

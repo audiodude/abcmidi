@@ -44,7 +44,7 @@
  *
  */
 
-#define VERSION "2.77 December 17 2004"
+#define VERSION "2.78 January 22 2005"
 
 /* Microsoft Visual C++ Version 6.0 or higher */
 #ifdef _MSC_VER
@@ -122,6 +122,7 @@ int midiprint; /* flag - run midigram instead of midi2abc       */
 int restsize; /* smallest rest to absorb                        */
 int no_triplets; /* flag - suppress triplets or broken rhythm   */
 int obpl = 0; /* flag to specify one bar per abc text line      */
+int nogr = 0; /* flag to put a space between every note         */
 int bars_per_line=4;  /* number of bars per output line         */
 int bars_per_staff=4; /* number of bars per music staff         */
 int asig, bsig;  /* time signature asig/bsig                    */
@@ -1500,6 +1501,7 @@ int len;
         if (len < i->note->playnum) {
           fprintf(outhandle,"-");
         };
+      if (nogr && i->next != NULL) fprintf(outhandle," ");
         i = i->next;
       };
       fprintf(outhandle,"]");
@@ -1810,8 +1812,7 @@ int trackno,  anacrusis;
 	       	freshline();
 	        bars_on_line=0;}
       }
-      else {
-        if (featurecount == 0) {
+      else if (featurecount == 0) {
           /* note grouping algorithm */
           if ((barsize/parts_per_unitlen) % 3 == 0) {
             if ( (barnotes/parts_per_unitlen) % 3 == 0
@@ -1826,8 +1827,8 @@ int trackno,  anacrusis;
               fprintf(outhandle," ");
             };
           };
-        };
-      };
+      }
+      if (nogr) fprintf(outhandle," ");
     };
   };
   /* print out all extra text */
@@ -2230,6 +2231,11 @@ int argc;
   else {
     no_triplets = 1;
   };
+  arg = getarg("-nogr",argc,argv);
+  if (arg != -1)
+     nogr=1;
+  else nogr = 0;
+
   arg = getarg("-f", argc, argv);
   if (arg == -1) {
     arg = huntfilename(argc, argv);
@@ -2242,11 +2248,11 @@ int argc;
     printf("midi2abc version %s\n  usage :\n",VERSION);
     printf("midi2abc filename <options>\n");
     printf("         -a <beats in anacrusis>\n");
-    printf("         -xa  extract anacrusis from file ");
+    printf("         -xa  Extract anacrusis from file ");
     printf("(find first strong note)\n");
-    printf("         -ga  guess anacrusis (minimize ties across bars)\n");
-    printf("         -gk  guess key signature \n");
-    printf("         -gu  guess xunit from note duration statistics\n");
+    printf("         -ga  Guess anacrusis (minimize ties across bars)\n");
+    printf("         -gk  Guess key signature \n");
+    printf("         -gu  Guess xunit from note duration statistics\n");
     printf("         -m <time signature>\n");
     printf("         -b <bars wanted in output>\n");
     printf("         -Q <tempo in quarter-notes per minute>\n");
@@ -2257,14 +2263,15 @@ int argc;
     printf("         -aul <denominator of L: unit length>\n");
     printf("         [-f] <input file>\n");
     printf("         -o <output file>\n");
-    printf("         -s do not discard very short notes\n");
-    printf("         -sr <number> absorb short rests following note\n");
+    printf("         -s Do not discard very short notes\n");
+    printf("         -sr <number> Absorb short rests following note\n");
     printf("           where <number> specifies its size\n");
     printf("         -sum summary\n");
-    printf("         -nt do not look for triplets or broken rhythm\n");
+    printf("         -nt Do not look for triplets or broken rhythm\n");
     printf("         -bpl <number> of bars printed on one line\n");
     printf("         -bps <number> of bars to be printed on staff\n");
-    printf("         -obpl one bar per line\n");
+    printf("         -obpl One bar per line\n");
+    printf("         -nogr No note grouping. Space between all notes\n");
     printf("         -Midigram   Prints midigram instead of abc file\n");
     printf("         -ver version number\n");
     printf(" None or only one of the options -gu, -b, -Q -u should\n");

@@ -2150,6 +2150,7 @@ int xtrack;
     case ARPEGGIO:
        notedelay = 3*staticnotedelay;
        chordattack=3*staticchordattack;
+       break;
     case DYNAMIC:
       dodeferred(atext[pitch[j]]);
       break;

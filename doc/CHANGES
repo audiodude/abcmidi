@@ -2845,4 +2845,22 @@ for ARPEGGIO. It changes the values of notedelay and noteattack
 to 3 times its nominal value. (They are restored back to
 their nominal values after a CHORDOFF or CHORDOFFEX feature.)
 
+Jan 22 2005
+
+Abc2midi: a missing break statement caused abc2midi to crash
+when encountering !arpeggio!. Added a tune demonstrating
+the !arpeggio! instruction to demo.abc.
+
+Midi2abc: normally midi2abc groups the notes forming a beat
+together so that abc*2ps produces a pretty output. For some
+raw  abc output, (eg.)
+B3/2z4^dz/2e3/2z3/2|
+it is easier to edit it if there is a space between every note (eg.)
+B3/2 z4 ^d z/2 e3/2 z3/2|
+A new option -nogr has been added to midi2abc. If it is included
+as one of the run time options, then a space is inserted between
+all notes that are not in triplets. Changes were made to printchord
+and printtrack in midi2abc.c. (Search for nogr to see changes.)
+
+
 
