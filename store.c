@@ -31,7 +31,7 @@
  * Wil Macaulay (wil@syndesis.com)
  */
 
-#define VERSION "1.58 January 22 2005"
+#define VERSION "1.59 February 05 2005"
 /* enables reading V: indication in header */
 #define XTEN1 1
 /*#define INFO_OCTAVE_DISABLED 1*/
@@ -734,7 +734,7 @@ int loc;
     pitch[i]   = pitch[i+1];
     num[i]     = num[i+1];
     denom[i]   = denom[i+1];
-    pitchline[i] = pitch[i+1];
+    pitchline[i] = pitchline[i+1];
     }
   notes--;
 }

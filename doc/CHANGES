@@ -2367,7 +2367,7 @@ in the chord.
 Fix: 
 
 Parseabc.c was modified to pick up the chord length placed
-after the clocking bracket "]". If it is not indicated, it
+after the closing bracket "]". If it is not indicated, it
 gets 1/1. The chord length is passed to event_chordoff
 via new parameters chord_n and chord_m. 
 
@@ -2780,7 +2780,7 @@ z2|G A|F G|G A|
 I shall update abcguide.txt regarding this issue.
 
 
-January 8 2004
+January 8 2005
 
 Another exploitable error in store.c was found by Anselm Lingnau
 which causes a buffer overflow for %%abc-copyright. A fix using
@@ -2820,7 +2820,7 @@ after case CHORDOFFEX:
 in the function dotie.
 
 
-January 9 2004
+January 9 2005
 
 Abc2midi:  new decorations !arpeggio! and !breath!
 are introduced.  When the !arpeggio! instruction precedes a
@@ -2862,5 +2862,88 @@ as one of the run time options, then a space is inserted between
 all notes that are not in triplets. Changes were made to printchord
 and printtrack in midi2abc.c. (Search for nogr to see changes.)
 
+
+February 03 2005
+
+Abc2abc: introduced a new run time parameter -usekey. This
+is a generalization of the -nokeys -nokeyf transformation
+which converts the music representation to the key of C
+inserting any accidentals to preserve the original key
+signature. Now you can force abc2abc to represent the
+music in any key signature. The -usekey parameter is followed
+by a number specifying the number of sharps (positive
+number) or number of flats (negative number) in the
+desired key signature.
+
+Implementation in toabc.c: if usekey parameter is set to a
+nonzero value, the nokey parameter is set so that event_note2
+is used to process the note. Setup_sharp_flats adjusts the
+arrays flatsym and sharpsym to match the desired key signature.
+The function printpitch prints the notes using these two
+arrays.
+
+
+February 04 2005
+
+Abc2midi: It has been proposed that a new option be introduced
+that would propogate dynamic indications (pp, ff, etc) from
+voice 1 to all other voices so that they need only be declared
+once in voice 1. This would provide another solution to the problem
+discussed in December 18 2004 resulting in the introduction
+of the -NFNP option. Introduction of this feature is deferred
+for the time being but here is a description of what is involved
+in implementing such a feature.
+
+When parseabc.c sees an instuction eg. !ff!, it calls
+event_instruction (in parser2.c) which calls split_string
+which calls event_handle_instruction (in store.c).
+Event_handle_instruction interprets the instruction and
+calls event_specific with a MIDI beat x x x x command.
+Event_specific passes the string to textfeature which
+adds an entry DYNAMIC to the feature array and a pointer
+to the string in the pitch array. Note the feature array
+is used to handle all the voices, and the list of voice 
+features are separated by VOICE entries. The problem is
+that it is impossible to propogate the DYNAMIC instructions
+to the other voices because the other voices may not exist
+(in the case the voices are specified serially in the abc file). 
+The function writetrack in genmidi.c separates the specific
+voice from the feature array and creates a separate MIDI
+track for each voice.
+
+To address this problem, we would leave the code in store.c
+and parseabc.c however we would need to change writetrack
+in genmidi. Writetrack would now have to keep track of the
+beat number when processing a voice. When a DYNAMIC feature
+is encountered in voice 1, the beat number where this has
+occurred would be stored in an array, along with a pointer
+to the dynamic indication string. For all other voices,
+the DYNAMIC feature would be ignored but instead the
+beat number would be compared with the beat number where
+the dynamic indication occurred and dodeferred would be
+called when the beat number equals or exceeds the numbers
+cached away for voice 1.
+
+Worked on this project is deferred for the present time.
+
+February 05 2005
+
+Abc2midi tie bug:
+
+For the file
+X:1
+T: tie bug
+M: 2/4
+L: 1/8
+K: G
+[FA]-[FA] FA|
+
+abc2midi fails to tie the F# note.
+
+Fix:
+replaced the line 737 (in removefeature) in store.c
+pitchline[i] = pitch[i+1];
+with
+pitchline[i] = pitchline[i+1];
 
 

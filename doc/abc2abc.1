@@ -1,11 +1,11 @@
-.TH ABC2ABC 1 "12 September 2004"
+.TH ABC2ABC 1 "03 February 2005"
 .SH NAME
 abc2abc \- a simple abc checker/re-formatter/transposer
 .SH SYNOPSIS
 \fBabc2abc\fP \fIfile\fP [ \fB-s\fP ] [ \fB-n\fP ] [ \fB-b\fP ]
 [ \fB-r\fP ] [ \fB-e\fP ] [ \fB-t \fP\fIsemitones\fP ] [ \fB-nda\fp ]
 [ \fB-u\fP ] [ \fB-d\fP ] [ \fB-v\fP ] [ \fB-v\fP] [\fB-nokeys\fp]
-[ \fB-nokeyf\fp]
+[ \fB-nokeyf\fp] [ \fB-usekey\fP\fI(sharps/flats)\fP]
 .SH "DESCRIPTION"
 .PP
 .B abc2abc
@@ -81,6 +81,13 @@ be placed wherever they are needed.
 .B \-nokeyf
 No key signature will be assumed. Instead, flats and naturals will
 be placed wherever they are needed.
+.TP
+.B \-usekey " sf
+This will force abc2abc to output the notes in the key signature
+keys[sf] where sf specifies the number of flats (-negative) or 
+sharps (+positive) in the key signature. It is a number between
+-5 and +5 inclusive.
+
 
 .SH "SEE ALSO"
 .IR abcmtex "(1), " abc2midi "(1), " midi2abc "(1), " mftext "(1)"
@@ -88,4 +95,4 @@ be placed wherever they are needed.
 This manual page was written by Anselm Lingnau <lingnau@tm.informatik.uni-frankfurt.de> and is now supported by Seymour Shlien <seymour.shlien@crc.ca>
 for the GNU/Linux system.
 .SH VERSION
-This man page describes abc2abc version 1.32 from September 12 2004.
+This man page describes abc2abc version 1.37 from February 03 2005.

@@ -1,8 +1,8 @@
 abcMIDI :   abc <-> MIDI conversion utilities
 
 midi2abc version 2.78 January 22 2005
-abc2midi version 1.58 January 22 2005
-abc2abc  version 1.35 January 09 2005
+abc2midi version 1.59 February 05 2005
+abc2abc  version 1.37 February 03 2005
 yaps     version 1.31 January 09 2005
 midicopy version 1.01 July 17 2004
 
@@ -13,7 +13,7 @@ J.R.Allwright@westminster.ac.uk
 University of Westminster,
 London, UK
 
-22 January 2005
+05 February 2005
 
 Seymour Shlien
 seymour.shlien@crc.ca
@@ -296,6 +296,7 @@ Usage: abc2abc <filename> [-s] [-n X] [-b] [-r] [-e] [-t X]
   -V X to output only voice X
   -ver prints version number and exits
   -X n renumber the all X: fields as n, n+1, ..
+  -usekey sf Use key signature sf (flats/sharps)
 
 A simple abc checker/re-formatter/transposer. If the -n option is selected, 
 error checking is turned off. 
@@ -304,6 +305,15 @@ The -nokeys or -nokeyf option will set "K: none" and place accidentals on
 all notes that should have accidentals for the expected key signature. 
 The first option will use only sharps; the second option will use
 only flats.
+
+The -usekey option will force the key signature to be key[sf] where
+sf is a number between -5 and +5 inclusive.
+sf  -5  -4  -3  -2  -1  0  1  2  3  4  5
+key Db  Ab  Eb  Bb  F   C  G  D  A  E  B
+Accidentals will be added to preserve the correct notes. This
+is useful for some music with many accidentals which does
+not fit in any specific key signature. If sf = 0, abc2abc
+use K:none.
 
 If you want to check an abc tune, it is recommended that you use abc2midi 
 with the -c option as this performs extra checks that abc2abc does not do.

@@ -21,7 +21,7 @@
 
 /* back-end for outputting (possibly modified) abc */
 
-#define VERSION "1.36 January 09 2005"
+#define VERSION "1.37 February 03 2005"
 
 /* for Microsoft Visual C++ 6.0 or higher */
 #ifdef _MSC_VER
@@ -91,6 +91,8 @@ int newrefnos; /* boolean for -X option (renumber X: fields) */
 int newref; /* next new number for X: field */
 int useflats=0; /* flag associated with nokey.*/ 
 int adapt_useflats_to_gchords = 1; /* experimental flag */
+int usekey = 0;
+
 extern int nokey; /* signals no key signature assumed */
 extern int voicecodes ;  /* from parseabc.c */
 extern char voicecode[16][30]; /*for interpreting V: string */
@@ -127,6 +129,7 @@ int basemap[7], workmap[7]; /* for -nokey and pitchof() */
 int  workmul[7];
 void copymap();
 void printpitch(int);
+void setup_sharps_flats (int sf);
 int pitchof(char note,int accidental,int mult,int octave);
 
 
@@ -476,6 +479,7 @@ char** filename;
     printf("  -nokeys No key signature. Use sharps\n");
     printf("  -nokeyf No key signature. Use flats\n");
     printf("  -u to update notation ([] for chords and () for slurs)\n");
+    printf("  -usekey n Use key signature sf (sharps/flats)\n");
     printf("  -d to notate with doubled note lengths\n");
     printf("  -v to notate with halved note lengths\n");
     printf("  -V X to output only voice X\n");
@@ -580,6 +584,17 @@ char** filename;
   if (targ != -1) {
     selected_voice  = readnumf(argv[targ]);
   };
+
+  targ = getarg("-usekey",argc,argv);
+  if (targ != -1) {
+     usekey = readsnumf(argv[targ]);
+     nokey = 1;
+     if (usekey < 0) useflats=1;
+     if (usekey <-5) usekey = -5;
+     if (usekey >5) usekey = 5;
+     setup_sharps_flats (usekey);
+     }
+
 
   /* printf("%% output from abc2abc\n"); */
   startline = 1;
@@ -1323,7 +1338,8 @@ int octave, xtranspose, gotoctave, gottranspose;
   } else {
     if (gotkey) {
       if (!nokey) emit_string(keys[newkey+5]);
-      else {emit_string("none"); /*setupkey(0);*/ }
+      else if (usekey == 0) emit_string("none"); 
+      else emit_string(keys[usekey+5]);
       if (gotclef) {
         emit_string(" ");
       };
@@ -2162,6 +2178,22 @@ char lowkey[7]   =  {'C','D','E','F','G','A','B'};
 char symlet[3]   =  {'=','^','_'};
 
 
+void setup_sharps_flats (int sf)
+{
+if (sf >=1) {sharpsym[6] = 0; sharpsym[5] = 2;}
+if (sf >=2) {sharpsym[1] = 0; sharpsym[0] = 2;}
+if (sf >=3) {sharpsym[8] = 0; sharpsym[7] = 2;}
+if (sf >=4) {sharpsym[3] = 0; sharpsym[2] = 2;}
+if (sf >=5) {sharpsym[10]= 0; sharpsym[9] = 2;}
+if (sf <= -1) {flatsym[10] = 0; flatsym[11] = 2;}
+if (sf <= -2) {flatsym[3]  = 0; flatsym[4]  =2;}
+if (sf <= -3) {flatsym[8]  = 0; flatsym[9]  =2;}
+if (sf <= -4) {flatsym[1]  = 0; flatsym[2]  =2;}
+if (sf <= -5) {flatsym[6]  = 0; flatsym[6]  =2;}
+}
+
+
+
 void printpitch(int pitch)
 /* convert midi pitch value to abc note */
 {
@@ -2192,6 +2224,9 @@ switch (symcod) {
    break;
   case -1:
    symlet = '_';
+   break;
+  case 2:
+   symlet = '=';
    break;
 }
  
