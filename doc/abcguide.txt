@@ -608,7 +608,22 @@ number should normally be a multiple of 12.
 %%MIDI grace a/b
 
 sets the fraction of the next note that grace notes will take up. a
-must be between 1 and b-1.
+must be between 1 and b-1. The grace notes may not sound natural
+in this approach, since the length of the individual grace notes
+vary with the complexity of the grace and the length of the
+following note. A different approach (which is now the default)
+assumes that the grace notes always have fixed duration specified
+by a fraction of the unit length. To use the other approach
+you would specify,
+
+%%MIDI gracedivider b
+
+where b specifies how many parts to divide the unit length
+specified by the L: field command. For example if b = 4 and
+L: = 1/8, then every grace note would be 1/(8*4) or a 32nd
+note. Time would be stolen from the note to which the grace
+note is applied. If that note is not long enough to handle
+the grace then the grace notes would be assigned 0 duration.
 
 %%MIDI chordname name n1 n2 n3 n4 n5 n6
 

@@ -1,12 +1,13 @@
-.TH MIDI2ABC 1 "20 March 2004"
+.TH MIDI2ABC 1 "26 June 2004"
 .SH NAME
 \fBmidi2abc\fP \- program to convert MIDI format files to abc notation
 .SH SYNOPSIS
 midi2abc -f \fIinfile\fP [-xa] [-ga]
 [-a \fIacbeats\fP] [-m \fItime signature\fP] 
+[-ppu \fiparts per unit\fP] [-aul \fidenominator of unit length\fP]
 [-gu] [-b \fIbars\fP] [-Q \fItempo\fP] [-u \fipulses\fp]
 [-k \fIkey\fP] [-c \fIchannel\fP] [-obpl] [-bpl \fibars\fp] [-bps \fpbars\fp]
-[-o \fIfilename\fP] [-s] [-sr] [-sum] [-nt] 
+[-o \fIfilename\fP] [-s] [-sr \fiunits\fP] [-sum] [-nt] 
 .SH DESCRIPTION
 \fImidi2abc\fP takes a MIDI format file and converts it to something as close
 as possible to abc text format. The user then has to add text fields not
@@ -16,11 +17,12 @@ The output of midi2abc is printed to the screen. To save it to a file, use
 the redirection operator, (e.g. \fImidi2abc -f file.mid > file.abc\fP) or
 specify the output file using the -o option.
 .PP
-Use only one or none of the options -u -gu, -b and -Q.  If none 
-of these is present, the program will use the PPQN information 
-in the MIDI header to compute the suitable note length.
-For most MIDI files on the web, it is recommended to rely on the MIDI
-header information and not use any of the options other than
+Use only one or none of the options -u -gu, -b and -Q. Midi2abc normally
+converts the MIDI time units into quantum units normally corresponding to the
+abc 1/16th note or 1/32nd note.  If none of these is present, the
+program will use the PPQN information in the MIDI header to compute the suitable
+conversion factor. For most MIDI files on the web, it is recommended to rely on 
+the MIDI header information and not use any of the options other than
 the formatting options.
 .PP
 The program will extract the time signature infromation from the MIDI file
@@ -55,6 +57,21 @@ tempo in quarter-notes per minute
 Allows you to specify directly the number of midi pulses per
 abc time unit.
 .TP
+.B -ppu \fiparts per abc unit length\fp
+Normally, the smallest note unit that midi2abc can extract
+is half the L: unit length.This is called the quantum unit.
+Thus for L: 1/8, midi2abc can extract 1/16 notes but not 1/32 notes.
+You can change this by specifying -ppu 4 for example. The number of parts
+should be a power of 2.
+.TP
+.B -aul \fidenominator of abc unit length\fp
+Normally midi2abc chooses a unit length of 1/8 or 1/16
+depending upon the time signature. For time signatures
+smaller than 3/4 the L: 1/16 is used and for larger time
+signatures L: 1/8 is used. You can specify the unit length
+to be used using this parameter. Thus -aul 32 will cause
+midi2abc to use a unit length of 1/32 nd note.
+.TP
 .B -gu
 Tells midi2abc to estimate the number of midi pulses per abc
 time unit from the note duration or spacing in the MIDI file.
@@ -82,8 +99,11 @@ specifies the output abc file name.
 .B -s
 do not discard very short notes.
 .TP
-.B -sr
-do not notate a short rest after a note.
+.B -sr \fIquantum units\fP
+do not notate a short rest smaller than the specified size after a note. If the
+size (in quantum units) is zero, nothing is done. For larger values, the rest
+is absorbed into the preceding note. In other words, the preceding note
+is lengthened to include that rest.
 .TP
 .B -sum
 print a short summary of the input midi file.
@@ -161,7 +181,7 @@ James Allwright <J.R.Allwright@westminster.ac.uk>
 .SH SUPPORTED
 Seymour Shlien <seymour.shlien@crc.ca>
 .SH VERSION
-This man page describes midi2abc version 2.71 from March 20 2004.
+This man page describes midi2abc version 2.73 from June 26 2004.
 .SH COPYRIGHT
 Copyright 1999 James Allwright
 .PP

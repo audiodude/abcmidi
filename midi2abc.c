@@ -69,7 +69,7 @@ extern char* strchr();
 #define MIDDLE 72
 void initfuncs();
 void setupkey(int);
-
+int testtrack(int trackno, int barbeats, int anacrusis);
 
 
 /* Global variables and structures */
@@ -82,6 +82,7 @@ long tempo = 500000; /* the default tempo is 120 quarter notes/minute */
 int unitlen;     /* abc unit length usually defined in L: field       */
 int header_unitlen; /* first unitlen set                              */
 int unitlen_set =0; /* once unitlen is set don't allow it to change   */
+int parts_per_unitlen = 2; /* specifies minimum quantization size */
 long laston = 0; /* length of MIDI track in pulses or ticks           */
 char textbuff[BUFFSIZE]; /*buffer for handling text output to abc file*/
 int trans[256], back[256]; /*translation tables for MIDI pitch to abc note*/
@@ -109,6 +110,7 @@ int guessk;   /* flag - guess key signature                     */
 int summary;  /* flag - output summary info of MIDI file        */
 int keep_short; /*flag - preserve short notes                   */
 int swallow_rests; /* flag - absorb short rests                 */
+int restsize; /* smallest rest to absorb                        */
 int no_triplets; /* flag - suppress triplets or broken rhythm   */
 int obpl = 0; /* flag to specify one bar per abc text line      */
 int bars_per_line=4;  /* number of bars per output line         */
@@ -119,7 +121,7 @@ int header_bsig =0; /* first time signature encountered         */
 int header_bb;      /* first ticks/quarter note encountered     */
 int active_asig,active_bsig;  /* last time signature declared   */
 int last_asig, last_ksig; /* last time signature printed        */
-int barsize; /* barsize in half unitlen units                   */
+int barsize; /* barsize in parts_per_unitlen units                   */
 int Qval;        /* tempo - quarter notes per minute            */
 int verbosity=0; /* control amount of detail messages in abcfile*/
 
@@ -278,7 +280,8 @@ int type;
   if (track[trackno].texthead == NULL) {
     track[trackno].texthead = newx;
     track[trackno].texttail = newx;
-  } else {
+  }
+  else {
     track[trackno].texttail->next = newx;
     track[trackno].texttail = newx;
   };
@@ -314,7 +317,8 @@ struct anote* p;
   };
   if (playingtail == NULL) {
     playingtail = newx;
-  } else {
+  } 
+  else {
     playingtail->next = newx;
     playingtail = newx;
   };
@@ -337,7 +341,8 @@ int p, v;
   if (track[trackno].head == NULL) {
     track[trackno].head = newx;
     track[trackno].tail = newx;
-  } else {
+  } 
+  else {
     track[trackno].tail->next = newx;
     track[trackno].tail = newx;
   };
@@ -369,7 +374,8 @@ int p, ch;
   while ((found == 0) && (i != NULL)) {
     if ((i->note->pitch == p)&&(i->note->chan==ch)) {
       found = 1;
-    } else {
+    } 
+    else {
       i = i->next;
     };
   };
@@ -383,12 +389,14 @@ int p, ch;
   /* remove note from list */
   if (i->last == NULL) {
     playinghead = i->next;
-  } else {
+  } 
+  else {
     (i->last)->next = i->next;
   };
   if (i->next == NULL) {
     playingtail = i->last;
-  } else {
+  } 
+  else {
     (i->next)->last = i->last;
   };
   free(i);
@@ -472,7 +480,8 @@ int chan, pitch, vol;
   if ((xchannel == -1) || (chan == xchannel)) {
     if (vol != 0) {
       addnote(pitch, chan, vol);
-    } else {
+    } 
+    else {
       notestop(pitch, chan);
     };
   };
@@ -544,7 +553,7 @@ void txt_metatext(type,leng,mess)
 int type, leng;
 char *mess;
 { 
-  static char *ttype[] = {
+    char *ttype[] = {
     NULL,
     "Text Event",        /* type=0x01 */
     "Copyright Notice",    /* type=0x02 */
@@ -575,10 +584,12 @@ char *mess;
   }
   if (strncmp(textbuff, "@KMIDI KARAOKE FILE", 14) == 0) {
     karaoke = 1;
-  } else {
+  } 
+  else {
     if ((karaoke == 1) && (*textbuff != '@')) {
       addtext(textbuff,0);
-    } else {
+    } 
+    else {
       if (leng < BUFFSIZE - 3) {
         sprintf(buffer2, "%%%s", textbuff);
         addtext(buffer2,0);
@@ -609,7 +620,10 @@ char sf, mi;
           (int) sf, (int) mi);
   if(verbosity) addtext(textbuff,0);
   sprintf(textbuff,"%d %d\n",sf,mi);
-  if (!ksig_set) {addtext(textbuff,1); keysig=sf;}
+  if (!ksig_set) {
+	  addtext(textbuff,1);
+	  keysig=sf;
+  }
   if (header_keysig == -50) header_keysig = keysig;
   if (summary <= 0) return;
   /* There may be several key signature changes in the midi
@@ -618,8 +632,9 @@ char sf, mi;
   */   
   accidentals = (int) sf;
   if (accidentals <0 )
-    {accidentals = -accidentals;
-     printf("Key signature: %d flats", accidentals);
+    {
+    accidentals = -accidentals;
+    printf("Key signature: %d flats", accidentals);
     }
   else
      printf("Key signature : %d sharps", accidentals);
@@ -636,6 +651,33 @@ long ltempo;
 }
 
 
+void setup_timesig(nn,  denom,  bb)
+int nn,denom,bb;
+{
+  asig = nn;
+  bsig = denom;
+/* we must keep unitlen and xunit fixed for the entire tune */
+  if (unitlen_set == 0) {
+    unitlen_set = 1; 
+    if ((asig*4)/bsig >= 3) {
+      unitlen =8;
+      } 
+    else {
+      unitlen = 16;
+      };
+   }
+/* set xunit for this unitlen */
+  if(!xunit_set) xunit = (division*bb*4)/(8*unitlen);
+  barsize = parts_per_unitlen*asig*unitlen/bsig;
+/*  printf("setup_timesig: unitlen=%d xunit=%d barsize=%d\n",unitlen,xunit,barsize); */
+  if (header_asig ==0) {header_asig = asig;
+	                header_bsig = bsig;
+			header_unitlen = unitlen;
+			header_bb = bb;
+                       }
+}
+
+
 void txt_timesig(nn,dd,cc,bb)
 int nn, dd, cc, bb;
 {
@@ -647,39 +689,15 @@ int nn, dd, cc, bb;
     nn,denom,cc,bb);
   if (verbosity) addtext(textbuff,0);
   sprintf(textbuff,"%d %d %d\n",nn,denom,bb);
-  if (!tsig_set) {addtext(textbuff,2);
-                  setup_timesig(nn, denom,bb);}
+  if (!tsig_set) {
+	  addtext(textbuff,2);
+          setup_timesig(nn, denom,bb);
+   }
   if (summary>0) {
     if(tsig_set) printf("Time signature = %d/%d suppressed\n",nn,denom);
     else printf("Time signature = %d/%d\n",nn,denom);
     }
 }
-
-
-setup_timesig(int nn, int denom, int bb)
-{
-  asig = nn;
-  bsig = denom;
-/* we must keep unitlen and xunit fixed for the entire tune */
-  if (unitlen_set == 0) {
-    unitlen_set = 1; 
-    if ((asig*4)/bsig >= 3) {
-      unitlen =8;
-      } else {
-      unitlen = 16;
-      };
-/* set xunit for this unitlen */
-  if(!xunit_set) xunit = (division*bb*4)/(8*unitlen);
-    }
-  barsize = 2*asig*unitlen/bsig;
-/*  printf("setup_timesig: unitlen=%d xunit=%d barsize=%d\n",unitlen,xunit,barsize); */
-  if (header_asig ==0) {header_asig = asig;
-	                header_bsig = bsig;
-			header_unitlen = unitlen;
-			header_bb = bb;
-                       }
-}
-
 
 
 void txt_smpte(hr,mn,se,fr,ff)
@@ -733,13 +751,15 @@ int trackno;
   i = track[trackno].head;
   if (i != NULL) {
     track[trackno].startwait = i->note->time;
-  } else {
+  } 
+  else {
     track[trackno].startwait = 0;
   };
   while (i != NULL) {
     if (i->next != NULL) {
       i->note->dtnext = i->next->note->time - i->note->time;
-    } else {
+    } 
+    else {
       i->note->dtnext = i->note->tplay;
     };
     i = i->next;
@@ -773,12 +793,14 @@ int trackno, xunit;
   struct anote* this;
   int spare;
   int toterror;
+  int quantum;
 
   /* fix to avoid division by zero errors in strange MIDI */
   if (xunit == 0) {
     return(10000);
   };
-  track[trackno].startunits = (2*(track[trackno].startwait + (xunit/4)))/xunit;
+  quantum = 2.*xunit/parts_per_unitlen; /* xunit assume 2 parts_per_unit */
+  track[trackno].startunits = (2*(track[trackno].startwait + (quantum/4)))/quantum;
   spare = 0;
   toterror = 0;
   j = track[trackno].head;
@@ -786,23 +808,24 @@ int trackno, xunit;
     this = j->note;
     /* this->xnum is the quantized inter onset time */
     /* this->playnum is the quantized note length   */
-    this->xnum = (2*(this->dtnext + spare + (xunit/4)))/xunit;
-    this->playnum = (2*(this->tplay + (xunit/4)))/xunit;
+    this->xnum = (2*(this->dtnext + spare + (quantum/4)))/quantum;
+    this->playnum = (2*(this->tplay + (quantum/4)))/quantum;
     if ((this->playnum == 0) && (keep_short)) {
       this->playnum = 1;
     };
     /* In the event of short rests, the inter onset time
      * will be larger than the note length. However, for
      * chords the inter onset time can be zero.          */
-    if ((swallow_rests) && (this->xnum - this->playnum < 2)
+    if ((swallow_rests>=0) && (this->xnum - this->playnum <= restsize)
 		        && this->xnum > 0) {
       this->playnum = this->xnum;
     };
-    this->denom = 2;
+    this->denom = parts_per_unitlen; /* this variable is never used ! */
     spare = spare + this->dtnext - (this->xnum*xunit/this->denom);
     if (spare > 0) {
       toterror = toterror + spare;
-    } else {
+    } 
+    else {
       toterror = toterror - spare;
     };
     /* gradually forget old errors so that if xunit is slightly off,
@@ -907,7 +930,8 @@ int maintrack;
   int j;
   int max, min, n[12], key_score[12];
   int minkey, minblacks;
-  static int keysharps[12] = {0, -5, 2, -3, 4, -1, 6, 1, -4, 3, -2, 5};
+  static int keysharps[12] = {
+	  0, -5, 2, -3, 4, -1, 6, 1, -4, 3, -2, 5};
   struct listx* p;
   int thispitch;
   int lastpitch;
@@ -928,7 +952,8 @@ int maintrack;
       thispitch = p->note->pitch;
       if (thispitch > max) {
         max = thispitch;
-      } else {
+      } 
+      else {
         if (thispitch < min) {
           min = thispitch;
         };
@@ -1114,12 +1139,14 @@ struct dlistx* i;
   /* remove note from list */
   if (i->last == NULL) {
     chordhead = i->next;
-  } else {
+  } 
+  else {
     (i->last)->next = i->next;
   };
   if (i->next == NULL) {
     chordtail = i->last;
-  } else {
+  } 
+  else {
     (i->next)->last = i->last;
   };
   newi = i->next;
@@ -1162,7 +1189,8 @@ int len;
       /* remove note */
       checkchordlist();
       p = removefromchord(p);
-    } else {
+    } 
+    else {
       /* shorten note */
       p->note->playnum = p->note->playnum - len;
       p = p->next;
@@ -1196,7 +1224,8 @@ int trackno, barbeats, anacrusis;
   gap = 0;
   if (anacrusis > 0) {
     barnotes = anacrusis;
-  } else {
+  } 
+  else {
     barnotes = barbeats;
   };
   barcount = 0;
@@ -1207,7 +1236,8 @@ int trackno, barbeats, anacrusis;
       gap = i->note->xnum;
       i = i->next;
       advancechord(0); /* get rid of any zero length notes */
-    } else {
+    } 
+    else {
       step = findshortest(gap);
       if (step > barnotes) {
         step = barnotes;
@@ -1239,17 +1269,20 @@ void printpitch(j)
 /* convert numerical value to abc pitch */
 struct anote* j;
 {
-  int p, po;
+  int p, po,i;
 
   p = j->pitch;
   if (p == -1) {
     fprintf(outhandle,"z");
-  } else {
+  } 
+  else {
     po = p % 12;
     if ((back[trans[p]] != p) || (key[po] == 1)) {
       fprintf(outhandle,"%c%c", symbol[po], atog[p]);
-      back[trans[p]] = p;
-    } else {
+      for (i=p%12; i<256; i += 12) /* apply accidental to all octaves */
+         back[trans[i]] = i;
+    } 
+    else {
       fprintf(outhandle,"%c", atog[p]);
     };
     while (p >= MIDDLE + 12) {
@@ -1263,6 +1296,31 @@ struct anote* j;
   };
 }
 
+static void reduce(a, b)
+int *a, *b;
+{
+  int t, n, m;
+
+    /* find HCF using Euclid's algorithm */
+    if (*a > *b) {
+        n = *a;
+        m = *b;
+      }
+    else {
+        n = *b;
+        m = *a;
+       };
+while (m != 0) {
+      t = n % m;
+      n = m;
+      m = t;
+    };
+*a = *a/n;
+*b = *b/n;
+}
+
+
+
 void printfract(a, b)
 /* print fraction */
 /* used when printing abc */
@@ -1272,11 +1330,8 @@ int a, b;
 
   c = a;
   d = b;
+  reduce(&c,&d);
   /* print out length */
-  if (((c % 2) == 0) && ((d % 2) == 0)) {
-    c = c/2;
-    d = d/2;
-  };
   if (c != 1) {
     fprintf(outhandle,"%d", c);
   };
@@ -1296,22 +1351,24 @@ int len;
   if (i == NULL) {
     /* no notes in chord */
     fprintf(outhandle,"z");
-    printfract(len, 2);
+    printfract(len, parts_per_unitlen);
     midline = 1;
-  } else {
+  } 
+  else {
     if (i->next == NULL) {
       /* only one note in chord */
       printpitch(i->note);
-      printfract(len, 2);
+      printfract(len, parts_per_unitlen);
       midline = 1;
       if (len < i->note->playnum) {
         fprintf(outhandle,"-");
       };
-    } else {
+    } 
+    else {
       fprintf(outhandle,"[");
       while (i != NULL) {
         printpitch(i->note);
-        printfract(len, 2);
+        printfract(len, parts_per_unitlen);
         if (len < i->note->playnum) {
           fprintf(outhandle,"-");
         };
@@ -1334,8 +1391,9 @@ int* featurecount;
   int pnum;
   long total, t1, t2, t3;
 
-  if ((chordhead != NULL) || (i == NULL) || (i->next == NULL) ||
-      (asig%3 == 0) || (asig%2 != 0)) {
+  
+  if ((chordhead != NULL) || (i == NULL) || (i->next == NULL)
+  /* || (asig%3 == 0) || (asig%2 != 0) 2004/may/09 SS*/) {
     return(' ');
   };
   t1 = i->note->dtnext;
@@ -1424,7 +1482,8 @@ int n;
 
   if (n <= 4) {
     v = n;
-  } else {
+  } 
+  else {
     v = 4;
     while (v*2 <= n) {
       v = v*2;
@@ -1476,12 +1535,14 @@ int trackno;
         default :
           if (midline == 0) {
             fprintf(outhandle,"%%%s", str);
-          } else {
+          } 
+	  else {
             fprintf(outhandle,"-%s", str);
           };
           break;
       };
-    } else {
+    } 
+    else {
       freshline();
       ch=*(str+1);
       switch (type) {
@@ -1503,14 +1564,15 @@ int trackno;
       sscanf(str,"%d %d %d",&nn,&denom,&bb);
       if ((trackno != 0 || trackcount ==1) &&
 	  (active_asig != nn || active_bsig != denom))
-        {setup_timesig(nn,denom,bb);
-	 fprintf(outhandle,"M: %d/%d\n",nn,denom);
-         fprintf(outhandle,"L: 1/%d\n",unitlen);
-	 active_asig=nn;
-	 active_bsig=denom;
+        {
+  	setup_timesig(nn,denom,bb);
+	fprintf(outhandle,"M: %d/%d\n",nn,denom);
+        fprintf(outhandle,"L: 1/%d\n",unitlen);
+	active_asig=nn;
+	active_bsig=denom;
 	}
       break;
-      default:
+     default:
       break;
       }
   }
@@ -1548,7 +1610,8 @@ int trackno,  anacrusis;
   if (anacrusis > 0) {
     barnotes = anacrusis;
     barcount = -1;
-  } else {
+  } 
+  else {
     barnotes = barsize;
     barcount = 0;
   };
@@ -1580,7 +1643,8 @@ int trackno,  anacrusis;
       barnotes_correction = barsize - last_barsize;
       barnotes += barnotes_correction;
       last_barsize = barsize;
-    } else {
+    } 
+    else {
       step = findshortest(gap);
       if (step > barnotes) {
         step = barnotes;
@@ -1589,9 +1653,10 @@ int trackno,  anacrusis;
       if (step == 0) {
         fatal_error("Advancing by 0 in printtrack!");
       };
-      if (featurecount == 3) {
-        fprintf(outhandle,"(3");
-      };
+      if (featurecount == 3)
+        {
+        fprintf(outhandle," (3");
+        };
       printchord(step);
       if ( featurecount > 0) {
         featurecount = featurecount - 1;
@@ -1613,17 +1678,23 @@ int trackno,  anacrusis;
 	}
      /* can't zero barcount because I use it for computing maxbarcount */
         else if(bars_on_line >= bars_per_line && i != NULL) {
-		fprintf(outhandle," \\"); freshline();
+		fprintf(outhandle," \\");
+	       	freshline();
 	        bars_on_line=0;}
-      } else {
+      }
+      else {
         if (featurecount == 0) {
           /* note grouping algorithm */
-          if (barsize % 6 == 0) {
-            if (barnotes % 6 == 0) {
+          if ((barsize/parts_per_unitlen) % 3 == 0) {
+            if ( (barnotes/parts_per_unitlen) % 3 == 0
+               &&(barnotes%parts_per_unitlen) == 0) {
               fprintf(outhandle," ");
             };
-          } else {
-            if ((barsize % 4 == 0) && (barnotes % 4 == 0)) {
+          } 
+	  else {
+            if (((barsize/parts_per_unitlen) % 2 == 0)
+                && (barnotes % parts_per_unitlen) == 0
+                && ((barnotes/parts_per_unitlen) % 2 == 0)) {
               fprintf(outhandle," ");
             };
           };
@@ -1659,7 +1730,6 @@ void printQ()
 /* print out tempo for abc */
 {
   float Tnote, freq;
-
   Tnote = mf_ticks2sec((long)((xunit*unitlen)/4), division, tempo);
   freq = 60.0/Tnote;
   fprintf(outhandle,"Q:1/4=%d\n", (int) (freq+0.5));
@@ -1697,21 +1767,25 @@ int sharps;
   if (sharps >= 0) {
     if (sharps == 6) {
       fprintf(outhandle,"K:F#");
-    } else {
+    } 
+    else {
       fprintf(outhandle,"K:%c", sharp[minkey] + 'A' - 'a');
     };
     issharp = 1;
-  } else {
+  } 
+  else {
     if (sharps == -1) {
       fprintf(outhandle,"K:%c", flat[minkey] + 'A' - 'a');
-    } else {
+    } 
+    else {
       fprintf(outhandle,"K:%cb", flat[minkey] + 'A' - 'a');
     };
     issharp = 0;
   };
   if (sharps >= 0) {
     fprintf(outhandle," %% %d sharps\n", sharps);
-  } else {
+  }
+  else {
     fprintf(outhandle," %% %d flats\n", -sharps);
   };
   key[(minkey+1)%12] = 1;
@@ -1724,7 +1798,8 @@ int sharps;
     if (issharp) {
       atog[j] = sharp[t];
       symbol[j] = shsymbol[t];
-    } else {
+    } 
+    else {
       atog[j] = flat[t];
       symbol[j] = flsymbol[t];
     };
@@ -1818,12 +1893,24 @@ char *sig;
   while (t > 1) {
     if (t%2 != 0) {
       fatal_error("Bad key signature, divisor must be a power of 2!");
-    } else {
+    }
+    else {
       t = t/2;
     };
   };
 }
 
+int is_power_of_two(int numb)
+/* checks whether numb is a power of 2 less than 256 */
+{
+int i,k;
+k = 1;
+for (i= 0;i<8;i++) {
+  if(numb == k) return(1);
+  k *= 2;
+  }
+return(0);
+}
 
 int getarg(option, argc, argv)
 /* extract arguments from command line */
@@ -1855,10 +1942,12 @@ int argc;
   while ((place == -1) && (j < argc)) {
     if (strncmp("-", argv[j], 1) != 0) {
       place = j;
-    } else {
-     if (strchr("ambQkco", *(argv[j]+1)) == NULL) {
+    } 
+    else {
+     if (strchr("ambQkcou", *(argv[j]+1)) == NULL) {
        j = j + 1;
-     } else {
+     }
+     else {
        j = j + 2;
      };
     };
@@ -1870,18 +1959,21 @@ int process_command_line_arguments(argc,argv)
 char *argv[];
 int argc;
 {
+  int val;
   int arg;
   arg = getarg("-a", argc, argv);
   if ((arg != -1) && (arg < argc)) {
     anacrusis = readnum(argv[arg]);
-  } else {
+  } 
+  else {
     anacrusis = 0;
   };
   arg = getarg("-m", argc, argv);
   if ((arg != -1) && (arg < argc)) {
     readsig(&asig, &bsig, argv[arg]);
     tsig_set = 1;
-  } else {
+  }
+  else {
     asig = 4;
     bsig = 4;
     tsig_set = 0;
@@ -1889,17 +1981,39 @@ int argc;
   arg = getarg("-Q", argc, argv);
   if (arg != -1) {
     Qval = readnum(argv[arg]);
-  } else {
+  }
+  else {
     Qval = 0;
   };
   arg = getarg("-u", argc,argv);
   if (arg != -1) {
     xunit = readnum(argv[arg]);
-    xunit_set = 1;}
+    xunit_set = 1;
+  }
   else {
 	xunit = 0;
 	xunit_set = 0;
        };
+  arg = getarg("-ppu",argc,argv);
+  if (arg != -1) {
+     val = readnum(argv[arg]);
+     if (is_power_of_two(val)) parts_per_unitlen = val;
+     else {
+	   printf("*error* -ppu parameter must be a power of 2\n");
+           parts_per_unitlen = 2;
+          }
+  }
+  else
+     parts_per_unitlen = 2;
+  arg = getarg("-aul",argc,argv);
+  if (arg != -1) {
+     val = readnum(argv[arg]);
+     if (is_power_of_two(val)) {
+	    unitlen = val;
+	    unitlen_set = 1;}
+        else 
+           printf("*error* -aul parameter must be a power of 2\n");
+      }
   arg = getarg("-bps",argc,argv);
   if (arg != -1)
    bars_per_staff = readnum(argv[arg]);
@@ -1920,24 +2034,33 @@ int argc;
   guessk = (getarg("-gk", argc, argv) != -1);
   keep_short = (getarg("-s", argc, argv) != -1);
   summary = getarg("-sum",argc,argv); 
-  swallow_rests = (getarg("-sr",argc,argv) != -1);
+  swallow_rests = getarg("-sr",argc,argv);
+  if (swallow_rests != -1) {
+	 restsize = readnum(argv[swallow_rests]);
+         if(restsize <1) restsize=1;
+        }
   obpl = getarg("-obpl",argc,argv);
   if (obpl>= 0) bars_per_line=1;
-  if ((asig*4)/bsig >= 3) {
-    unitlen =8;
-  } else {
-    unitlen = 16;
-  };
+  if (!unitlen_set) {
+    if ((asig*4)/bsig >= 3) {
+      unitlen =8;
+     }
+    else {
+      unitlen = 16;
+     };
+   }
   arg = getarg("-b", argc, argv);
   if ((arg != -1) && (arg < argc)) {
     bars = readnum(argv[arg]);
-  } else {
+  }
+  else {
     bars = 0;
   };
   arg = getarg("-c", argc, argv);
   if ((arg != -1) && (arg < argc)) {
     xchannel = readnum(argv[arg]) - 1;
-  } else {
+  }
+  else {
     xchannel = -1;
   };
   arg = getarg("-k", argc, argv);
@@ -1947,7 +2070,8 @@ int argc;
     if (keysig>6)  keysig = keysig%12;
     if (keysig>6)  keysig = keysig - 12;
     ksig_set = 1;
-  } else {
+  } 
+  else {
     keysig = -50;
     ksig_set = 0;
   };
@@ -1957,13 +2081,15 @@ int argc;
   arg = getarg("-o",argc,argv);
   if ((arg != -1) && (arg < argc))  {
     outhandle = efopen(argv[arg],"w");  /* open output abc file */
-  } else {
+  } 
+  else {
     outhandle = stdout;
   };
   arg = getarg("-nt", argc, argv);
   if (arg == -1) {
     no_triplets = 0;
-  } else {
+  } 
+  else {
     no_triplets = 1;
   };
   arg = getarg("-f", argc, argv);
@@ -1973,8 +2099,9 @@ int argc;
   if ((arg != -1) && (arg < argc)) {
     F = efopen(argv[arg],"rb");
 /*    fprintf(outhandle,"%% input file %s\n", argv[arg]); */
-  } else {
-    printf("midi2abc version 2.71\n  usage :\n");
+  }
+  else {
+    printf("midi2abc version 2.73\n  usage :\n");
     printf("midi2abc filename <options>\n");
     printf("         -a <beats in anacrusis>\n");
     printf("         -xa  extract anacrusis from file ");
@@ -1988,10 +2115,13 @@ int argc;
     printf("         -k <key signature> -6 to 6 sharps\n");
     printf("         -c <channel>\n");
     printf("         -u <number of midi pulses in abc time unit>\n");
+    printf("         -ppu <number of parts in abc time unit>\n");
+    printf("         -aul <denominator of L: unit length>\n");
     printf("         [-f] <input file>\n");
     printf("         -o <output file>\n");
     printf("         -s do not discard very short notes\n");
-    printf("         -sr do not notate a short rest after a note\n");
+    printf("         -sr <number> absorb short rests following note\n");
+    printf("           where <number> specifies its size\n");
     printf("         -sum summary\n");
     printf("         -nt do not look for triplets or broken rhythm\n");
     printf("         -bpl <number> of bars printed on one line\n");
@@ -2051,12 +2181,19 @@ int argc;
     postprocess(j);
   };
 
+  if (tsig_set == 1){  /* for -m parameter set up time signature*/
+       header_asig = asig; 
+       header_unitlen = unitlen;
+       header_bsig = bsig;
+  };
+
 /* print abc header block */
   fprintf(outhandle,"X: 1\n"); 
   fprintf(outhandle,"T: from %s\n",argv[arg]); 
   fprintf(outhandle,"M: %d/%d\n", header_asig, header_bsig);
   fprintf(outhandle,"L: 1/%d\n", header_unitlen); 
-  barsize = 2*header_asig*header_unitlen/header_bsig;
+
+  barsize = parts_per_unitlen*header_asig*header_unitlen/header_bsig;
 
 /* compute xunit size for -Q -b options */
   if (Qval != 0) {
@@ -2096,7 +2233,7 @@ int argc;
        keysig = findkey(maintrack);
        if (summary>0) printf("Best key signature = %d flats/sharps\n",keysig);
        }
-       if (gotkeysig == 0) header_keysig = keysig;
+       header_keysig = keysig;
        setupkey(header_keysig);
 
 /* scannotes(maintrack); For debugging */
@@ -2113,7 +2250,8 @@ int argc;
       };
       printtrack(j,anacrusis);
     };
-  } else {
+  }
+  else {
     printtrack(maintrack, anacrusis);
   };
 
@@ -2123,7 +2261,8 @@ int argc;
   if(summary>0) {
    accidentals = keysig;
    if (accidentals <0 )
-     {accidentals = -accidentals;
+     {
+     accidentals = -accidentals;
      printf("Using key signature: %d flats\n", accidentals);
      }
    else

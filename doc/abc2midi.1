@@ -1,4 +1,4 @@
-.TH ABC2MIDI 1 "2 May 2004"
+.TH ABC2MIDI 1 "12 June 2004"
 .SH NAME
 \fBabc2midi\fP \- converts abc file to MIDI file(s)
 .SH SYNOPSIS
@@ -153,7 +153,24 @@ number should normally be a multiple of 12.
 %%MIDI grace a/b
 .PP
 sets the fraction of the next note that grace notes will take up. a
-must be between 1 and b-1.
+must be between 1 and b-1. The grace notes may not sound natural
+in this approach, since the length of the individual grace notes
+vary with the complexity of the grace and the length of the
+following note. A different approach (which is now the default)
+assumes that the grace notes always have a fixed duration.
+To use the other approach you would specify,
+
+%%MIDI gracedivider b
+
+where b specifies how many parts to divide the unit length
+specified by the L: field command. For example if b = 4 and
+L: = 1/8, then every grace note would be 1/(8*4) or a 32nd
+note. Time would be stolen from the note to which the grace
+notes are applied. If that note is not long enough to handle
+the grace then the grace notes would be assigned 0 duration.
+
+
+
 .PP
 %%MIDI chordname name n1 n2 n3 n4 n5 n6
 .PP
@@ -322,7 +339,7 @@ James Allwright <J.R.Allwright@westminster.ac.uk>
 .SH SUPPORTED
  by Seymour Shlien <seymour.shlien@crc.ca>
 .SH VERSION
-This man page describes abc2midi version 1.43,  May 02 2004.
+This man page describes abc2midi version 1.44,  June 12 2004.
 .SH COPYRIGHT
 Copyright 1999 James Allwright
 .PP

@@ -1,7 +1,7 @@
 abcMIDI :   abc <-> MIDI conversion utilities
 
-midi2abc version 2.71
-abc2midi version 1.43
+midi2abc version 2.73
+abc2midi version 1.45
 abc2abc  version 1.29
 yaps     version 1.24
 
@@ -99,6 +99,8 @@ midi2abc <options>
          -sum summary
          -nt do not look for triplets or broken rhythm
          -u number of midi pulses per abc time unit
+         -ppu parts per abc unit length (power of 2 only)
+         -aul denominator of abc unit length (power of 2 only)
          -obpl one bar per line (deprecated)
          -bpl <number> of bars per printed line
          -bps <number> of bars per staff line
@@ -117,8 +119,6 @@ midi2abc -f file.mid > file.abc
 or
 midi2abc -f file.mid -o file.abc
 
-If the MIDI file is computer-generated, you may be able to extract the time
-signature from it using the -xm option.
 By default the program uses the key signature and time signature
 specified in the MIDI file. If the key signature is not specified,
 the program will automatically determine the key signature by
@@ -127,16 +127,52 @@ found, then 4/4 is assumed. You may also specify a time signature
 using the -m option.  Allowable time signatures are C,
 4/4, 3/8, 2/4 and so on.
 
-If the tune has an anacrusis, you should specify the number in half
-unit lengths assumed in the abc file  using the -a option. For example,
+If the tune has an anacrusis, you should specify the number in quantum
+units lengths. By default a quantum unit length is one half of
+the unit length note specified by the L: command. (However, this
+can be changed using the -ppu runtime parameter.)  For example,
 if the meter is 6/8 and L: is set to 1/8, a half unit length is
-1/16. An anacrusis of a quarter note would be specified as 4.
+1/16 note. An anacrusis of a quarter note would be specified as 4.
 
 The -bpl and -bps control the formatting of the output. -bpl controls
 the number of bars put in every line. The lines are joined together
 with a backslash (\) until the desired number of bars per staff are
 printed. Since -bpl 1 is equivalent to -obpl, the latter parameter
 is being deprecated.
+
+Midi2abc has evolved quite a lot since James Allwright has
+transferred support and development to me [SS]. Most of the
+MIDI files posted on the web site appear to have been generated
+from a music notation program and therefore convert cleanly
+to abc files using all the information built into the file.
+Therefore midi2abc no longer automatically estimates the number 
+of MIDI pulses per note from the file statistics, but uses
+the indications embedded in the file. However, the user still
+has the option of calling these functions or changing this
+parameter by using the run time parameters Use only one of -u -gu 
+-b and -Q or better none. The -u parameter, allows you
+to specify the number of MIDI pulses per unit length, assuming
+you know what it should be. To find out the value that
+midi2abc is using, run the program with the -sum parameter.
+
+Midi2abc quantizes the note durations to a length of half
+the L: value. Thus if L: was set to 1/8, then the smallest
+note that midi2abc would extract would be a 1/16 th note.
+This is the basic quantum unit.  The L: note length is set
+by midi2abc on the basis of the time signature. For time 
+signatures less than 3/4 it uses an L: 1/16 and for others 
+it uses a length of 1/8. This convention was probably choosen 
+so that midi2abc does not quantize the notes to a too fine 
+level producing outputs like  C2-C/4 D2-D/8 etc which would 
+be difficult to read.  For some music, this may be too coarse 
+and it may be preferable to allow the user take control of 
+the L: value or allow the splitting of the L: value into 
+smaller parts.  Two new run time parameters were introduced:
+-ppu specifies the number of parts to split the L: note. 
+It should be a power of 2 (eg. 1,2,4,8,16 ...) and by default 
+it remains as 2 as before. The -aul specifies the L: value to use,
+for example, to get L: 1/32 you would put -aul 32.
+
 
 -------------------------------------------------------------------------
 

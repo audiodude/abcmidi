@@ -33,7 +33,7 @@
 
 /* enables reading V: indication in header */
 #define XTEN1 1
-#define INFO_OCTAVE_DISABLED 1
+/*#define INFO_OCTAVE_DISABLED 1*/
 
 #include "abc.h"
 #include "parseabc.h"
@@ -174,7 +174,7 @@ int barchecking;
 int middle_c;
 extern int channels[MAXCHANS + 3];
 extern int additive;
-int gfact_num, gfact_denom;
+int gfact_num, gfact_denom, gfact_method;  /* for handling grace notes */
 
 /* karaoke handling */
 int karaoke, wcount;
@@ -434,7 +434,7 @@ char **filename;
   atext = (char**) checkmalloc(maxtexts*sizeof(char*));
   words = (char**) checkmalloc(maxwords*sizeof(char*));
   if ((getarg("-h", argc, argv) != -1) || (argc < 2)) {
-    printf("abc2midi version 1.43\n");
+    printf("abc2midi version 1.45\n");
     printf("Usage : abc2midi <abc file> [reference number] [-c] [-v] ");
     printf("[-o filename]\n");
     printf("        [-t] [-n <value>] [-RS]\n");
@@ -800,7 +800,7 @@ char *package, *s;
         event_error(msg);
       } else {
         if (pastheader) {
-          addfeature(SETGRACE, a, 0, b);
+          addfeature(SETGRACE, 1, a, b);
         } else {
           gfact_num = a;
           gfact_denom = b;
@@ -808,6 +808,24 @@ char *package, *s;
       };
       done = 1;
     };
+
+    if(strcmp(command,"gracedivider") == 0) {
+      int b;
+      char msg[40];
+      skipspace(&p);
+      b = -1;
+      b = readnump(&p);
+     if (b < 2)
+       {
+       sprintf(msg, "a number 2 or larger should follow MIDI gracedivider");
+      event_error(msg);
+      }
+      if (pastheader)
+         addfeature(SETGRACE, 0, 1, b);
+      else {gfact_denom = b; gfact_method = 0;}
+      done = 1;
+    }
+
     if (strcmp(command, "gchordon") == 0) {
       addfeature(GCHORDON, 0, 0, 0);
       done = 1;
@@ -2621,9 +2639,26 @@ static void tiefix()
   };
 }
 
+static void applygrace_orig(int);
+static void applygrace_new(int);
+
 static void applygrace(place)
 int place;
+{
+if (gfact_method)  applygrace_orig(place); 
+else applygrace_new(place);
+}
+
+
+static void applygrace_orig(place)
+int place;
 /* assign lengths to grace notes before generating MIDI */
+/* This version adjusts the length of the grace notes
+ * based on the length of the following note, the
+ * number of the notes in the group of grace notes
+ * and the desired fraction, gfact_num/gfact_denom.
+ * This does not sound very natural.
+ */
 {
   int start, end, p;
   int next_num, next_denom;
@@ -2721,6 +2756,133 @@ int place;
   };
 }
 
+
+static void applygrace_new(place)
+int place;
+/* assign lengths to grace notes before generating MIDI */
+/* In this version each grace note has a predetermined
+ * length, eg, (1/64 th note) and the total length of
+ * the group of grace notes is stolen from the following
+ * note. If the length of the following note is note
+ * long enough to accommodate the group of grace notes,
+ * then all the grace notes are given a length of 0.
+ */
+{
+  int start, end, p;
+  int next_num, next_denom;
+  int fact_num, fact_denom;
+  int grace_num, grace_denom;
+  int j;
+  int nextinchord;
+  int hostnotestart, hostnoteend;
+  int  adjusted_num, adjusted_den;
+
+  j = place;
+  start = -1;
+  while ((j < notes) && (start == -1)) {
+    if (feature[j] == GRACEON) {
+      start = j;
+    };
+    if (feature[j] == GRACEOFF) {
+      event_error("} with no matching {");
+    };
+    j = j + 1;
+  };
+  /* now find end of grace notes */
+  end = -1;
+  while ((j < notes) && (end == -1)) {
+    if (feature[j] == GRACEOFF) {
+      end = j;
+    };
+    if ((feature[j] == GRACEON) && (j != start - 1)) {
+      event_error("nested { not allowed");
+    };
+    j = j + 1;
+  };
+  /* now find following note */
+  nextinchord = 0;
+  hostnotestart = -1;
+  while ((hostnotestart == -1) && (j < notes)) {
+    if ((feature[j] == NOTE) || (feature[j] == REST)) {
+      hostnotestart = j;
+    };
+    if (feature[j] == GRACEON) {
+      event_error("Intervening note needed between grace notes");
+    };
+    if (feature[j] == CHORDON) {
+      nextinchord = 1;
+    };
+    j = j + 1;
+  };
+  hostnoteend = -1;
+  if (nextinchord) {
+    while ((hostnoteend == -1) && (j < notes)) {
+      if (feature[j] == CHORDOFF) {
+        hostnotestart = j;
+      };
+      j = j + 1;
+    };
+  } else {
+    hostnoteend = hostnotestart;
+  };
+  if (hostnotestart == -1) {
+    event_error("No note found to follow grace notes");
+  } else {
+    /* count up grace units */
+    grace_num = 0;
+    grace_denom = 1;
+    p = start;
+    while (p <= end) {
+      if ((feature[p] == NOTE) || (feature[p] == REST)) {
+        grace_num = grace_num * denom[p] + grace_denom * num[p];
+        grace_denom = grace_denom * denom[p];
+        reduce(&grace_num, &grace_denom);
+      };
+      p = p + 1;
+    };
+
+/* new stuff starts here [SS] 2004/06/11 */
+
+/* is the following note long enough */
+   adjusted_num = num[p]*grace_denom*gfact_denom - denom[p]*grace_num;
+   adjusted_den = denom[p]*grace_denom*gfact_denom;
+   if (adjusted_den <0.0) /* not long enough*/
+      {
+      p = start;
+      while (p <= end)
+        { 
+        lenmul(p,0,1);
+	p = p+1;
+	}
+      return;
+      }
+
+    /* adjust host note or notes */
+    p = hostnotestart;
+    while (p <= hostnoteend) {
+      if ((feature[p] == NOTE) || (feature[p] == REST) || 
+          (feature[p] == CHORDOFF)) {
+        num[p] = adjusted_num;
+        denom[p] = adjusted_den;
+        reduce(&num[p], &denom[p]);
+      };
+      p = p + 1;
+    };
+
+    fact_num = 1;
+    fact_denom =gfact_denom;
+    reduce(&fact_num, &fact_denom);
+    /* adjust length of grace notes */
+    p = start;
+    while (p <= end) {
+      lenmul(p, fact_num, fact_denom);
+      p = p + 1;
+    };
+  };
+}
+
+
+
 static void dograce()
 /* assign lengths to grace notes before generating MIDI */
 {
@@ -2732,7 +2894,8 @@ static void dograce()
       applygrace(j);
     };
     if (feature[j] == SETGRACE) {
-      gfact_num = pitch[j];
+      gfact_method = pitch[j];
+      gfact_num =  num[j];
       gfact_denom = denom[j];
     };
     if (feature[j] == LINENUM) {
@@ -2972,7 +3135,7 @@ static void startfile()
   notes = 0;
   ntexts = 0;
   gfact_num = 1;
-  gfact_denom = 3;
+  gfact_denom = 4;
   hornpipe = 0;
   karaoke = 0;
   retain_accidentals = 1;

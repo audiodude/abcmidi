@@ -21,7 +21,7 @@
 # KANDR selects functions prototypes without argument prototypes.
 #
 CC=gcc
-CFLAGS=-c -ansi -DANSILIBS -Wformat -Wtraditional
+CFLAGS=-c -g -ansi -DANSILIBS -Wformat
 # -ansi forces ANSI compliance
 LNK=gcc
 
