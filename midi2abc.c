@@ -765,7 +765,8 @@ int trackno;
 
 
 int quantize(trackno, xunit)
-/* work out how long each note is in musical time units */
+/* Work out how long each note is in musical time units.
+ * The results are placed in note.playnum              */
 int trackno, xunit;
 {
   struct listx* j;
@@ -783,12 +784,18 @@ int trackno, xunit;
   j = track[trackno].head;
   while (j != NULL) {
     this = j->note;
+    /* this->xnum is the quantized inter onset time */
+    /* this->playnum is the quantized note length   */
     this->xnum = (2*(this->dtnext + spare + (xunit/4)))/xunit;
     this->playnum = (2*(this->tplay + (xunit/4)))/xunit;
     if ((this->playnum == 0) && (keep_short)) {
       this->playnum = 1;
     };
-    if ((swallow_rests) && (this->xnum - this->playnum < 2)) {
+    /* In the event of short rests, the inter onset time
+     * will be larger than the note length. However, for
+     * chords the inter onset time can be zero.          */
+    if ((swallow_rests) && (this->xnum - this->playnum < 2)
+		        && this->xnum > 0) {
       this->playnum = this->xnum;
     };
     this->denom = 2;
@@ -1967,7 +1974,7 @@ int argc;
     F = efopen(argv[arg],"rb");
 /*    fprintf(outhandle,"%% input file %s\n", argv[arg]); */
   } else {
-    printf("midi2abc version 2.70\n  usage :\n");
+    printf("midi2abc version 2.71\n  usage :\n");
     printf("midi2abc filename <options>\n");
     printf("         -a <beats in anacrusis>\n");
     printf("         -xa  extract anacrusis from file ");

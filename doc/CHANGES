@@ -1285,3 +1285,28 @@ a mixture of numeric and symbolic codes for voices.
 If you use symbols for voices, use them for all
 voices.
 
+
+20 March 2004
+
+Midi2abc fails to extract chords when the -sr 
+(swallow short rests) option is selected.
+The problem occurs in the function quantize()
+in the file midi2abc. When the -sr option is
+specified, the note's length is determined
+more by its inter onset time interval rather
+(time between onset times of two adjacent
+notes) rather than the time between note off
+and note on. In the event of several notes
+played at the same time, the inter onset
+times will be zero for some notes. Because
+quantize() failed to test for this condition,
+the function assigned a note length of zero
+to those notes and they do not appear in the
+chord. The problem was fixed by also checking
+for zero inter onset time when the -sr option
+is active.
+
+
+Added a bagpipe tune to demo.abc to illustrate
+the use of the %%MIDI drone commands.
+
