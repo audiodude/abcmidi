@@ -22,7 +22,7 @@
 /* yapstree.c - back-end for abc parser. */
 /* generates a data structure suitable for typeset music */
 
-#define VERSION "1.30 November 20 2004"
+#define VERSION "1.31 December 17 2004"
 #include <stdio.h>
 #ifdef USE_INDEX
 #define strchr index
@@ -1183,9 +1183,11 @@ char** filename;
   fileopen = 0;
   filearg = getarg("-o", argc, argv);
   if (filearg != -1) { 
-    strcpy(outputname, argv[filearg]);
+    /*strcpy(outputname, argv[filearg]); security risk buffer overflow */
+    strncpy(outputname, argv[filearg],256);
   } else {
-    strcpy(outputname, argv[1]);
+    /* strcpy(outputname, argv[1]); security risk: buffer overflow */
+    strncpy(outputname, argv[1],256);
     place = strchr(outputname, '.');
     if (place == NULL) {
       strcat(outputname, ".ps");

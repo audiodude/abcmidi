@@ -44,7 +44,7 @@
  *
  */
 
-#define VERSION "2.76 December 04 2004"
+#define VERSION "2.77 December 17 2004"
 
 /* Microsoft Visual C++ Version 6.0 or higher */
 #ifdef _MSC_VER
@@ -243,7 +243,7 @@ void event_error(s)
 char *s;
 /* problem encountered but OK to continue */
 {
-  char msg[160];
+  char msg[256];
 
   sprintf(msg, "Error: Time=%ld Track=%d %s\n", Mf_currtime, trackno, s);
   printf(msg);
@@ -425,8 +425,7 @@ char *mode;
     FILE *f;
 
     if ( (f=fopen(name,mode)) == NULL ) {
-      char msg[80];
-
+      char msg[256];
       sprintf(msg,"Error - Cannot open file %s",name);
       fatal_error(msg);
     }
@@ -603,8 +602,7 @@ char *mess;
     } 
     else {
       if (leng < BUFFSIZE - 3) {
-        /*sprintf(buffer2, "%%%s", textbuff); */
-        sprintf(buffer2, " %s", textbuff);
+        sprintf(buffer2, " %s", textbuff); 
         addtext(buffer2,0);
       };
     };

@@ -2542,3 +2542,143 @@ end of the function txt_metatxt() was modified.
 
 Midi2abc should place the input file name in the title
 line instead of null. This has been changed.
+
+
+December 09 2004
+
+Abc2midi new feature: introduced %%MIDI randomchordattack n.
+The delay between notes in a chord will vary randomly between
+0 and n-1 MIDI units. It is recommended that n is not longer
+than the shortest chord. (If the shortest chord consisting
+of two notes is a 1/16 note then n should be not greater than
+480/4 = 120. If there are three notes in the chord n should
+be less than 480/8 since the delays add up.)
+
+December 12 2004
+
+New feature: chord extension applied to tied chords.
+
+In order for abc2midi to handle the syntax [CEG]3-[CEG]2 or
+something similar, it was necessary to make more changes
+in the code store.c. The code dotie() was not easy to
+figure out. To avoid working with this code, abc2midi
+patches up the feature,num,denom arrays so that it
+appears the same as if the old syntax [C3-E3-G3-][C2E2G2]
+was used instead. New functions, insertfeature() and
+removefeature() were written to insert or remove a feature
+in the middle of the arrays. The dotie() function was
+modified to also detect the CHORDOFFEX feature and
+treat it the same way as a CHORDOFF. The function
+fix_enclosed_note_lengths was modified to also catch
+the TNOTE feature and treat as a NOTE feature. A
+new function patchup_chordtie was introduced. The
+function stuffs a TIE feature after each note in the
+chord and returns the position of the first TIE.
+Many changes were made to the tiefix function().
+Another local variable, chord_end was added. Chord_start
+and chord_end keep track of the feature index positions
+of the last chord scanned. If a TIE feature is immediately
+preceeded by a CHORDOFF or CHORDOFFEX feature, then
+that tie is stripped off and new ties are stuffed
+into the chord using the function patch_chordtie.
+Tiefix then backups into this chord so it can run
+dotie on all the internal ties.
+
+December 17 2004
+
+Finished debugging chord tie feature. Tiefix no
+longer runs fix_enclosed_note_length when it
+backs up into the chord.
+
+
+Abc2midi:
+Limin Wang discovered and  D.J. Bernstein reported 
+two unprotected buffer overflows in store.c.  This
+allows an attacker to gain control of the computer 
+through a malicious abc file in an email message or
+from a web page that is fed into abc2midi. This
+applies to all versions of abc2midi.
+
+The buffers are now protected.
+
+Yaps, midi2abc: minor changes to reduce likelihood
+of buffer overflow.
+
+
+December 18 2004
+
+Abc2midi new feature:
+Abc2midi recognizes the !f!, !pp!, etc indications
+and adjusts the audio level in the output MIDI file accordingly.
+Unfortunately this may get in the way for multivoiced abc files
+where the indications are placed in one voice but not the others.
+When the file is typeset by abcm2ps the output looks fine, but
+one of the voices is inaudible in the MIDI file. An example,
+is shown below.
+
+X: 1
+T:ff_pp_1_1
+C:ff_pp_1_1: the second voice is covered by the first one
+C:but the score could be interpreted as they both have to
+C:be played with the same intensity
+M:4/4
+L:1/4
+Q:1/4=100
+%%MIDI transpose -12
+%%staves (1 2)
+V: 1 clef=treble
+V: 2 clef=treble
+%V: 3 clef=treble
+%
+K:C
+%%measurenb 0
+%
+[V: 1]  G A c e | e c A G | A G A G |
+[V: 2] !ppp!C E E E | G E E E | F E D C |
+
+Things get more complicated when 2 or 3 voices share one stave
+(eg. classical guitar notation). It is not desirable to have
+to many "p"s printed over and under the stave. Abc2midi
+does not understand !crescendo! and !diminuendo! notation.
+A simple but not a perfect solution, is to introduce a new
+option in abc2midi which will tell abc2midi to ignore all
+dynamic indications.
+
+Fix: thanks to Michele for the code and suggestion. A new
+option -NFNP (no f no p) was introduced in store.c. Abcguide.txt
+and abcmidi.1 documentation was also updated.
+
+
+
+Abc2midi:  Wrong tempo when L: missing in a multivoiced file. 
+Abc2midi should assume a L:1/8 when the meter is 3/4 or larger
+and L:1/16 otherwise in the event that the default length of
+a note is not specified.. This works correctly for most abc
+files but fails in the following example. (The tune is
+played at the wrong tempo.)
+
+X: 1
+T: no L
+M: 3/4
+L: 1/8
+Q: 80
+V:1 clef=treble
+V:2 clef=treble
+K: G
+V: 1
+abcdf2|gabcG2|
+V: 2
+ABCDF2|ABCDF2|
+
+Analysis: abc2midi checks for missing L: in the function 
+headerprocess() when it reaches the start of the tune body
+(the first K: field).  If the note length,  global.default_length,
+was not set at this point then it is set to 8 or 16. When a new
+voice is created by event_voice, it assumes a note length
+specified by global.default_length. In the above example,
+an event_voice is called prior to the start of the body 
+so global.default_length is still undefined. The default_length
+for the voice remains undefined and abc2midi runs unpredictably.
+
+Fix: headerprocess now sets default_length to global.default_length
+for any voices that have already been created.

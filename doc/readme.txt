@@ -1,9 +1,9 @@
 abcMIDI :   abc <-> MIDI conversion utilities
 
-midi2abc version 2.76 December 04 2004
-abc2midi version 1.54 December 04 2004
+midi2abc version 2.77 December 17 2004
+abc2midi version 1.55 December 18 2004
 abc2abc  version 1.35 November 09 2004
-yaps     version 1.30 November 20 2004
+yaps     version 1.31 December 17 2004
 midicopy version 1.01 July 17 2004
 
 24th January 2002
@@ -13,7 +13,7 @@ J.R.Allwright@westminster.ac.uk
 University of Westminster,
 London, UK
 
-13 September 2003
+18 December 2004
 
 Seymour Shlien
 seymour.shlien@crc.ca
@@ -206,7 +206,9 @@ Usage : abc2midi <abc file> [reference number] [-c] [-v] [-o filename]
         -RS use 3:1 instead of 2:1 for broken rhythms
         -NAR suppress assuming repeat warning
         -Q <tempo> in quarter notes/minute
+        -NFNP ignore all dynamic indications (!f! !ff! !p! etc.)
         -ver prints version number and exits
+
  The default action is to write a MIDI file for each abc tune
  with the filename <stem>N.mid, where <stem> is the filestem
  of the abc file and N is the tune reference number. If the -o
@@ -403,10 +405,10 @@ for the executables to run.
 -------------------------------------------------------------------------
 Bug reports
 
-Please report any bugs you find in abc2midi, midi2abc or abc2abc to 
-J.R.Allwright@westminster.ac.uk (preferably with an example so that I
-can replicate the problem). Better still, send me a patch to fix the 
-problem! If you add your own features to the code that other people 
-might want to use then let me know - I may or may not want to add them 
-to the official version, but I'll put up a link to your version. So
-far I have been maintaining the code, but I don't guarantee anything.
+Please report any bugs you find in abc2midi, midi2abc, midicopy, or 
+abcmatch, abc2abc to seymour.shlien@crc.ca (preferably with 
+an example so that I can replicate the problem). Better still, send 
+me the repaired source files which fix the problem! If you add your
+own features to the code that other people might want to use then let 
+me know.  I may or may not want to add them to the official version.
+So far I have been maintaining the code, but I don't guarantee anything.

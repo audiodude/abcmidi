@@ -879,7 +879,13 @@ behave as in earlier versions. The delay n is in MIDI time units
 where there are 480 units in a quarter note beat. The program
 may not run correctly if n is too large and there are short
 chords.
-  
+
+%%MIDI randomchordattack n
+
+where n is a small number. This is similar to above, except the
+delay of each note in the chord varies randomly between 0 and n-1.
+Therefore each chord is played differently.
+
 
 Compatibility with proposed abc standard version 2.0
 

@@ -47,6 +47,13 @@
 #ifdef USE_INDEX
 #define strchr index
 #endif
+#include <stdlib.h>
+
+
+float ranfrac ()
+{
+return rand()/(float) RAND_MAX;
+}
 
 void setbeat();
 
@@ -171,6 +178,7 @@ int drum_ptr, drum_on;
 int notecount=0;  /* number of notes in a chord [ABC..] */
 int notedelay=10;  /* time interval in MIDI ticks between */
                   /*  start of notes in chord */
+int chordattack=0;
 int totalnotedelay=0; /* total time delay introduced */
 
 void reduce(a, b)
@@ -1453,6 +1461,10 @@ char* s;
     notedelay = readnump(&p);
     done = 1;
   };
+  if (strcmp(command,"randomchordattack") == 0) {
+    chordattack = readnump(&p);
+    done = 1;
+  };
   if (done == 0) {
     event_error("Command not recognized");
   };
@@ -1839,6 +1851,7 @@ int xtrack;
         if (inchord) {
            notecount++;
            if (notecount > 1) {
+                if(chordattack > 0) notedelay = chordattack*ranfrac();
                 delta_time += notedelay;
                 totalnotedelay += notedelay;
                 }

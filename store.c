@@ -31,7 +31,7 @@
  * Wil Macaulay (wil@syndesis.com)
  */
 
-#define VERSION "1.54 December 04 2004"
+#define VERSION "1.55 December 18 2004"
 /* enables reading V: indication in header */
 #define XTEN1 1
 /*#define INFO_OCTAVE_DISABLED 1*/
@@ -171,6 +171,7 @@ int userfilename = 0;
 char *outname = NULL;
 char *outbase = NULL;
 int check;
+int nofnop; /* for suppressing dynamics (ff, pp etc) */
 int ntracks;
 
 /* bar length checking */
@@ -434,6 +435,13 @@ char **filename;
      printf("%s\n",VERSION);
      exit(0);
   }
+/* look for "no forte no piano" option */
+  if (getarg("-NFNP", argc, argv) != -1) {
+    nofnop = 1;
+  } else {
+    nofnop = 0;
+  }
+
   maxnotes = 500;
   /* allocate space for notes */
   pitch = checkmalloc(maxnotes*sizeof(int));
@@ -449,7 +457,7 @@ char **filename;
     printf("abc2midi version %s\n",VERSION);
     printf("Usage : abc2midi <abc file> [reference number] [-c] [-v] ");
     printf("[-o filename]\n");
-    printf("        [-t] [-n <value>] [-RS]\n");
+    printf("        [-t] [-n <value>] [-RS] [-NFNP]\n");
     printf("        [reference number] selects a tune\n");
     printf("        -c  selects checking only\n");
     printf("        -v  selects verbose option\n");
@@ -460,6 +468,7 @@ char **filename;
     printf("        -RS use 3:1 instead of 2:1 for broken rhythms\n");
     printf("        -NAR suppress assuming repeat warning\n");
     printf("        -Q default tempo (quarter notes/minute)\n");
+    printf("        -NFNP don't process !p! or !f!-like fields\n");
     printf(" The default action is to write a MIDI file for each abc tune\n");
     printf(" with the filename <stem>N.mid, where <stem> is the filestem\n");
     printf(" of the abc file and N is the tune reference number. If the -o\n");
@@ -534,6 +543,9 @@ char *s;
 {
   char msg[200];
 
+  /* to prevent possible buffer overflow in sprintf, which is */
+  /* a security risk,  we truncate s */
+  if (strlen(s) > 199) s[199] = '\0';
   sprintf(msg, "Ignoring text: %s", s);
   event_warning(msg);
 }
@@ -683,6 +695,43 @@ int f, p, n, d;
   };
 }
 
+static void insertfeature(f, p, n, d, loc)
+/* insert feature in internal table */
+int f,p,n,d,loc;
+{ int i;
+  notes = notes + 1;
+  if (notes >= maxnotes) {
+    maxnotes = autoextend(maxnotes);
+  };
+  for (i=notes;i>loc;i--) {
+    feature[i] = feature[i-1];
+    pitch[i] = pitch[i-1];
+    pitchline[i] = pitchline[i-1];
+    num[i] = num[i-1];
+    denom[i] = denom[i-1];
+    };
+  feature[loc] = f;
+  pitch[loc]   = p;
+  num[i]       = n;
+  denom[i]     = d;
+  pitchline[i] = 0;
+}
+
+static void removefeature(loc)
+int loc;
+{
+  int i;
+  for (i=loc;i<notes;i++)
+    {
+    feature[i] = feature[i+1];
+    pitch[i]   = pitch[i+1];
+    num[i]     = num[i+1];
+    denom[i]   = denom[i+1];
+    pitchline[i] = pitch[i+1];
+    }
+  notes--;
+}
+
 void event_linebreak()
 /* reached end of line in abc */
 {
@@ -737,6 +786,7 @@ char *package, *s;
   char msg[200], command[40];
   char *p;
   int done;
+  int bytesleft;
 
   if (strcmp(package, "MIDI") == 0) {
     int ch;
@@ -1002,7 +1052,18 @@ char *package, *s;
     if (done == 0)  
     {
     strcpy(msg, "%");
+/* guard against buffer overflow - security risk */
+    if (strlen(package) > 200) {
+       event_warning("event_specific: possible buffer overflow");
+       return;
+       }
     strcat(msg, package);
+    bytesleft = 200-strlen(msg);;
+    if(bytesleft < 0) return;
+    if (strlen(s)>bytesleft) {
+       event_warning("event_specific: possible buffer overflow");
+       return;
+       }
     strcat(msg, s);
     event_comment(msg);
     }
@@ -1590,6 +1651,7 @@ int t;
   };
 }
 
+
 void event_tie()
 /* a tie - has been encountered in the abc */
 {
@@ -1880,6 +1942,8 @@ static void brokenadjust()
     };
   };
 }
+
+
 
 static void marknotestart()
 /* voice data structure keeps a record of last few notes encountered */
@@ -2431,6 +2495,8 @@ char* s;
     *q = '\0';
   };
   done = 0;
+/* add nofnop ... */
+if (nofnop == 0) {
   if (strcmp(p, "ppp") == 0) {
     event_specific("MIDI", "beat 30 20 10 1");
     done = 1;
@@ -2463,6 +2529,7 @@ char* s;
     event_specific("MIDI", "beat 127 125 110 1");
     done = 1;
   };
+}; /* end nofnop */
   if (strcmp(p, "drum") == 0) {
     addfeature(DRUMON, 0, 0, 0);
     if ((drumvoice != 0) && (drumvoice != v->indexno)) {
@@ -2654,6 +2721,7 @@ int j, xinchord;
           inchord = 1;
           break;
         case CHORDOFF:
+        case CHORDOFFEX:
           inchord = 0;
           /* subtract time from tied time */
           addfract(&tied_num, &tied_denom, -num[place], denom[place]);
@@ -2678,13 +2746,27 @@ static void fix_enclosed_note_lengths(int from, int end)
 int j;
 for (j = from; j < end; j++)
   {
-  if (feature[j] == NOTE) 
+  if (feature[j] == NOTE || feature[j] == TNOTE) 
     {
       num[j] = num[end];
       denom[j] =denom[end]; 
     }
   }
 }
+
+
+static int patchup_chordtie(int chordstart,int chordend)
+{
+int i,tieloc;
+for (i=chordend;i>=chordstart;i--) {
+	if(feature[i]==NOTE && feature[i+1] != TIE) {
+             insertfeature(TIE,0,0,0,i+1);
+	     tieloc = i+1;
+	}
+     }
+ return tieloc;
+}
+
 
 static void tiefix()
 /* connect up tied notes and cleans up the */
@@ -2693,22 +2775,26 @@ static void tiefix()
   int j;
   int inchord;
   int chord_num, chord_denom;
-  int chord_start;
+  int chord_start,chord_end;
+  int nochordfix;
 
   j = 0;
   inchord = 0;
+  nochordfix=0;
   while (j<notes) {
     switch (feature[j]) {
     case CHORDON:
       inchord = 1;
       chord_num = -1;
-      j = j + 1;
       chord_start = j;
+      j = j + 1;
       break;
     case CHORDOFFEX:
-      fix_enclosed_note_lengths(chord_start,j);
+      if(nochordfix == 0) fix_enclosed_note_lengths(chord_start,j);
       inchord = 0;
+      chord_end=j;
       j = j + 1;
+      nochordfix=0;
       break;
     case CHORDOFF:
       if (!((!inchord) || (chord_num == -1))) {
@@ -2716,6 +2802,7 @@ static void tiefix()
         denom[j] = chord_denom; 
       };
       inchord = 0;
+      chord_end=j;
       j = j + 1;
       break;
     case NOTE:
@@ -2735,6 +2822,14 @@ static void tiefix()
       j = j + 1;
       break;
     case TIE:
+      if (chord_end+1 == j) { /* did a TIE connect with a chord */
+	      removefeature(j);
+	      /* patchup and backtrack */
+	      j = patchup_chordtie(chord_start,chord_end);
+	      inchord=1;
+             /* make sure we don't run fix_enclosed_notes_again */
+              nochordfix=1; 
+              }
       dotie(j, inchord);
       j = j + 1;
       break;
@@ -3281,6 +3376,7 @@ static void headerprocess()
 /* the header and the start of the tune */
 {
   int t_num, t_denom;
+  struct voicecontext *p;
 
   if (headerpartlabel == 1) {
     part_start[(int)part.st[0] - (int)'A'] = notes;
@@ -3301,6 +3397,13 @@ static void headerprocess()
       global.default_length = 8;
     };
   };
+/* ensure default_length is defined for all voices */
+  p = head;
+  while ((p != NULL)) {
+    if (p->default_length == -1) p->default_length=global.default_length;
+    p = p->next;
+  };
+
   bar_num = 0;
   bar_denom = 1;
   set_meter(time_num, time_denom);
