@@ -55,6 +55,7 @@ int newspacing; /* was -s option selected ? */
 int barcheck, repcheck; /* indicate -b and -r options selected */
 int echeck; /* was error-checking turned off ? (-e option) */
 int newbreaks; /* was -n option selected ? */
+int nodouble_accidentals;
 int totalnotes, notecount; 
 int bars_per_line; /* number supplied after -n option */
 int barcount;
@@ -67,6 +68,8 @@ int transpose; /* number of semitones to transpose by (-t option) */
 struct fract lenfactor; /* fraction to scale note lengths; -v,-d options */
 int newkey; /* key after transposition (expressed as no. of sharps) */
 int lines; /* used by transposition */
+int orig_key_number; /* used for gchord transposition */
+int new_key_number;  /* used for gchord transposition */
 int oldtable[7], newtable[7]; /* for handling transposition */
 int inchord; /* are we in a chord [ ] ? */
 int ingrace; /* are we in a grace note set { } ? */
@@ -437,7 +440,7 @@ char** filename;
   int targ, narg;
 
   if ((getarg("-h", argc, argv) != -1) || (argc < 2)) {
-    printf("abc2abc version 1.26\n");
+    printf("abc2abc version 1.28\n");
     printf("Usage: abc2abc <filename> [-s] [-n X] [-b] [-r] [-e] [-t X]\n");
     printf("       [-u] [-d] [-v] [-V X] [-X n]\n");
     printf("  -s for new spacing\n");
@@ -446,6 +449,7 @@ char** filename;
     printf("  -r to remove repeat checking\n");
     printf("  -e to remove all error reports\n");
     printf("  -t X to transpose X semitones\n");
+    printf("  -nda No double accidentals in guitar chords\n");
     printf("  -u to update notation ([] for chords and () for slurs)\n");
     printf("  -d to notate with doubled note lengths\n");
     printf("  -v to notate with halved note lengths\n");
@@ -455,6 +459,7 @@ char** filename;
   } else {
     *filename = argv[1];
   };
+  nodouble_accidentals = 0;   /* use correct guitar chords */
   if (getarg("-u", argc, argv) == -1) {
     cleanup = 0;
   } else {
@@ -532,6 +537,9 @@ char** filename;
       };
     };
   };
+  targ = getarg("-nda",argc,argv);
+  if (targ != -1) nodouble_accidentals = 1;
+
   targ = getarg("-V", argc, argv);
   if (targ != -1) {
     selected_voice  = readnumf(argv[targ]);
@@ -1212,9 +1220,9 @@ static void start_tune()
   inlinefield = 0;
   if (barlen.num == 0) {
     /* generate missing time signature */
+    event_linebreak();
     event_timesig(4, 4, 1);
     inmusic = 0;
-    event_linebreak();
   };
   if (unitlen.num == 0) {
     if ((float) barlen.num / (float) barlen.denom < 0.75) {
@@ -1248,6 +1256,9 @@ int octave, xtranspose, gotoctave, gottranspose;
   if (gotkey) {
     setmap(sharps, oldtable);
     newkey = (sharps+7*transpose)%12;
+    if (sharps < -5) orig_key_number = (int) keys[sharps+17][0] - (int) 'A';
+    else if (sharps > 6) orig_key_number = (int)keys[sharps-7][0] - (int) 'A';
+    else    orig_key_number = (int) keys[sharps+5][0] - (int) 'A';
     lines = (sharps+7*transpose)/12;
     if (newkey > 6) {
       newkey = newkey - 12;
@@ -1258,6 +1269,7 @@ int octave, xtranspose, gotoctave, gottranspose;
       lines = lines - 1;
     };
     setmap(newkey, newtable);
+    new_key_number = (int) keys[newkey+5][0] - (int) 'A';
   };
   emit_string("K:");
   if (transpose == 0) {
@@ -1580,6 +1592,10 @@ char* s;
   char** roots;
   char** bases;
   int chordstart;
+  int key_number;
+  int old_triad_number;
+  int new_triad_number;
+  int triad_diff;
 
   if ((transpose == 0) || (*s == '_') || (*s == '^') || (*s == '<') ||
       (*s == '>') || (*s == '@')) {
@@ -1602,35 +1618,94 @@ char* s;
     while (*p != '\0') {
       if (chordstart) {
         if ((*p >= 'A') && (*p <= 'G')) {
-          pitch = (offset[(int) *p - ((int) 'A')] + transpose)%12;
+          key_number = (int) *p - ((int) 'A');
+	  old_triad_number = key_number - orig_key_number+1;
+	  if (old_triad_number < 1) old_triad_number += 7;
+          pitch = (offset[key_number] + transpose)%12;
           p = p + 1;
           if (*p == 'b') {
             pitch = pitch - 1;
             p = p + 1;
-          };
+            };
           if (*p == '#') {
             pitch = pitch + 1;
             p = p + 1;
-          };
+            };
           pitch = (pitch + 12)%12;
-          strcpy(&newchord[j], roots[pitch]);
-          j = strlen(newchord);
+	  key_number = (int) roots[pitch][0] - (int) 'A';
+	  new_triad_number = key_number - new_key_number +1;
+	  if (new_triad_number < 1) new_triad_number += 7;
+	  triad_diff = new_triad_number - old_triad_number;
+	  if (!nodouble_accidentals && (triad_diff == -1 || triad_diff == 6)) {
+		  /*      printf("*** %d  old chord = %s (%d) new chord = %s (%d)\n",
+		        triad_diff,s,old_triad_number,roots[pitch],new_triad_number); */
+	                pitch = pitch+1;
+                        pitch = (pitch+12)%12;
+                        strcpy(&newchord[j],roots[pitch]);
+                        j = strlen(newchord);
+                        strcpy(&newchord[j],"b");
+                        j = j+1;
+	                } else
+          if (!nodouble_accidentals && (triad_diff  ==1 || triad_diff == -6)) {
+  	         /*	   printf("*** %d old chord = %s (%d) new chord = %s (%d)\n",
+		         triad_diff,s,old_triad_number,roots[pitch],new_triad_number);  */
+
+                        pitch = pitch-1;
+                        pitch = (pitch+12)%12;
+                        strcpy(&newchord[j],roots[pitch]);
+                        j = strlen(newchord);
+                        strcpy(&newchord[j],"#");
+                        j = j+1;
+                        } else  
+                        {
+                        strcpy(&newchord[j], roots[pitch]);
+                        j = strlen(newchord);
+                        }
           chordstart = 0;
         } else {
           if ((*p >= 'a') && (*p <= 'g')) {
-            pitch = (offset[(int) *p - ((int) 'a')] + transpose)%12;
+            key_number = (int) *p - ((int) 'a');
+	    old_triad_number = key_number - orig_key_number+1;
+	    if (old_triad_number < 1) old_triad_number += 7;
+            pitch = (offset[key_number] + transpose)%12;
             p = p + 1;
             if (*p == 'b') {
               pitch = pitch - 1;
               p = p + 1;
-            };
+              };
             if (*p == '#') {
               pitch = pitch + 1;
               p = p + 1;
-            };
+              };
             pitch = (pitch + 12)%12;
-            strcpy(&newchord[j], bases[pitch]);
-            j = strlen(newchord);
+	    key_number = (int) bases[pitch][0] - (int) 'a';
+	    new_triad_number = key_number - new_key_number +1;
+	    if (new_triad_number < 1) new_triad_number += 7;
+	    triad_diff = new_triad_number - old_triad_number;
+	  if (!nodouble_accidentals && (triad_diff == -1 || triad_diff == 6)) {
+          /*              printf("*** %d  old chord = %s (%d) new chord = %s (%d)\n",
+			 triad_diff,s,old_triad_number,bases[pitch],new_triad_number); */
+	                pitch = pitch+1;
+                        pitch = (pitch+12)%12;
+			strcpy(&newchord[j],bases[pitch]);
+			j = strlen(newchord);
+			strcpy(&newchord[j],"b");
+			j = j+1;
+	                } else
+          if (!nodouble_accidentals && (triad_diff  ==1 || triad_diff == -6)) {
+	/*	        printf("*** %d old chord = %s (%d) new chord = %s (%d)\n",
+			 triad_diff,s,old_triad_number,bases[pitch],new_triad_number);*/
+			 pitch = pitch-1;
+			 pitch = (pitch+12)%12;
+			 strcpy(&newchord[j],bases[pitch]);
+			 j = strlen(newchord);
+			 strcpy(&newchord[j],"#");
+			 j = j+1;
+                         } else
+	                 {
+                         strcpy(&newchord[j], bases[pitch]);
+                         j = strlen(newchord);
+			 }
             chordstart = 0;
           } else {
             if (isalpha(*p)) {
@@ -1646,6 +1721,7 @@ char* s;
         if ((*p == '/') || (*p == '(') || (*p == ' ')) {
           chordstart = 1;
         };
+
         newchord[j] = *p;
         p = p + 1;
         j = j + 1;

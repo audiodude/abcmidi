@@ -354,9 +354,10 @@ char **p;
 }
 
 
-int isclef(s, gotoctave, octave)
+int isclef(s, gotoctave, octave, strict)
 char* s;
 int *gotoctave, *octave;
+int strict;
 /* part of K: parsing - looks for a clef in K: field                 */
 /* format is K:string where string is treble, bass, baritone, tenor, */
 /* alto, mezzo, soprano or K:clef=arbitrary                          */
@@ -401,6 +402,24 @@ int *gotoctave, *octave;
   if (strncmp(s, "soprano", 7) == 0) {
     gotclef= 1;
   };
+/*
+ * only clef=F or clef=f is allowed, or else
+ * we get a conflict with the key signature
+ * indication K:F
+*/
+
+  if (strncmp(s, "f",1) == 0 && strict==0) {
+    gotclef = 1;
+  }
+  if (strncmp(s, "F",1) == 0 && strict==0) {
+    gotclef = 1;
+  }
+
+  if (!strict && !gotclef) {
+	  gotclef = 1;
+	  event_warning("cannot recognize clef indication");
+          }
+
   return(gotclef);
 }
 
@@ -587,13 +606,13 @@ if (casecmp(word, "clef") == 0) {
         *s = *s + 1;
         skipspace(s);
         *s = readword(clefstr, *s);
-        if (isclef(clefstr,gotoctave,octave)) {
+        if (isclef(clefstr,gotoctave,octave,0)) {
           *gotclef = 1;
         };
       };
       successful = 1;
     }
-else if (isclef(word,gotoctave,octave)) {
+else if (isclef(word,gotoctave,octave,1)) {
       *gotclef = 1;
       strcpy(clefstr, word);
       successful = 1;

@@ -1310,3 +1310,210 @@ is active.
 Added a bagpipe tune to demo.abc to illustrate
 the use of the %%MIDI drone commands.
 
+
+25 March 2004
+
+When transposing guitar chords, abc2abc converts
+double accidentals to the note above or below.
+For example when abc2abc raises the guitar chord
+"Db7" in the C scale to "Ebb7" in the Db scale, it
+converts "Ebb7" to "D7". This is strictly not
+correct.
+
+Fix: event_handle_gchord in toabc.c was modified to
+not convert the double flat or sharp to the next
+pitch degree by default. A new option -nda (for
+no double accidentals) was introduced which
+preserves the old behaviour of abc2abc. (Note
+the -nda option is only active when you are
+transposing to another key.) This change involved
+introducing a new global variable nodouble_accidentals.
+See comments for 11 April 2004 for more details.
+
+(I am grateful to Atte Jensen for alerting me to
+this problem as well as the following three problems.)
+
+
+27 March 2004
+
+abc2midi fails to tie notes correctly when the
+tie crosses bar lines. In the following example
+
+X:1
+T: Tie
+M: 2/4
+L: 1/4
+K: C
+E ^F-|F F |
+
+abc2midi reports an error
+Error in line 6: Could not find note to be tied.
+
+The problem is that F was sharpened by an accidental, but
+since the accidental did not apply to the next bar, the
+next F appears as a natural and the function dotie()
+fails to match the note with F#. As a result, the two
+notes are not tied. One could place an accidental on
+the second F, but strictly this is not musicly correct.
+
+"An accidental is valid for the rest of the bar (only
+the octave where it's written). Tied notes carry the 
+accidental to the next bar until the note that ends the
+tie is released."
+
+The fix: store.c joins the tied notes in a second pass
+after all the notes have been scanned and parsed.
+Unfortunately, at this point there is no information
+that indicates whether the pitch of the note was
+modified by one or more accidentals. A new array
+pitchline[] was introduced to store the original
+pitch of the note before any accidentals are applied.
+The contents of the array are maintained by event_note.
+The function dotie now compares pitchline[place] with
+pitchline[tienote] rather than pitch[place] with
+pitch[tienote]. When it establishes a tie, it
+ensures pitch[place] = pitch[tienote].
+
+
+
+27 March 2004
+
+abc2abc.exe fails to transfer the clef indication,
+clef=F to the output abc file. For example,
+V: 1 clef=F
+becomes
+V: 1
+
+Analysis: the function isclef() in parseabc.c recognizes only
+the following clef indications: bass, treble, treble+8,
+treble-8, baritone, tenor, tenor-8, alto, mezzo, soprano.
+When it encounters clef=F, it fails to recognize F and
+assumes there is no proper clef indication. Since 
+K: G treble+8
+is interpreted as
+K: G clef=treble+8
+the function isclef() must have a fixed repertoire.
+
+Fix: (1) indications clef= F or clef=f have been added to
+the function isclef. (2) Since there may be other indications
+that have not been built into isclef and it is desirable that
+abc2abc copies these indications, I have added a new
+flag, int strict, to the function isclef. The flag strict
+is 1 when no clef= was found and isclef is interpreting the
+given word. The flag strict is 0 when the given word is
+preceeded by clef=. When strict is 0, the function isclef
+will assume that the word is something meaningful even
+though it does not recognize it and pass a warning message.
+If strict is 1, isclef will not return words that it
+does not recognize.
+
+Unfortunately, this change introduced another conflict.
+See comments for April 11 2004.
+
+April 3 2004
+
+When an abc file is missing a meter M: indication, abc2abc.exe
+attempts to correct this situation by adding it to the output
+file. Unfortunately it does not do it correctly as seen in
+the following example.
+
+X:1
+T: Missing M:
+L: 1/8
+K: C
+CDEF GABC| CDEF GABC|
+
+output
+
+
+X: 1
+T:Missing M:
+L:1/8
+K:CM:4/4
+
+CDEF GABC| CDEF GABC|
+
+Analysis:
+The function event_refno in toabc.c which is called whenever an
+X: command occurs, initializes barlen.num to zero.  The function 
+start_tune() in toabc.c checks whether barlen.num is still zero,
+which indicates that a M: indication is missing. If it is zero,
+it calls event_timesig to set it to the default time signature
+of 4/4. Unfortunately, it places a linebreak after calling
+event_timesig instead of  before. Fix: the function event_linebreak
+was moved before calling event_timesig.
+
+April 11 2004
+
+The patch dealing with transposing guitar chords in toabc.c
+(refer to March 25 2004 note), did not work correctly so it
+was necessary to take a different approach. Apparently,
+the code in event_handle_gchord works correctly for all
+diatonic guitar chords. The algorithm finds the chord's
+pitch ignoring all following accidentals using the offset[]
+table. It adds the transpose interval to the pitch and then
+shifts it by +1 or -1 in event that the chord is followed
+by sharp or flat accidental. For nondiatonic chords (i.e.
+contains notes not present in the key signature), the
+transpose algorithm yields the correct chord but represents
+it incorrectly for the key signature. For example, suppose the
+nondiatonic chord in the C key signature is Dbm which is
+a degree 2 minor triad. When it is transposed one semitone
+to the Db key signature, the chord should now be Ebbm.
+However, event_handle_gchord changes it to Dm chord which
+has the identical notes but has the wrong representation
+(it was changed to a degree 1 minor triad).
+
+To fix this problem, it was necessary to compute the
+triad degree in the original key signature and compare
+it with the degree of the transposed triad in the new
+key signature. If they are identical, everything is fine.
+If they are different by one degree, then an adjustment
+is needed. The degree actually also depends upon the
+mode of the key signature (major/minor/dorian/lydian ....),
+however for simplification we shall assume it is the
+major key signature. (The toabc.c file is not passed
+the key signature but the number of sharps or flats
+in the key signature.)
+
+The following changes were made. New global variables
+orig_key_number and new_key_number were introduced which
+represents the tonic (ignoring accidentals) of the original
+and new key signature (assuming major scale). They are
+represented by numbers where A is zero, B is 1, etc.
+These variables are set by event_key which handles the
+K: field command. In the function event_handle_gchord,
+the triad degree (old_triad_number) is computed by 
+subtracting orig_key_number from the key_number.
+Something similar is done for the transposed triad, yielding
+new_triad_number. If the degrees are not identical, the
+tranposed triad is shifted back and a sharp appended or
+else shifted forward and a flat appended. Otherwise
+nothing is done. (The correction is disabled if the
+flag nodouble_accidentals was set by the -nda run time
+parameter.)
+
+April 11 2004
+
+Key signature K:F no longer processed correctly.
+eg.
+X:1
+T: key signature problem
+M: 2/4
+L: 1/4
+K: F
+G A|B D|F2|
+
+This problem occurs in abc2midi, abc2abc and yaps since
+they all share the same parser.
+
+This was caused by introducing F and f as an option in
+the isclef(..) function in parseabc. (See March 27 2004
+report.) As a result the F is first interpreted as a clef 
+indication and ignored as a key indication.
+
+Fix: if F or f is used to specify the clef then it
+must be preceded by clef=. This is not true for other
+indications like soprano+8. To fix this I inserted
+the condition strict==0 in the test for F or f in isclef(). 
+

@@ -127,6 +127,7 @@ int chordsnamed = 0;
 int maxnotes;
 int *pitch, *num, *denom;
 featuretype *feature;
+int *pitchline; /* introduced for handling ties */
 int notes;
 
 int verbose = 0;
@@ -427,11 +428,13 @@ char **filename;
   num = checkmalloc(maxnotes*sizeof(int));
   denom = checkmalloc(maxnotes*sizeof(int));
   feature = (featuretype*) checkmalloc(maxnotes*sizeof(featuretype));
+  pitchline = checkmalloc(maxnotes*sizeof(int));
+
   /* and for text */
   atext = (char**) checkmalloc(maxtexts*sizeof(char*));
   words = (char**) checkmalloc(maxwords*sizeof(char*));
   if ((getarg("-h", argc, argv) != -1) || (argc < 2)) {
-    printf("abc2midi version 1.39\n");
+    printf("abc2midi version 1.41\n");
     printf("Usage : abc2midi <abc file> [reference number] [-c] [-v] ");
     printf("[-o filename]\n");
     printf("        [-t] [-n <value>] [-RS]\n");
@@ -575,7 +578,7 @@ static int autoextend(maxnotes)
 int maxnotes;
 {
   int newlimit;
-  int *ptr;
+  int *ptr,*ptr2;
   featuretype *fptr;
   int i;
 
@@ -590,11 +593,15 @@ int maxnotes;
   free(feature);
   feature = fptr;
   ptr = checkmalloc(newlimit*sizeof(int));
+  ptr2 = checkmalloc(newlimit*sizeof(int));
   for(i=0;i<maxnotes;i++){
     ptr[i] = pitch[i];
+    ptr2[i] = pitchline[i];
   };
   free(pitch);
+  free(pitchline);
   pitch = ptr;
+  pitchline = ptr2;
   ptr = checkmalloc(newlimit*sizeof(int));
   for(i=0;i<maxnotes;i++){
     ptr[i] = num[i];
@@ -2115,6 +2122,7 @@ char accidental, note;
 int xoctave, n, m;
 {
   int pitch;
+  int pitch_noacc;
   int num, denom;
   int octave;
 
@@ -2151,6 +2159,7 @@ int xoctave, n, m;
     addunits(num, denom*(v->default_length));
   };
   pitch = pitchof(note, accidental, mult, octave, 1);
+  pitch_noacc = pitchof(note, 0, 0, octave, 0);
   if (decorators[FERMATA]) {
     num = num*2;
   };
@@ -2174,14 +2183,17 @@ int xoctave, n, m;
         if (v->chordcount == 1) {
           addfeature(REST, pitch, num*4, denom*(v->default_length));
         };
+	pitchline[notes] = pitch_noacc;
         addfeature(NOTE, pitch, num*4, denom*2*(v->default_length));
       } else {
+	pitchline[notes] = pitch_noacc;
         addfeature(NOTE, pitch, num*4, denom*2*(v->default_length));
         marknotestart();
         addfeature(REST, pitch, num*4, denom*2*(v->default_length));
         marknoteend();
       };
     } else {
+      pitchline[notes] = pitch_noacc;
       addfeature(NOTE, pitch, num*4, denom*(v->default_length));
       if (!v->inchord) {
         marknote();
@@ -2494,12 +2506,14 @@ int j, xinchord;
           if ((tied_num == 0) && (tietodo == 0)) {
             done = 1;
           };
-          if ((pitch[place] == pitch[tienote]) && (tietodo == 1)) {
+          if ((pitchline[place] == pitchline[tienote]) && (tietodo == 1)) {
             /* tie in note */
             if (tied_num != 0) {
               event_error("Time mismatch at tie");
             };
             tietodo = 0;
+	    pitch[place] = pitch[tienote]; /* in case accidentals did not
+					      propagate                   */
             /* add time to tied time */
             addfract(&tied_num, &tied_denom, num[place], denom[place]);
             /* add time to tied note */
@@ -3251,6 +3265,7 @@ void event_eof()
     printf("End of File reached\n");
   };
   free(pitch);
+  free(pitchline);
   free(num);
   free(denom);
   free(feature);

@@ -1,10 +1,10 @@
-.TH ABC2ABC 1 "7 March 2004"
+.TH ABC2ABC 1 "27 March 2004"
 .SH NAME
 abc2abc \- a simple abc checker/re-formatter/transposer
 .SH SYNOPSIS
 \fBabc2abc\fP \fIfile\fP [ \fB-s\fP ] [ \fB-n\fP ] [ \fB-b\fP ]
-[ \fB-r\fP ] [ \fB-e\fP ] [ \fB-t \fP\fIsemitones\fP ] [ \fB-u\fP ]
-[ \fB-d\fP ] [ \fB-v\fP ]
+[ \fB-r\fP ] [ \fB-e\fP ] [ \fB-t \fP\fIsemitones\fP ] [ \fB-nda\fp ]
+[ \fB-u\fP ] [ \fB-d\fP ] [ \fB-v\fP ]
 .SH "DESCRIPTION"
 .PP
 .B abc2abc
@@ -46,6 +46,10 @@ Don't report errors.
 .BI \-t " semitones"
 Transpose tune by \fIsemitones\fP semitones
 .TP
+.B \-nda
+Convert double accidentals in guitar chord to another chord though
+strictly not correct.
+.TP
 .B \-u
 Update notation; the older notation \fB+ +\fP for chords is replaced by 
 \fB[]\fP and \fBs s\fP for slurs is replaced by \fB()\fP.
@@ -70,4 +74,4 @@ starting from number \fIn\fP.
 This manual page was written by Anselm Lingnau <lingnau@tm.informatik.uni-frankfurt.de> and is now supported by Seymour Shlien <seymour.shlien@crc.ca>
 for the GNU/Linux system.
 .SH VERSION
-This man page describes abc2abc version 1.26 from March 07 2004.
+This man page describes abc2abc version 1.27 from March 27 2004.
