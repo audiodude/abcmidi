@@ -860,6 +860,27 @@ notated. This can be achieved with
 
 %%MIDI ratio 3 1
 
+
+With version 1.54 Dec 4 2004 of abc2midi, notes in chords
+(eg. [FAc]) are not played in the same instant but offsetted
+and shortened by 10 MIDI time units. Thus the first note
+in the chord (eg. F) is played for the full indicated time,
+the second note (eg. A) starts 10 MIDI units later and is shortened
+by the same amount and the third note starts another 10 MIDI
+units later and is shortened by another 10 units. This introduces
+an "expressivo" option and avoids the heavy attack. (This
+does not apply to gchords or multivoiced chords.) The amount
+of the delay and shortening may be configured by the MIDI command
+
+%%MIDI chordattack n
+
+where n is a small number. If n is zero, then abc2midi should
+behave as in earlier versions. The delay n is in MIDI time units
+where there are 480 units in a quarter note beat. The program
+may not run correctly if n is too large and there are short
+chords.
+  
+
 Compatibility with proposed abc standard version 2.0
 
 The proposed standard introduces a new copyright field

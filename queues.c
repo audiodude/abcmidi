@@ -48,8 +48,20 @@ struct Qitem {
 };
 struct Qitem Q[QSIZE+1];
 int Qhead, freehead, freetail;
+extern int totalnotedelay; /* from genmidi.c [SS] */
+extern int notedelay;      /* from genmidi.c [SS] */
 
 /* routines to handle note queue */
+
+/* genmidi.c communicates with queues.c mainly through the    */
+/* functions addtoQ and timestep. The complexity comes in the */
+/* handling of chords. When another note in a chord is passed,*/
+/* addtoQ detemines whether other notes in the Q structure    */
+/* overlap in time with this chord and modifies the delay item*/
+/* of the note which finish later so that it is relative to the*/
+/* end of the earlier note. Normally all notes in the chord end*/
+/* at the same as specifiedy abc standard, so the delay of the*/
+/* other notes cached in the Q structure should be set to zero.*/
 
 void addtoQ(num, denom, pitch, chan, d)
 int num, denom, pitch, chan, d;
@@ -81,7 +93,7 @@ int num, denom, pitch, chan, d;
       done = 1;
     } else {
       if (Q[*ptr].delay > wait) {
-        Q[*ptr].delay = Q[*ptr].delay - wait;
+        Q[*ptr].delay = Q[*ptr].delay - wait -notedelay;
         Q[i].next = *ptr;
         Q[i].delay = wait;
         *ptr = i;
@@ -228,6 +240,22 @@ void Qcheck()
   };
 }
 
+/* timestep is called by delay() in genmidi.c typically at the */
+/* end of a note, chord or rest. It is also called by clearQ in*/
+/* this file. Timestep, is not only responsible for sending the*/
+/* midi_noteoff command for any expired notes in the Q structure*/
+/* but also maintains the delta_time global variable which is  */
+/* shared with genmidi.c. Timestep also calls advanceQ() in   */
+/* this file which updates all the delay variables for the items */
+/* in the Q structure to reflect the current MIDI time. Timestep */
+/* also calls removefromQ in this file which cleans out expired */
+/* notes from the Q structure. To make things even more complicated*/
+/* timestep runs the dogchords and the dodrums for bass/chordal */
+/* and drum accompaniments by calling the function progress_sequence.*/
+/* Dogchords and dodrums may also call addtoQ changing the contents*/
+/* of the Q structure array. The tracklen variable in MIDI time */
+/* units is also maintained here.                               */ 
+
 void timestep(t, atend)
 int t;
 int atend;
@@ -256,5 +284,5 @@ int atend;
   if (Qhead != -1) {
     advanceQ(time);
   };
-  delta_time = delta_time + (long)time;
+  delta_time = delta_time + (long)time - totalnotedelay;
 }

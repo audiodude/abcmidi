@@ -44,7 +44,7 @@
  *
  */
 
-#define VERSION "2.75 July 17 2004"
+#define VERSION "2.76 December 04 2004"
 
 /* Microsoft Visual C++ Version 6.0 or higher */
 #ifdef _MSC_VER
@@ -603,7 +603,8 @@ char *mess;
     } 
     else {
       if (leng < BUFFSIZE - 3) {
-        sprintf(buffer2, "%%%s", textbuff);
+        /*sprintf(buffer2, "%%%s", textbuff); */
+        sprintf(buffer2, " %s", textbuff);
         addtext(buffer2,0);
       };
     };
@@ -2289,6 +2290,7 @@ int arg;
 int voiceno;
 int accidentals; /* used for printing summary */
 int j;
+int argc;
 
 /* initialization */
   trackno = 0;
@@ -2326,8 +2328,9 @@ int j;
   };
 
 /* print abc header block */
+  argc = huntfilename(arg, argv);
   fprintf(outhandle,"X: 1\n"); 
-  fprintf(outhandle,"T: from %s\n",argv[arg]); 
+  fprintf(outhandle,"T: from %s\n",argv[argc]); 
   fprintf(outhandle,"M: %d/%d\n", header_asig, header_bsig);
   fprintf(outhandle,"L: 1/%d\n", header_unitlen); 
 

@@ -1,4 +1,4 @@
-.TH ABC2MIDI 1 "20 September 2004"
+.TH ABC2MIDI 1 "04 December 2004"
 .SH NAME
 \fBabc2midi\fP \- converts abc file to MIDI file(s)
 .SH SYNOPSIS
@@ -320,6 +320,31 @@ as done in the body of the music, but it is still possible to express
 complex rhythms. For example, to indicate a rhythm such as
 (3ddd d/d/d/d, you would write the string "d4d4d4d3d3d3d3".
 
+
+.PP
+With version 1.54 Dec 4 2004 of abc2midi, notes in chords
+(eg. [FAc]) are not played in the same instant but offsetted
+and shortened by 10 MIDI time units. Thus the first note
+in the chord (eg. F) is played for the full indicated time,
+the second note (eg. A) starts 10 MIDI units later and is shortened
+by the same amount and the third note starts another 10 MIDI
+units later and is shortened by another 10 units. This introduces
+an "expressivo" option and avoids the heavy attack. (This
+does not apply to gchords or multivoiced chords.) The amount
+of the delay and shortening may be configured by the MIDI command
+
+.PP
+%%MIDI chordattack n
+
+.PP
+where n is a small number. If n is zero, then abc2midi should
+behave as in earlier versions. The delay n is in MIDI time units
+where there are 480 units in a quarter note beat. The program
+may not run correctly if n is too large and there are short
+chords.
+
+
+
 .SH "COMPATIBILITY WITH DRAFT STANDARD 2.0"
 
 .PP
@@ -346,7 +371,7 @@ James Allwright <J.R.Allwright@westminster.ac.uk>
 .SH SUPPORTED
  by Seymour Shlien <seymour.shlien@crc.ca>
 .SH VERSION
-This man page describes abc2midi version 1.50  September 20 2004.
+This man page describes abc2midi version 1.54  December 04 2004.
 .SH COPYRIGHT
 Copyright 1999 James Allwright
 .PP

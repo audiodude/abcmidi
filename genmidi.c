@@ -168,6 +168,11 @@ int drum_len[40];
 int drum_velocity[40], drum_program[40];
 int drum_ptr, drum_on;
 
+int notecount=0;  /* number of notes in a chord [ABC..] */
+int notedelay=10;  /* time interval in MIDI ticks between */
+                  /*  start of notes in chord */
+int totalnotedelay=0; /* total time delay introduced */
+
 void reduce(a, b)
 /* elimate common factors in fraction a/b */
 int *a, *b;
@@ -1323,7 +1328,6 @@ char* s;
     set_drums(p);
     done = 1;
   };
-/*  if ((strcmp(command, "chordprog") == 0) && (gchordvoice > 0)) { */
   if ((strcmp(command, "chordprog") == 0))  {
     int prog;
 
@@ -1333,7 +1337,6 @@ char* s;
     };
     done = 1;
   };
-/*  if ((strcmp(command, "bassprog") == 0) && (gchordvoice> 0)) { */
   if ((strcmp(command, "bassprog") == 0)) {
     int prog;
 
@@ -1444,6 +1447,10 @@ char* s;
       skipspace(&p);
     };
     write_event(pitch_wheel, chan, data, 2);
+    done = 1;
+  };
+  if (strcmp(command,"chordattack") == 0) {
+    notedelay = readnump(&p);
     done = 1;
   };
   if (done == 0) {
@@ -1829,13 +1836,22 @@ int xtrack;
         write_syllable(j);
       };
       if (noteson) {
+        if (inchord) {
+           notecount++;
+           if (notecount > 1) {
+                delta_time += notedelay;
+                totalnotedelay += notedelay;
+                }
+           }
         noteon(j);
         /* set up note off */
-        addtoQ(num[j], denom[j], pitch[j] + transpose +global_transpose, channel, -1);
+        addtoQ(num[j], denom[j], pitch[j] + transpose +global_transpose, channel, -totalnotedelay -1);
       };
       if (!inchord) {
         delay(num[j], denom[j], 0);
         addunits(num[j], denom[j]);
+        notecount =0;
+        totalnotedelay=0;
       };
       break;
     case TNOTE:
@@ -1876,6 +1892,8 @@ int xtrack;
       };
       inchord = 0;
       delay(num[j], denom[j], 0);
+      totalnotedelay=0;
+      notecount=0;
       addunits(num[j], denom[j]);
       break;
     case LINENUM:

@@ -2437,4 +2437,108 @@ yaps.txt describing the implementation of yaps was prepared.
 
 
 
+November 28 2004
 
+Abc2midi new feature: all notes in a chord are started at the
+same instant. Inserting a short delay between the start of the notes
+in the chord would provide more control over the timbre. However to 
+ensure that the music is not lengthened, it is necessary to ensure
+that all the notes end at the same time.
+
+Implementation of this feature was not easy due to the way the
+notes are handled are converted to MIDI commands in genmidi.c
+and the complexity of the queues.c code. MIDI note on commands
+are sent by a long chain of function calls starting with the
+function call to noteon(). Noteon() determines the velocity 
+of the note from the beatstring and current context and then
+calls noteon_data(). Noteon_data() calls midi_noteon() and
+updates the tracklen. Midi_noteon() calls mf_write_midi_event
+which finally records the MIDI command.
+
+The MIDI command to stop playing the note is sent to a queue
+by the function addtoQ which is defined in the queue.c file.
+Finally if this note is not inside a chord, or if a end of chord
+feature has been encountered, the notes in the queue all processed
+by calling the function delay(). Delay() converts the note duration
+in MIDI tick units and calls the function timestep() which
+is defined in queues.c.
+
+The global variable delta_time indicates the time delay in
+MIDI tick units to execute the MIDI command. All MIDI command
+specify times relative to the time of the last command. Functions
+in genmidi.c generally reset delta_time to zero after sending
+a MIDI command. Otherwise, delta_time is adjusted by timestep()
+in queues.c.
+
+In order to control the delay intervals between notes in a chord,
+new global variables notecount, notedelay and totalnotedelay were
+introduced into genmidi.c. If notecount is greater than 1, delta_time
+is changed to notedelay and totalnotedelay is incremented by this
+amount.  It is necessary to shorten the shifted notes by totalnotedelay
+so that they end at the same time. The new length is passed to addtoQ
+in queues.c. At the end of the chord, notecount and totalnotedelay
+are reset to zero.
+
+December 4 2004:
+
+(Continued from November 28 2004.) Unfortunately addtoQ does not
+know that the shortened notes have been shifted.  When correcting 
+the delay of the cached note in the structure, addtoQ now takes
+into account that the new note was shifted with respect to the 
+previous note by notedelay which is also passed as a global variable. 
+Finally, it was also necessary to adjust delta_time in timestep()
+by totalnotedelay. More comments were added to the code addtoQ
+and timestep in queues.c.
+
+The notedelay variable is set to 10 MIDI units as a default. (There
+are 480 MIDI units in one quarter note beat.)  A new MIDI command
+%%MIDI chordattack n, was introduced in dodeferred() (genmidi.c)
+to allow the user to fine tune this variable. I do not recommend
+making this variable larger than the smallest note in the tune,
+(eg. 30 units if there are 1/16 note chords.) The abcguide.txt
+and abc2midi.1 documentation was updated. Thanks go to Hudson
+Lacerda for suggesting this improvement.
+
+
+Midi2abc outputs MIDI metatext commands as abc comments. In
+some cases they can be interpreted as pseudo comments causing
+undesirable actions by other software. For example, in the
+following the title MIDI program 17 is converted to metatext
+in the MIDI file. When midi2abc converts the MIDI file back
+to an abc file the text can be interpreted as a %%MIDI command.
+
+X:1
+T:MIDI program 17
+C:Hudson Lacerda
+M:12/8
+L:1/8
+Q:1/4=120
+K:C
+%MIDI
+C,^C,D,^D,E,F,^F,G,^G,A,^A,B, |
+C^CD^DEF^FG^GA^AB |
+c^cd^def^fg^ga^ab |
+c'^c'd'^d'e'f'^f'g'^g'a'^a'b' |
+
+
+-- output from midi2abc --
+
+X: 1
+T: from (null)
+M: 12/8
+L: 1/8
+Q:1/4=120
+K:C % 0 sharps
+%%MIDI program 17
+%%MIDI
+C,^C,D, ^D,E,F, ^F,G,^G, A,^A,B,| \
+=C^C=D ^DE=F ^F=G^G =A^AB| \
+=c^c=d ^de=f ^f=g^g =a^ab| \
+=c'^c'=d' ^d'e'=f' ^f'=g'^g' =a'^a'b'|
+
+As suggested by Hudson Lacerda, the fix is to add a space
+before the metatext. The sprintf statement near the
+end of the function txt_metatxt() was modified.
+
+Midi2abc should place the input file name in the title
+line instead of null. This has been changed.
