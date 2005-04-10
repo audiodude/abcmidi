@@ -60,8 +60,8 @@ extern void event_field(char k, char *f);
 extern void event_words(char *p, int continuation);
 extern void event_part(char *s);
 extern void event_voice(int n, char *s, int gotclef, int gotoctave,
-		int gottranspose, int gotname, char *clefname, int octave,
-		int transpose, char *namestring);
+	int gottranspose, int gotname, int gotsname, char *clefname,
+        int octave, int transpose, char *namestring, char *snamestring);
 extern void event_length(int n);
 extern void event_blankline(void);
 extern void event_refno(int n);
@@ -99,6 +99,7 @@ extern void event_gchord(char *s);
 extern void event_note(int decorators[DECSIZE], char accidental, int mult, 
                        char note, int xoctave, int n, int m);
 extern void event_abbreviation(char symbol, char *string, char container);
+extern void event_acciaccatura();
 extern void print_voicecodes(void);
 #else
 extern void event_init();
@@ -150,5 +151,6 @@ extern void event_instruction();
 extern void event_gchord();
 extern void event_note();
 extern void event_abbreviation();
+extern void event_acciaccatura();
 extern void print_voicecodes();
 #endif

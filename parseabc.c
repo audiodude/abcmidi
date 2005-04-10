@@ -69,6 +69,7 @@ static int parsing_started =0;
 static int parsing, slur;
 static int inhead, inbody;
 static int parserinchord;
+static int ingrace=0;
 int chorddecorators[DECSIZE];
 char decorations[] = ".MLRH~Tuv";
 static char *abbreviation[SIZE_ABBREVIATIONS];
@@ -736,7 +737,52 @@ if (**s != '=') {
   return 1;
 };
 
-
+int parsesname(s,word,gotname,namestring,maxsize)
+/* parses string name= "string" in V: command 
+   for compatability of abc2abc with abcm2ps
+*/
+char **s;
+char * word;
+int *gotname;
+char namestring[];
+int maxsize;
+{
+int i;
+i = 0;
+if  (casecmp(word, "sname") != 0) return 0;
+skipspace(s);
+if (**s != '=') {
+   event_error("name must be followed by '='");
+   } else {
+       *s = *s + 1;
+       skipspace(s);
+       if (**s == '"')   /* string enclosed in double quotes */
+          {
+          namestring[i] = (char) **s; 
+          *s = *s + 1;
+          i++;
+          while (i < maxsize && **s != '"' && **s != '\0') 
+           {namestring[i] = (char) **s;
+            *s = *s +1;
+            i++;
+            }
+           namestring[i] = (char) **s; /* copy double quotes */
+           i++;
+           namestring[i]= '\0'; 
+          } else      /* string not enclosed in double quotes */
+           {
+           while (i < maxsize && **s != ' ' && **s != '\0')
+            {
+            namestring[i] = (char) **s;
+            *s = *s +1;
+            i++; 
+            }
+           namestring[i] = '\0'; 
+           }
+       *gotname = 1;
+        }
+  return 1;
+};
 
 
 
@@ -895,11 +941,12 @@ static void parsevoice(s)
 char *s;
 {
 int num;
-int gotclef, gotkey, gotoctave, gottranspose, gotname;
+int gotclef, gotkey, gotoctave, gottranspose, gotname, gotsname;
 int transpose, octave;
 char clefstr[30];
 char word[30];
 char namestring[64];
+char snamestring[64];
 int parsed;
 int coctave,cgotoctave;
 transpose = 0;
@@ -911,6 +958,7 @@ gotclef = 0;
 cgotoctave=0;
 coctave=0;
 gotname = 0;
+gotsname =0;
 skipspace(&s);
 if ((*s >= '0') && (*s <= '9')) {
   num = readnump(&s);
@@ -927,9 +975,10 @@ while (*s != '\0') {
   if (!parsed) parsed = parsetranspose(&s,word,&gottranspose,&transpose);
   if (!parsed) parsed = parseoctave(&s,word,&gotoctave,&octave);
   if (!parsed) parsed = parsename(&s,word,&gotname,namestring,60);
+  if (!parsed) parsed = parsesname(&s,word,&gotsname,snamestring,60);
   }
 if (cgotoctave) {gotoctave=1; octave=coctave;}
-event_voice(num, s,gotclef,gotoctave,gottranspose,gotname,clefstr,octave,transpose,namestring);
+event_voice(num, s,gotclef,gotoctave,gottranspose,gotname,gotsname,clefstr,octave,transpose,namestring,snamestring);
 /*
 if (gottranspose) printf("transpose = %d\n",transpose);
  if (gotoctave) printf("octave= %d\n",octave);
@@ -1018,13 +1067,13 @@ char **s;
       accidental = **s;
     };*/
     if (**s == '^') {
-      accidental == **s;
+      accidental = **s;
       *s = *s + 1;
       microtone = ismicrotone(s,1);
       if (microtone ==0) accidental = '^';
       } 
     else if (**s == '_') { 
-      accidental == **s;
+      accidental = **s;
       *s = *s + 1;
       microtone = ismicrotone(s,-1);
       if (microtone ==0) accidental = '_';
@@ -1643,10 +1692,12 @@ char* field;
       case '{':
         p = p + 1;
         event_graceon();
+        ingrace=1;
         break;
       case '}':
         p = p + 1;
         event_graceoff();
+        ingrace=0;
         break;
       case '[':
         p = p + 1;
@@ -1832,6 +1883,11 @@ char* field;
           event_error("*'s in middle of line ignored");
         };
         break;
+      case '/':
+        p = p + 1;
+        if (ingrace) event_acciaccatura();
+        else event_error("stray / not in grace sequence");
+        break;
       default:
         {
           char msg[40];
@@ -1861,6 +1917,7 @@ char* line;
 
 /*  printf("%d parsing : %s\n", lineno, line);  */
   p = line;
+  ingrace=0;
   skipspace(&p);
   if (strlen(p) == 0) {
     event_blankline();

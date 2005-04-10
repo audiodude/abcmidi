@@ -1,4 +1,4 @@
-.TH ABC2ABC 1 "03 February 2005"
+.TH ABC2ABC 1 "10 April 2005"
 .SH NAME
 abc2abc \- a simple abc checker/re-formatter/transposer
 .SH SYNOPSIS
@@ -47,6 +47,10 @@ Don't report errors.
 .BI \-t " n
 Transpose tune by \fIn\fP semitones. This function will also
 work with K: none or one of -nokeys or -nokeyf.
+If a voice is assigned to channel 10 (drum channel) using a
+%%MIDI channel 10
+command, then this voice is never transposed.
+
 .TP
 .B \-nda
 Convert double accidentals in guitar chord to another chord though
@@ -95,4 +99,4 @@ sharps (+positive) in the key signature. It is a number between
 This manual page was written by Anselm Lingnau <lingnau@tm.informatik.uni-frankfurt.de> and is now supported by Seymour Shlien <seymour.shlien@crc.ca>
 for the GNU/Linux system.
 .SH VERSION
-This man page describes abc2abc version 1.37 from February 03 2005.
+This man page describes abc2abc version 1.40 from April 10 2005.

@@ -21,7 +21,7 @@
 
 /* back-end for outputting (possibly modified) abc */
 
-#define VERSION "1.38 February 26 2005"
+#define VERSION "1.40 April 10 2005"
 
 /* for Microsoft Visual C++ 6.0 or higher */
 #ifdef _MSC_VER
@@ -94,6 +94,7 @@ int newref; /* next new number for X: field */
 int useflats=0; /* flag associated with nokey.*/ 
 int adapt_useflats_to_gchords = 1; /* experimental flag */
 int usekey = 0;
+int drumchan=0; /* flag to suppress transposition */
 
 extern int nokey; /* signals no key signature assumed */
 extern int voicecodes ;  /* from parseabc.c */
@@ -106,6 +107,7 @@ struct voicetype { /* information needed for each voice */
   struct abctext* currentline;
   int bars_remaining;
   int bars_complete;
+  int drumchan;
 } voice[MAX_VOICES];
 int voicecount, this_voice, next_voice;
 enum abctype {field, bar, barline};
@@ -789,13 +791,29 @@ char *s;
   inmusic = 0;
 }
 
-void event_specific(p, s)
-char *p, *s;
+void event_specific(package, s)
+char *package, *s;
 {
+  char command[40];
+  int ch;
+  char *p;
   emit_string("%%");
-  emit_string(p);
+  emit_string(package);
   emit_string(s);
   inmusic = 0;
+/* detect drum channel by searching for %%MIDI channel 10 */
+  if (strcmp(package,"MIDI") != 0) return;
+  p = s;
+  skipspace(&p);
+  readstr(command, &p, 40);
+  if (strcmp(command, "channel") != 0) return;
+  skipspace(&p);
+  ch = readnump(&p);
+  if(ch == 10) {
+               voice[next_voice].drumchan = 1;
+               drumchan = 1;
+               }
+/*  printf("event_specific: next_voice = %d\n",next_voice); */
 }
 
 void event_info(f)
@@ -1070,6 +1088,8 @@ int num;
   };
   if ((i < voicecount) && (voice[i].number == num)) {
     voice_index = i;
+    drumchan = voice[voice_index].drumchan;
+/*    printf("voice_index = %d drumchan = %d\n",voice_index,drumchan); */
   } else {
     voice_index = voicecount;
     if (voicecount < MAX_VOICES) {
@@ -1081,19 +1101,21 @@ int num;
     voice[voice_index].barcount = zero_barcount(&voice[voice_index].foundbar);
     voice[voice_index].bars_complete = 0;
     voice[voice_index].bars_remaining = bars_per_line;
+    voice[voice_index].drumchan = 0;
   };
   voice[voice_index].currentline = NULL;
   return(voice_index);
 }
 
 void event_voice(n, s, gotclef, gotoctave, gottranspose, gotname,
-	       	clefname, octave, transpose, namestring)
+	       	gotsname, clefname, octave, transpose, namestring,
+                snamestring)
 int n;
 char *s;
-int gotclef, gotoctave, gottranspose, gotname;
+int gotclef, gotoctave, gottranspose, gotname, gotsname;
 char *clefname;
 int octave, transpose;
-char *namestring;
+char *namestring,*snamestring;
 {
   char output[32];
   if (xinbody) {
@@ -1122,6 +1144,8 @@ char *namestring;
     if (gottranspose) {sprintf(output," transpose=%d",transpose);
 	    emit_string(output);}
      if (gotname) {sprintf(output," name=%s",namestring);
+            emit_string(output);}
+     if (gotsname) {sprintf(output," sname=%s",snamestring);
             emit_string(output);}
   } else {
     if(voicecodes >= n) emit_string_sprintf("V:%s",voicecode[n-1]);
@@ -1905,7 +1929,7 @@ int xoctave, n, m;
   char accidental, note;
   int octave;
 
-  if (transpose == 0) {
+  if (transpose == 0 || drumchan) {
     accidental = xaccidental;
     mult = xmult;
     note = xnote;
@@ -2070,7 +2094,8 @@ int xoctave, n, m;
   assumed_acc = oldtable[(int)anoctave[val] - (int)'a']; 
   propogate=0;
   midipitch = pitchof(xnote, acc, xmult, xoctave);
-  printpitch(midipitch+transpose);
+  if (drumchan) printpitch(midipitch);
+  else printpitch(midipitch+transpose);
 
   if (!ingrace) {
     notecount = notecount + 1;
@@ -2130,6 +2155,14 @@ void event_abbreviation(char symbol, char *string, char container)
   };
   inmusic = 0;
 }
+
+void event_acciaccatura()
+{
+/* to handle / in front of note in grace notes eg {/A} */
+/* abcm2ps compatability feature [SS] 2005-03-28 */
+emit_string("/");
+}
+
 
 /* The following functions provide an alternative
    method for transposing. The note is converted

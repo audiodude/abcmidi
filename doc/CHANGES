@@ -3335,3 +3335,86 @@ user. Support for this syntax may be withdrawn at a later time
 as the abc standard evolves. I do not recommend making wide
 use of this feature at this point.
 
+
+March 28 2005
+
+Acciaccatura grace note notation. Abcm2ps compatability feature.
+Abc2mps accepts the notation {/b}a where the slash before the
+b tells it to display the grace note b as an acciaccatura.
+Parseabc.c does not understand this notation and returns an
+error message "Unrecognized character /". 
+
+Fix: parseabc.c was modified to keep track whether it is inside
+a grace sequence using a new global variable ingrace. When
+the function parsemusic encounters a / that is not a note length
+indicator, it will call event_acciaccatura if ingrace flag is
+set. This function does nothing in abc2midi and yaps but it
+prints the / character in abc2abc.
+
+
+April 02 2005
+
+Abc2midi does not handle microtones properly in multivoiced
+files. For example in,
+
+X:3
+T:Miudezas
+C:Hudson Lacerda
+M:none
+Q:1/8=132 "ca."
+L:1/8
+K:none clef=treble
+V:1 name="Clarineta em Sib"
+{=B}_/G {=B}^g | {=B}^F {_/e}=B {_/e}^/c' |\
+{_/e}_/G {_/e}_/d' {=a}_/e |
+
+the first note B (grace note) was affected by the microtone which was
+intended to be applied on the second note G.
+
+Analysis: Multivoiced files (i.e. using V:1, V:2 etc.) place a
+header track (track 0) in the MIDI file where global DYNAMIC
+features such as %%MIDI program may be defined for all other
+voices. The microtone is sinces it uses the %%MIDI pitchbend,
+is also treated as a DYNAMIC feature. As a result the header
+track contains many pitchbends but no notes. This unfortunately
+handles all other notes in channel 0 in a random fashion.
+
+Fix: a new parameter, noteson,  was introduced into the function
+dodeferred which handles all DYNAMIC features. Noteson is
+also a local variable controled by writetrack to specify whether
+NOTE features are to be processed by writetrack. This flag
+is now also used by dodeferred to determine whether pitchbend
+MIDI commands are to be inserted.
+
+
+April 07 2005
+
+Introduced a new feature to midi2abc. Midi2abc.exe -mftext
+will now produce a mftext output of a specified input MIDI file.
+It was preferable to build mftext into midi2abc since I
+changed the output format; also runabc already links to too 
+many executables and I would not like to keep track of version
+numbers for another program.
+
+April 09 2005
+
+I have modified toabc.c (abc2abc) so that it will no longer
+transpose voices assigned to the drum channel (%%MIDI channel 10).
+Implementation: added a new entry, drumchan, in the voicetype
+structure which indicates whether this voice is to played
+on drums. Also added a new global, drumchan which is linked
+to voice.drumchan for the currently active voice. The event_specific
+function has been extended to catch %%MIDI channel 10 and
+update drumchan. The function setvoice() initializes voice[].drumchan
+to 0 when a new voice is created. The functions event_note1 and
+event_note2 now check the drumchan flag before transposing the note.
+
+April 10 2005
+
+Abc2abc - abcm2ps compatibility issue. Abc2abc does not recognize
+the sname= "...". Fix: introduced new function parsesname in parseabc.c
+added new parameters to event_voice in parseabc.c, store.c,
+yapstree.c and toabc.c. (See September 26 2004 in this file
+for more details.)
+
+ 

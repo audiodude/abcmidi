@@ -1,9 +1,9 @@
 abcMIDI :   abc <-> MIDI conversion utilities
 
-midi2abc version 2.78 January 22 2005
-abc2midi version 1.62 March 27 2005
-abc2abc  version 1.38 February 26 2005
-yaps     version 1.33 February 26 2005
+midi2abc version 2.80 April 10 2005
+abc2midi version 1.64 April 10 2005
+abc2abc  version 1.40 April 10 2005
+yaps     version 1.35 April 10 2005
 midicopy version 1.01 July 17 2004
 
 24th January 2002
@@ -13,7 +13,7 @@ J.R.Allwright@westminster.ac.uk
 University of Westminster,
 London, UK
 
-05 February 2005
+10 April 2005
 
 Seymour Shlien
 seymour.shlien@crc.ca
@@ -115,6 +115,10 @@ midi2abc <options>
          -Midigram   No abc file is created, but a list
 		of all notes is produced. Other parameters
                 are ignored.
+         -mftext  No abc file is created, but a list of all
+                the midi commands (mftext like output) is
+                produced. The output is best viewed with
+                runabc.tcl
          -ver   Prints version number and exits
 
 Use only one of -u -gu -b and -Q or better none.
@@ -300,6 +304,10 @@ Usage: abc2abc <filename> [-s] [-n X] [-b] [-r] [-e] [-t X]
 
 A simple abc checker/re-formatter/transposer. If the -n option is selected, 
 error checking is turned off. 
+
+If a voice is assigned to channel 10 (drum channel) using a
+%%MIDI channel 10
+command, then this voice is never transposed.
 
 The -nokeys or -nokeyf option will set "K: none" and place accidentals on
 all notes that should have accidentals for the expected key signature. 

@@ -22,7 +22,7 @@
 /* yapstree.c - back-end for abc parser. */
 /* generates a data structure suitable for typeset music */
 
-#define VERSION "1.33 February 26 2005"
+#define VERSION "1.35 April 10 2005"
 #include <stdio.h>
 #ifdef USE_INDEX
 #define strchr index
@@ -1310,6 +1310,12 @@ char container;
 {
 }
 
+void event_acciaccatura()
+{
+/* does nothing but outputs a / in toabc.c */
+return;
+}
+
 void event_tex(s)
 char *s;
 /* A TeX command has been found in the abc */
@@ -1733,12 +1739,13 @@ char* s;
 }
 
 void event_voice(n, s, gotclef, gotoctave,gottranspose,gotname,
-	       	clefname, octave, transpose, namestring)
+	       	gotsname, clefname, octave, transpose, namestring,
+                snamestring)
 int n;
 char *s;
-int gotclef,gotoctave,gottranspose;
+int gotclef,gotoctave,gottranspose,gotname,gotsname;
 char *clefname;
-char *namestring;
+char *namestring,*snamestring;
 int transpose,octave;
 /* A voice field (V: ) has been encountered */
 {

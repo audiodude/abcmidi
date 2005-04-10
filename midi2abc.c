@@ -38,13 +38,15 @@
  * when midi program channel is command encountered, we ensure that 
  * we are using the correct channel number for the Voice by sending
  * a %%MIDI channel message.
- *                Seymour Shlien  9/December/00
+ *
+ * Many more changes (see doc/CHANGES) 
+ *
+ *                Seymour Shlien  2005
  * 
  * based on public domain 'midifilelib' package.
- *
  */
 
-#define VERSION "2.78 January 22 2005"
+#define VERSION "2.80 April 10 2005"
 
 /* Microsoft Visual C++ Version 6.0 or higher */
 #ifdef _MSC_VER
@@ -82,9 +84,12 @@ int close_note(int chan, int pitch, int *initvol);
 
 /* Global variables and structures */
 
+extern long Mf_toberead;
+
 static FILE *F;
 static FILE *outhandle; /* for producing the abc file */
 
+int tracknum=0;  /* track number */
 int division;    /* pulses per quarter note defined in MIDI header    */
 long tempo = 500000; /* the default tempo is 120 quarter notes/minute */
 int unitlen;     /* abc unit length usually defined in L: field       */
@@ -811,6 +816,319 @@ int close_note(int chan, int pitch, int *initvol)
 }
 
 
+/* mftext mode */
+int prtime()
+{
+/*  if(Mf_currtime >= pulses) ignore=0; 
+  if (ignore) return 1; 
+  linecount++;
+  if(linecount > maxlines) {fclose(F); exit(0);}
+*/
+  int units;
+  units = 1;
+  if(units==1)
+ /*seconds*/
+     printf("%6.2f   ",mf_ticks2sec(Mf_currtime,division,tempo));
+  else if (units==2)
+ /*beats*/
+     printf("%6.2f   ",(float) Mf_currtime/(float) division);
+  else
+ /*pulses*/
+    printf("%6ld  ",Mf_currtime);
+  return 0;
+}
+
+char * pitch2key(int note)
+{
+static char name[5];
+char* s = name;
+  switch(note % 12)
+  {
+  case 0: *s++ = 'c'; break;
+  case 1: *s++ = 'c'; *s++ = '#'; break;
+  case 2: *s++ = 'd'; break;
+  case 3: *s++ = 'd'; *s++ = '#'; break;
+  case 4: *s++ = 'e'; break;
+  case 5: *s++ = 'f'; break;
+  case 6: *s++ = 'f'; *s++ = '#'; break;
+  case 7: *s++ = 'g'; break;
+  case 8: *s++ = 'g'; *s++ = '#'; break;
+  case 9: *s++ = 'a'; break;
+  case 10: *s++ = 'a'; *s++ = '#'; break;
+  case 11: *s++ = 'b'; break;
+  }
+  sprintf(s, "%d", (note / 12)-1);  /* octave  (assuming Piano C4 is 60)*/
+  return  name;
+}
+
+void mftxt_header (int format, int ntrks, int ldivision)
+{
+  division = ldivision;
+  printf("Header format=%d ntrks=%d division=%d\n",format,ntrks,division);
+}
+
+void mftxt_trackstart()
+{
+  int numbytes;
+  tracknum++;
+  numbytes = Mf_toberead;
+  /*if(track != 0 && tracknum != track) {ignore_bytes(numbytes); return;} */
+  printf("Track %d contains %d bytes\n",tracknum,numbytes);
+}
+
+
+void mftxt_noteon(chan,pitch,vol)
+{
+  char *key;
+/*
+  if (onlychan >=0 && chan != onlychan) return;
+*/
+  if (prtime()) return;
+  key = pitch2key(pitch);
+  printf("Note on  %2d  %3s %3d\n",chan+1, key,vol);
+}
+
+void mftxt_noteoff(chan,pitch,vol)
+{
+  char *key;
+/*
+  if (onlychan >=0 && chan != onlychan) return;
+*/
+  if (prtime()) return;
+  key = pitch2key(pitch);
+  printf("Note off %2d  %3s %3d\n",chan+1,key,vol);
+}
+
+void mftxt_pressure(chan,pitch,press)
+{
+  char *key;
+  if (prtime()) return;
+  key = pitch2key(pitch);
+  printf("Pressure %2d   %3s %3d\n",chan+1,key,press);
+}
+
+
+void mftxt_pitchbend(chan,msb,lsb)
+{
+/*
+  if (onlychan >=0 && chan != onlychan) return;
+*/
+  if (prtime()) return;
+  printf("Pitchbnd %2d msb=%d lsb=%d\n",chan+1,msb,lsb);
+}
+
+
+
+void mftxt_program(chan,program)
+{
+static char *patches[] = {
+ "Acoustic Grand","Bright Acoustic","Electric Grand","Honky-Tonk", 
+ "Electric Piano 1","Electric Piano 2","Harpsichord","Clav", 
+ "Celesta", "Glockenspiel",  "Music Box",  "Vibraphone", 
+ "Marimba", "Xylophone", "Tubular Bells", "Dulcimer", 
+ "Drawbar Organ", "Percussive Organ", "Rock Organ", "Church Organ", 
+ "Reed Organ", "Accordian", "Harmonica", "Tango Accordian",
+ "Acoustic Guitar (nylon)", "Acoustic Guitar (steel)",
+ "Electric Guitar (jazz)", "Electric Guitar (clean)", 
+ "Electric Guitar (muted)", "Overdriven Guitar",
+ "Distortion Guitar", "Guitar Harmonics",
+ "Acoustic Bass", "Electric Bass (finger)",
+ "Electric Bass (pick)", "Fretless Bass",
+ "Slap Bass 1", "Slap Bass 2", "Synth Bass 1", "Synth Bass 2",
+ "Violin", "Viola", "Cello", "Contrabass",
+ "Tremolo Strings", "Pizzicato Strings",
+ "Orchestral Strings", "Timpani",
+ "String Ensemble 1", "String Ensemble 2",
+ "SynthStrings 1", "SynthStrings 2", 
+ "Choir Aahs", "Voice Oohs", "Synth Voice", "Orchestra Hit",
+ "Trumpet", "Trombone", "Tuba", "Muted Trumpet",
+ "French Horn", "Brass Section", "SynthBrass 1", "SynthBrass 2",
+ "Soprano Sax", "Alto Sax", "Tenor Sax", "Baritone Sax",
+ "Oboe", "English Horn", "Bassoon", "Clarinet",
+ "Piccolo", "Flute", "Recorder", "Pan Flute",
+ "Blown Bottle", "Skakuhachi", "Whistle", "Ocarina",
+ "Lead 1 (square)", "Lead 2 (sawtooth)",
+ "Lead 3 (calliope)", "Lead 4 (chiff)", 
+ "Lead 5 (charang)", "Lead 6 (voice)",
+ "Lead 7 (fifths)", "Lead 8 (bass+lead)",
+ "Pad 1 (new age)", "Pad 2 (warm)",
+ "Pad 3 (polysynth)", "Pad 4 (choir)",
+ "Pad 5 (bowed)", "Pad 6 (metallic)",
+ "Pad 7 (halo)", "Pad 8 (sweep)",
+ "FX 1 (rain)", "(soundtrack)",
+ "FX 3 (crystal)", "FX 4 (atmosphere)",
+ "FX 5 (brightness)", "FX 6 (goblins)",
+ "FX 7 (echoes)", "FX 8 (sci-fi)",
+ "Sitar", "Banjo", "Shamisen", "Koto",
+ "Kalimba", "Bagpipe", "Fiddle", "Shanai",
+ "Tinkle Bell", "Agogo", "Steel Drums", "Woodblock",
+ "Taiko Drum", "Melodic Tom", "Synth Drum", "Reverse Cymbal",
+ "Guitar Fret Noise", "Breath Noise", "Seashore", "Bird Tweet",
+ "Telephone ring", "Helicopter", "Applause", "Gunshot"};
+/*
+  if (onlychan >=0 && chan != onlychan) return;
+*/
+  if (prtime()) return;
+  printf("Program  %2d %d (%s)\n",chan+1, program,patches[program]);
+   }
+
+void mftxt_chanpressure(chan,press)
+{
+  prtime();
+  printf("Chanpres %2d pressure=%d\n",chan+1,press);
+}
+
+
+void mftxt_parameter(chan,control,value)
+{
+  static char *ctype[] = {
+ "Bank Select",       "Modulation Wheel",     /*1*/
+ "Breath controller", "unknown",              /*3*/
+ "Foot Pedal",        "Portamento Time",      /*5*/
+ "Data Entry",        "Volume",               /*7*/
+ "Balance",           "unknown",              /*9*/
+ "Pan position",      "Expression",           /*11*/
+ "Effect Control 1",  "Effect Control 2",     /*13*/
+ "unknown",           "unknown",              /*15*/
+ "Slider 1",          "Slider 2",             /*17*/
+ "Slider 3",          "Slider 4",             /*19*/
+ "unknown",           "unknown",              /*21*/
+ "unknown",           "unknown",              /*23*/
+ "unknown",           "unknown",              /*25*/
+ "unknown",           "unknown",              /*27*/
+ "unknown",           "unknown",              /*29*/
+ "unknown",           "unknown",              /*31*/
+ "Bank Select (fine)",  "Modulation Wheel (fine)",    /*33*/
+ "Breath controller (fine)",  "unknown",              /*35*/
+ "Foot Pedal (fine)",   "Portamento Time (fine)",     /*37*/
+ "Data Entry (fine)",   "Volume (fine)",              /*39*/
+ "Balance (fine)",      "unknown",                    /*41*/
+ "Pan position (fine)", "Expression (fine)",          /*43*/
+ "Effect Control 1 (fine)",  "Effect Control 2 (fine)", /*45*/
+ "unknown",           "unknown",             /*47*/
+ "unknown",           "unknown",             /*49*/
+ "unknown",           "unknown",             /*51*/
+ "unknown",           "unknown",             /*53*/
+ "unknown",           "unknown",             /*55*/
+ "unknown",           "unknown",             /*57*/
+ "unknown",           "unknown",             /*59*/
+"unknown",           "unknown",             /*61*/
+ "unknown",           "unknown",             /*63*/
+ "Hold Pedal",        "Portamento",          /*65*/
+ "Susteno Pedal",     "Soft Pedal",          /*67*/
+ "Legato Pedal",      "Hold 2 Pedal",        /*69*/
+ "Sound Variation",   "Sound Timbre",        /*71*/
+ "Sound Release Time",  "Sound Attack Time", /*73*/
+ "Sound Brightness",  "Sound Control 6",     /*75*/
+ "Sound Control 7",   "Sound Control 8",     /*77*/
+ "Sound Control 9",   "Sound Control 10",    /*79*/
+ "GP Button 1",       "GP Button 2",         /*81*/
+ "GP Button 3",       "GP Button 4",         /*83*/
+ "unknown",           "unknown",             /*85*/
+ "unknown",           "unknown",             /*87*/
+ "unknown",           "unknown",             /*89*/
+ "unknown",           "Effects Level",       /*91*/
+ "Tremolo Level",     "Chorus Level",        /*93*/
+ "Celeste Level",     "Phaser Level",        /*95*/
+ "Data button increment",  "Data button decrement", /*97*/
+ "NRP (fine)",        "NRP (coarse)",        /*99*/
+ "Registered parameter (fine)", "Registered parameter (coarse)", /*101*/
+ "unknown",           "unknown",             /*103*/
+ "unknown",           "unknown",             /*105*/
+ "unknown",           "unknown",             /*107*/
+ "unknown",           "unknown",             /*109*/
+ "unknown",           "unknown",             /*111*/
+ "unknown",           "unknown",             /*113*/
+ "unknown",           "unknown",             /*115*/
+ "unknown",           "unknown",             /*117*/
+ "unknown",           "unknown",             /*119*/
+ "All Sound Off",     "All Controllers Off", /*121*/
+ "Local Keyboard (on/off)","All Notes Off",  /*123*/
+ "Omni Mode Off",     "Omni Mode On",        /*125*/
+ "Mono Operation",    "Poly Operation"};
+
+/*  if (onlychan >=0 && chan != onlychan) return; */
+  if (prtime()) return;
+
+  printf("CntlParm %2d %s = %d\n",chan+1, ctype[control],value);
+}
+
+
+void mftxt_metatext(type,leng,mess)
+char *mess;
+{
+  static char *ttype[] = {
+    NULL,
+    "Text Event",    /* type=0x01 */
+    "Copyright Notice",  /* type=0x02 */
+    "Seqnce/Track Name",
+    "Instrument Name",  /* ...       */
+    "Lyric",
+    "Marker",
+    "Cue Point",    /* type=0x07 */
+    "Unrecognized"
+  };
+  int unrecognized = (sizeof(ttype)/sizeof(char *)) - 1;
+  int len;
+  register int n, c;
+  register char *p = mess;
+
+  if ( type < 1 || type > unrecognized )
+    type = unrecognized;
+  if (prtime()) return;
+  printf("Metatext (%s) ",ttype[type]);
+  len = leng;
+  if (len > 15) len = 15;
+  for ( n=0; n<len; n++ ) {
+    c = (*p++) & 0xff;
+    printf( (isprint(c)||isspace(c)) ? "%c" : "\\0x%02x" , c);
+  }
+  if (leng>15) printf("...");
+  printf("\n");
+}
+
+void mftxt_keysig(sf,mi)
+{
+  static char *major[] = {"Cb", "Gb", "Db", "Ab", "Eb", "Bb", "F",
+    "C", "G", "D", "A", "E", "B", "F#", "C#"};
+  static char *minor[] = {"Abmin", "Ebmin", "Bbmin", "Fmin", "Cmin",
+    "Gmin", "Dmin", "Amin", "Emin", "Bmin", "F#min", "C#min", "G#min"};
+  int index;
+  index = sf + 7;
+  if (prtime()) return;
+  if (mi)
+    printf("Metatext key signature %s (%d/%d)\n",minor[index],sf,mi);
+  else
+    printf("Metatext key signature %s (%d/%d)\n",major[index],sf,mi);
+}
+
+void mftxt_tempo(ltempo)
+long ltempo;
+{
+  tempo = ltempo;
+  if (prtime()) return;
+  printf("Metatext tempo = %6.2f bpm\n",60000000.0/tempo);
+}
+
+void mftxt_timesig(nn,dd,cc,bb)
+{
+  int denom = 1;
+  while ( dd-- > 0 )
+    denom *= 2;
+  if (prtime()) return;
+  printf("Metatext time signature=%d/%d\n",nn,denom);
+/*  printf("Time signature=%d/%d  MIDI-clocks/click=%d \
+  32nd-notes/24-MIDI-clocks=%d\n", nn,denom,cc,bb); */
+}
+
+void mftxt_smpte(hr,mn,se,fr,ff)
+{
+  if (prtime()) return;
+  printf("Metatext SMPTE, %d:%d:%d  %d=%d\n", hr,mn,se,fr,ff);
+}
+
+
+
 void initfunc_for_midinotes()
 {
     Mf_error = error;
@@ -834,6 +1152,33 @@ void initfunc_for_midinotes()
     Mf_keysig = no_op2;
     Mf_seqspecific = no_op3;
     Mf_text = no_op3;
+    Mf_arbitrary = no_op2;
+}
+
+
+void initfunc_for_mftext()
+{
+    Mf_error = error;
+    Mf_header = mftxt_header;
+    Mf_trackstart = mftxt_trackstart;
+    Mf_trackend = txt_trackend;
+    Mf_noteon = mftxt_noteon;
+    Mf_noteoff = mftxt_noteoff;
+    Mf_pressure =mftxt_pressure;
+    Mf_parameter = mftxt_parameter;
+    Mf_pitchbend = mftxt_pitchbend;
+    Mf_program = mftxt_program;
+    Mf_chanpressure = mftxt_chanpressure;
+    Mf_sysex = no_op2;
+    Mf_metamisc = no_op3;
+    Mf_seqnum = no_op1;
+    Mf_eot = no_op0;
+    Mf_timesig = mftxt_timesig;
+    Mf_smpte = mftxt_smpte;
+    Mf_tempo = mftxt_tempo;
+    Mf_keysig = mftxt_keysig;
+    Mf_seqspecific = no_op3;
+    Mf_text = mftxt_metatext;
     Mf_arbitrary = no_op2;
 }
 
@@ -2096,8 +2441,13 @@ int argc;
   arg = getarg("-Midigram",argc,argv);
   if (arg != -1) 
    {
-   midiprint=1;
-/*   return arg; */
+   midiprint = 1;
+   }
+
+  arg = getarg("-mftext",argc,argv);
+  if (arg != -1) 
+   {
+   midiprint = 2;
    }
 
   arg = getarg("-a", argc, argv);
@@ -2273,6 +2623,7 @@ int argc;
     printf("         -obpl One bar per line\n");
     printf("         -nogr No note grouping. Space between all notes\n");
     printf("         -Midigram   Prints midigram instead of abc file\n");
+    printf("         -mftext mftext output\n"); 
     printf("         -ver version number\n");
     printf(" None or only one of the options -gu, -b, -Q -u should\n");
     printf(" be specified. If none are present, midi2abc will uses the\n");
@@ -2458,6 +2809,19 @@ mfread();
 printf("%d\n",last_tick);
 }
 
+void mftext(argc,argv)
+char *argv[];
+int argc;
+{
+initfunc_for_mftext();
+init_notechan();
+last_tick=0;
+/*F = efopen(argv[argc -1],"rb");*/
+Mf_getc = filegetc;
+mfread();
+/*printf("%d\n",last_tick);*/
+}
+
 
 int main(argc,argv)
 char *argv[];
@@ -2467,7 +2831,8 @@ int argc;
   int arg;
 
   arg = process_command_line_arguments(argc,argv);
-  if(midiprint) midigram(argc,argv);
+  if(midiprint ==1) midigram(argc,argv);
+  else if(midiprint ==2) mftext(argc,argv);
   else midi2abc(argc,argv); 
   return 0;
 }

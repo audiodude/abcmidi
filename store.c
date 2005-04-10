@@ -31,7 +31,7 @@
  * Wil Macaulay (wil@syndesis.com)
  */
 
-#define VERSION "1.62 March 27 2005"
+#define VERSION "1.64 April 10 2005"
 /* enables reading V: indication in header */
 #define XTEN1 1
 /*#define INFO_OCTAVE_DISABLED 1*/
@@ -579,6 +579,12 @@ char symbol;
 char *string;
 char container;
 {
+}
+
+void event_acciaccatura()
+{
+/* does nothing here but outputs a / in abc2abc */
+return;
 }
 
 void event_tex(s)
@@ -1382,15 +1388,15 @@ char* s;
   };
 }
 
-void event_voice(n, s,gotclef,gotoctave,gottranspose,gotname,
-		clefname,octave,transpose,namestring)
+void event_voice(n, s, gotclef,gotoctave,gottranspose,gotname,gotsname,
+		clefname,octave,transpose,namestring,snamestring)
 /* handles a V: field in the abc */
 int n;
 char *s;
-int gotclef,gotoctave,gottranspose,gotname;
+int gotclef,gotoctave,gottranspose,gotname,gotsname;
 char *clefname;
 int octave,transpose;
-char *namestring;
+char *namestring,*snamestring;
 {
   if (pastheader || XTEN1) {
     voicesused = 1;

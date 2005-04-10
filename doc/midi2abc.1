@@ -1,4 +1,4 @@
-.TH MIDI2ABC 1 "21 Jan 2005"
+.TH MIDI2ABC 1 "10 April 2005"
 .SH NAME
 \fBmidi2abc\fP \- program to convert MIDI format files to abc notation
 .SH SYNOPSIS
@@ -7,7 +7,8 @@ midi2abc -f \fIinfile\fP [-xa] [-ga]
 [-ppu \fiparts per unit\fP] [-aul \fidenominator of unit length\fP]
 [-gu] [-b \fIbars\fP] [-Q \fItempo\fP] [-u \fipulses\fp]
 [-k \fIkey\fP] [-c \fIchannel\fP] [-obpl] [-bpl \fibars\fp] [-bps \fpbars\fp]
-[-o \fIfilename\fP] [-s] [-sr \fiunits\fP] [-sum] [-nt] [-Midigram] [-nogr]
+[-o \fIfilename\fP] [-s] [-sr \fiunits\fP] [-sum] [-nt] [-Midigram]
+[-mftext] [-nogr]
 
 .SH DESCRIPTION
 \fImidi2abc\fP takes a MIDI format file and converts it to something as close
@@ -138,7 +139,12 @@ midi pitch and midi velocity. The last record indicates
 the duration of the MIDI file in MIDI pulse units. The
 output is designed to go into a graphical user interface
 which will produce a graphical representation (piano roll).
-
+.TP
+.B -mftext
+When this option appears, all other options are ignored and
+no abc file is produced. Instead a list of all the MIDI
+commands are printed. The output is designed to go into
+a graphical user interface provided by runabc.tcl.
 
 .SS FEATURES
 * The key is chosen so as to minimize the number of accidentals. 
@@ -197,7 +203,7 @@ James Allwright <J.R.Allwright@westminster.ac.uk>
 .SH SUPPORTED
 Seymour Shlien <seymour.shlien@crc.ca>
 .SH VERSION
-This man page describes midi2abc version 2.74 from July 11 2004.
+This man page describes midi2abc version 2.80 from April 10 2005.
 .SH COPYRIGHT
 Copyright 1999 James Allwright
 .PP

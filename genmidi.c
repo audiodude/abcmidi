@@ -1299,10 +1299,11 @@ int *chan;
   return(p);
 }
 
-static void dodeferred(s)
+static void dodeferred(s,noteson)
 /* handle package-specific command which has been held over to be */
 /* interpreted as MIDI is being generated */
 char* s;
+int noteson;
 {
   char* p;
   char command[40];
@@ -1456,7 +1457,8 @@ char* s;
       n = n + 1;
       skipspace(&p);
     };
-    write_event(pitch_wheel, chan, data, 2);
+/* don't write pitchbend in the header track [SS] 2005-04-02 */
+    if (noteson) write_event(pitch_wheel, chan, data, 2);
     done = 1;
   };
   if (strcmp(command,"chordattack") == 0) {
@@ -2152,7 +2154,7 @@ int xtrack;
        chordattack=3*staticchordattack;
        break;
     case DYNAMIC:
-      dodeferred(atext[pitch[j]]);
+      dodeferred(atext[pitch[j]],noteson);
       break;
     case KEY:
       if(timekey) write_keysig(pitch[j], denom[j]);
