@@ -216,6 +216,9 @@ In accordance to the General MIDI recommendations the pitch range
 of the pitchwheel is set to plus or minus two semitones. Therefore
 abc2midi cannot go beyond this range.
 
+Microtones may be placed between tied notes, producing a pitch
+bend effect. eg G- ^/G.
+
 Microtones have been introduced fairly recently into abcmidi (Mar 2005);
 so far there is very little abc notated on the web which exploits
 this feature.
@@ -856,7 +859,7 @@ standard are given below.
 
 This generates a MIDI control event. If the word "control" is followed by
 "bass" or "chord", the event will be applied to the bass or chord channel,
-otherwise it will be applied to the melody channel. n1 and n2 are numbers
+otherwise it will be applied to the current channel. n1 and n2 are numbers
 in the range 0-127. Generally, n1 selects a control parameter and n2 is
 the value to which it is set. A couple of examples :
 
@@ -871,12 +874,26 @@ will set the pan parameter (left/right balance) to 0.
 See the manual for your MIDI tone generator to find out what control events 
 are supported.
 
+%%MIDI portamento [bass/chord] n
+
+This will turn on the MIDI portamento controller and set the speed
+of sliding between pitches to n. Like %%MIDI control, if the word
+portamento is followed by "bass" or "chord", the event will be 
+applied to the bass or chord channel, otherwise it will be 
+applied to the current channel. The parameter n should be between
+0 and 63. Large values imply a slow transition between pitches.
+I have found the resulting effect to be rather wierd, especially
+for large pitch intervals.
+
+%%MIDI noportamento [bass/chord] 
+
+This will turn off the portamento controller (current default).
+
 %%MIDI pitchbend [bass/chord] <high byte> <low byte>
 
 This generates a pitchbend event on the current channel, or on the bass
 or chord channel as specified. The value given by the following two bytes
-indicates the pitch change. This feature is experimental and I do not
-have good documentation on how it works.
+indicates the pitch change.
 
 %%MIDI nobarlines
 

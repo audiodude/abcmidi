@@ -31,7 +31,7 @@
  * Wil Macaulay (wil@syndesis.com)
  */
 
-#define VERSION "1.64 April 10 2005"
+#define VERSION "1.65 April 25 2005"
 /* enables reading V: indication in header */
 #define XTEN1 1
 /*#define INFO_OCTAVE_DISABLED 1*/
@@ -3714,5 +3714,26 @@ void event_eof()
   free(words);
   free(outname);
   free(outbase);
+}
+
+
+int main(argc,argv)
+int argc;
+char *argv[];
+{
+  char *filename;
+  int i;
+
+  for (i=0;i<DECSIZE;i++) decorators_passback[i]=0;
+
+  event_init(argc, argv, &filename);
+  if (argc < 2) {
+    /* printf("argc = %d\n", argc); */
+  } else {
+    init_abbreviations();
+    parsefile(filename);
+    free_abbreviations();
+  };
+  return(0);
 }
 

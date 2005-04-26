@@ -30,7 +30,7 @@ LNK=ilink32
 LDFLAGS=/ap  /L\bcc55\lib c0x32.obj
 LDFLAGS2=import32.lib cw32.lib
 
-all : abc2midi.exe midi2abc.exe abc2abc.exe mftext.exe yaps.exe midicopy.exe
+all : abc2midi.exe midi2abc.exe abc2abc.exe mftext.exe yaps.exe midicopy.exe abcmatch.exe
 
 abc2midi.exe : parseabc.obj store.obj genmidi.obj queues.obj midifile.obj parser2.obj
 	$(LNK) $(LDFLAGS) parseabc.obj genmidi.obj store.obj \
@@ -52,6 +52,11 @@ yaps.exe : parseabc.obj yapstree.obj drawtune.obj debug.obj pslib.obj position.o
 midicopy.exe: midicopy.obj
 	$(LNK)  $(LDFLAGS) midicopy.obj, midicopy.exe,, $(LDFLAGS2)
 
+abcmatch.exe : abcmatch.obj matchsup.obj parseabc.obj
+	$(LNK) $(LDFLAGS) abcmatch.obj matchsup.obj parseabc.obj,  abcmatch.exe,, $(LDFLAGS2)
+
+
+
 # common parser object code
 #
 parseabc.obj : parseabc.c abc.h parseabc.h
@@ -72,10 +77,6 @@ store.obj : store.c abc.h parseabc.h parser2.h genmidi.h
 
 genmidi.obj : genmidi.c abc.h midifile.h genmidi.h
 	$(CC) $(CFLAGS) genmidi.c 
-
-# could use -DNOFTELL here
-tomidi.obj : tomidi.c abc.h midifile.h
-	$(CC) $(CFLAGS) tomidi.c
 
 queues.obj: queues.c genmidi.h
 	$(CC) $(CFLAGS) queues.c
@@ -120,6 +121,16 @@ mftext.obj : mftext.c midifile.h
 #
 midicopy.obj :midicopy.c midicopy.h
 	$(CC) $(CFLAGS) midicopy.c
+
+# objects for abcmatch
+#
+abcmatch.obj : abcmatch.c abc.h
+	$(CC) $(CFLAGS) abcmatch.
+
+matchsup.obj : matchsup.c abc.h parseabc.h parser2.h
+	$(CC) $(CFLAGS) matchsup.c
+
+
 
 clean:
 	rm *.obj

@@ -46,7 +46,7 @@
  * based on public domain 'midifilelib' package.
  */
 
-#define VERSION "2.80 April 10 2005"
+#define VERSION "2.81 April 15 2005"
 
 /* Microsoft Visual C++ Version 6.0 or higher */
 #ifdef _MSC_VER
@@ -1081,6 +1081,7 @@ char *mess;
   if (len > 15) len = 15;
   for ( n=0; n<len; n++ ) {
     c = (*p++) & 0xff;
+    if(iscntrl(c)) {printf(" \\0x%02x",c); continue;} /* no <cr> <lf> */
     printf( (isprint(c)||isspace(c)) ? "%c" : "\\0x%02x" , c);
   }
   if (leng>15) printf("...");
@@ -2687,6 +2688,10 @@ int argc;
   argc = huntfilename(arg, argv);
   fprintf(outhandle,"X: 1\n"); 
   fprintf(outhandle,"T: from %s\n",argv[argc]); 
+  if (header_bsig == 0) {
+     fprintf(outhandle,"%%***Missing time signature meta command in MIDI file\n");
+     setup_timesig(4,  4,  8);
+     }
   fprintf(outhandle,"M: %d/%d\n", header_asig, header_bsig);
   fprintf(outhandle,"L: 1/%d\n", header_unitlen); 
 

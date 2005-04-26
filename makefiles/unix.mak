@@ -4,7 +4,7 @@
 # compilation #ifdefs - you need to compile with these defined to get
 #                       the code to compile with PCC.
 #
-# NOFTELL in midifile.c and tomidi.c selects a version of the file-writing
+# NOFTELL in midifile.c and genmidi.c selects a version of the file-writing
 #         code which doesn't use file seeking.
 #
 # PCCFIX in mftext.c midifile.c midi2abc.c
@@ -35,7 +35,7 @@ CC=gcc
 CFLAGS=-c -DANSILIBS
 LNK=gcc
 
-all : abc2midi midi2abc abc2abc mftext yaps midicopy
+all : abc2midi midi2abc abc2abc mftext yaps midicopy abcmatch
 
 abc2midi : parseabc.o store.o genmidi.o midifile.o queues.o parser2.o
 	$(LNK) -o abc2midi parseabc.o store.o genmidi.o queues.o \
@@ -52,10 +52,13 @@ mftext : midifile.o mftext.o crack.o
 
 yaps : parseabc.o yapstree.o drawtune.o debug.o pslib.o position.o parser2.o
 	$(LNK) -o yaps parseabc.o yapstree.o drawtune.o debug.o \
-	position.o pslib.o parser2.o
+	position.o pslib.o parser2.o -o yaps
 
 midicopy : midicopy.o
 	$(LNK) -o midicopy midicopy.o
+
+abcmatch : abcmatch.o matchsup.o parseabc.o
+	$(LNK) abcmatch.o matchsup.o parseabc.o -o abcmatch
 
 parseabc.o : parseabc.c abc.h parseabc.h
 	$(CC) $(CFLAGS) parseabc.c 
@@ -86,6 +89,9 @@ midi2abc.o : midi2abc.c midifile.h
 midicopy.o : midicopy.c midicopy.h
 	$(CC) $(CFLAGS) midicopy.c
 
+abcmatch.o: abcmatch.c abc.h
+	$(CC) $(CFLAGS) abcmatch.c
+
 crack.o : crack.c
 	$(CC) $(CFLAGS) crack.c 
 
@@ -109,5 +115,12 @@ position.o: position.c abc.h structs.h sizes.h
 debug.o: debug.c structs.h abc.h
 	$(CC) $(CFLAGS) debug.c
 
+#objects for abcmatch
+#
+matchsup.o : matchsup.c abc.h parseabc.h parser2.h
+	$(CC) $(CFLAGS) matchsup.c
+
 clean :
-	rm *.o abc2midi midi2abc abc2abc mftext midicopy
+
+
+	rm *.o abc2midi midi2abc abc2abc mftext midicopy yaps abcmatch

@@ -3417,4 +3417,52 @@ added new parameters to event_voice in parseabc.c, store.c,
 yapstree.c and toabc.c. (See September 26 2004 in this file
 for more details.)
 
- 
+April 15 2005
+
+Midi2abc: fixed problem causing midi2abc to crash when the
+MIDI command indicating the time signature is missing from the file. 
+
+
+April 22 2005
+
+Abc2midi: pitchbend inside a tied note. In the following
+example, the third note is held too long.
+
+X:1
+T: bends
+M: 2/4
+L: 1/8
+K: G
+%%MIDI program 60
+G4|G4|G2-_/G2|G4|
+
+Fix: in function dodeferred() (genmidi.c) for command == pitchbend, added
+ tracklen = tracklen + delta_time;
+  delta_time = 0L;
+after  write_event(pitch_wheel, chan, data, 2);
+
+Also listen to the example 11 in demo.abc.
+
+
+April 23 2005
+
+Abcmidi: introduced two more MIDI commands.
+%%MIDI portamento n
+turns on the portamento controller on the current channel and
+sets it to n. n is a 7 bit number which specifies the rate
+slides the pitch between two notes. (Unless you are composing
+20 th century classical music, you may not wish to use this
+feature. Avoid slides between large pitch intervals.)
+
+%%MIDI noportamento
+turns off the portamento controller on the current channel. 
+
+
+April 24 2005
+
+Integration of abcmatch into abcmidi package. The main() function
+in parseabc.c was moved into store.c, yapstree.c, and
+toabc.c .The function parsetune was placed in parseabc.c.
+All makefiles were updated. (I cannot verify all of them;
+report any corrections to me.) The files abcstore.c and abcparse.c
+are no longer needed; delete them if they are lieing around.

@@ -86,6 +86,8 @@ int decorators_passback[DECSIZE];
 
 int nokey=0;  /* K: none was encountered */
 int chord_n,chord_m ; /* for event_chordoff */
+int fileline_number = 1;
+int intune = 1;
 
 extern programname program;
 
@@ -1309,7 +1311,7 @@ char *s;
   event_words(s, continuation);
 }
 
-static void init_abbreviations()
+void init_abbreviations()
 /* initialize mapping of H-Z to strings */
 {
   int i;
@@ -1319,7 +1321,7 @@ static void init_abbreviations()
   };
 }
 
-static void record_abbreviation(char symbol, char *string)
+void record_abbreviation(char symbol, char *string)
 /* update record of abbreviations when a U: field is encountered */
 {
   int index;
@@ -1344,7 +1346,7 @@ char *lookup_abbreviation(char symbol)
   };
 }
 
-static void free_abbreviations()
+void free_abbreviations()
 /* free up any space taken by abbreviations */
 {
   int i;
@@ -1963,7 +1965,7 @@ char* line;
   };
 }
 
-static void parsefile(name)
+void parsefile(name)
 char* name;
 /* top-level routine for parsing file */
 {
@@ -2035,25 +2037,64 @@ char* name;
   if (parsing_started == 0) event_error("No tune processed. Possible missing X: field");
 }    
 
-int main(argc,argv)
-int argc;
-char *argv[];
+
+int parsetune(FILE *fp)
+/* top-level routine for parsing file */
 {
-  char *filename;
-  int i;
+  int reading;
+  struct vstring line;
+  /* char line[MAXLINE]; */
+  int t;
+  int lastch, done_eol;
 
-  for (i=0;i<DECSIZE;i++) decorators_passback[i]=0;
 
-  event_init(argc, argv, &filename);
-  if (argc < 2) {
-    /* printf("argc = %d\n", argc); */
-  } else {
-    init_abbreviations();
-    parsefile(filename);
-    free_abbreviations();
+  inhead = 0;
+  inbody = 0;
+  parseroff();
+  intune  = 1;
+  reading = 1;
+  line.limit = 4;
+  initvstring(&line);
+  done_eol = 0;
+  lastch = '\0';
+  while (reading && intune) {
+    t = getc(fp);
+    if (t == EOF) {
+      reading = 0;
+      if (line.len>0) {
+        printf("%s\n",line.st);
+        parseline(line.st);
+        fileline_number = fileline_number + 1;
+        lineno = fileline_number;
+        event_linebreak();
+      };
+    } else {
+      /* recognize  \n  or  \r  or  \r\n  or  \n\r  as end of line */
+      /* should work for DOS, unix and Mac files */
+      if ((t != '\n') && (t != '\r')) {
+        addch((char) t, &line);
+        done_eol = 0;
+      } else {
+        if ((done_eol) && (((t == '\n') && (lastch == '\r')) || 
+                           ((t == '\r') && (lastch == '\n')))) {
+          done_eol = 0;
+          /* skip this character */
+        } else {
+          /* reached end of line */
+          parseline(line.st);
+          clearvstring(&line);
+          fileline_number = fileline_number + 1;
+          lineno = fileline_number;
+          event_linebreak();
+          done_eol = 1;
+        };
+      };
+      lastch = t;
+    };
   };
-  return(0);
-}
+  freevstring(&line);
+return t;  
+}    
 
 /*
 int getline ()

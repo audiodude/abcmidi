@@ -4,7 +4,7 @@
 # compilation #ifdefs - you need to define some of these to get
 #                       the code to compile with PCC.
 #
-# NOFTELL in midifile.c and tomidi.c selects a version of the file-writing
+# NOFTELL in midifile.c and genmidi.c selects a version of the file-writing
 #         code which doesn't use file seeking.
 #
 # PCCFIX in mftext.c midifile.c midi2abc.c
@@ -22,8 +22,7 @@ CC=pcc
 CFLAGS=-nPCCFIX -nNOFTELL -nUSE_INDEX -nKANDR
 LNK=pccl
 
-all : abc2midi.exe midi2abc.exe abc2abc.exe mftext.exe yaps.exe
-      midicopy.exe
+all : abc2midi.exe midi2abc.exe abc2abc.exe mftext.exe yaps.exe midicopy.exe abcmatch.exe
 
 abc2midi.exe : parseabc.o store.o genmidi.o queues.o midifile.o parser2.o
 	$(LNK) -Lc:\bin\pcc\ -Oabc2midi parseabc.o store.o genmidi.o queues.o midifile.o parser2.o
@@ -38,7 +37,7 @@ mftext.exe : midifile.o mftext.o crack.o
 	$(LNK) -Lc:\bin\pcc\ midifile.o mftext.o crack.o -Omftext
 
 midicopy.exe: midicopy.o
-	$(LNK) midicopy.c $(CFLAGS)
+	$(LNK) -Lc:\bin\pcc\ midicopy.o -Omidicopy $(CFLAGS)
 
 parseabc.o : parseabc.c abc.h parseabc.h
 	$(CC) parseabc.c  $(CFLAGS)
@@ -70,9 +69,18 @@ crack.o : crack.c
 mftext.o : mftext.c midifile.h
 	$(CC) mftext.c $(CFLAGS)
 
+midicopy.o : midicopy.c
+	$(CC) midicopy.c $(CFLAGS)
+
+abcmatch.o : abcmatch.c
+	$(CC) abcmatch.c $(CFLAGS)
+
+matchsup.o : matchsup.c
+	$(CC) matchsup.c $(CFLAGS)
+
 clean:
 	del *.exe
 	del *.o
 
-zipfile: abc2midi.exe midi2abc.exe abc2abc.exe mftext.exe midicopy.exe
+zipfile: abc2midi.exe midi2abc.exe abc2abc.exe mftext.exe midicopy.exe abcmatch.exe
 	zip pcexe.zip *.exe readme.txt abcguide.txt demo.abc

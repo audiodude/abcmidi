@@ -22,7 +22,7 @@
 /* yapstree.c - back-end for abc parser. */
 /* generates a data structure suitable for typeset music */
 
-#define VERSION "1.35 April 10 2005"
+#define VERSION "1.36 April 25 2005"
 #include <stdio.h>
 #ifdef USE_INDEX
 #define strchr index
@@ -2919,5 +2919,26 @@ char* value;
     num = readsnumf(value);
     event_octave(num,0);
   };
+}
+
+
+int main(argc,argv)
+int argc;
+char *argv[];
+{
+  char *filename;
+  int i;
+
+  for (i=0;i<DECSIZE;i++) decorators_passback[i]=0;
+
+  event_init(argc, argv, &filename);
+  if (argc < 2) {
+    /* printf("argc = %d\n", argc); */
+  } else {
+    init_abbreviations();
+    parsefile(filename);
+    free_abbreviations();
+  };
+  return(0);
 }
 

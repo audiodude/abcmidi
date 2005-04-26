@@ -5,7 +5,8 @@
 typedef enum {
 ABC2MIDI,
 ABC2ABC,
-YAPS} programname;
+YAPS,
+ABCMATCH} programname;
 
 /* define types of abc object */
 typedef enum {

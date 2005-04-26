@@ -21,7 +21,7 @@
 
 /* back-end for outputting (possibly modified) abc */
 
-#define VERSION "1.40 April 10 2005"
+#define VERSION "1.41 April 25 2005"
 
 /* for Microsoft Visual C++ 6.0 or higher */
 #ifdef _MSC_VER
@@ -2297,5 +2297,26 @@ while (p < MIDDLE - 12) {
     emit_string(",");
     p = p + 12;
     };
+}
+
+
+int main(argc,argv)
+int argc;
+char *argv[];
+{
+  char *filename;
+  int i;
+
+  /*for (i=0;i<DECSIZE;i++) decorators_passback[i]=0; */
+
+  event_init(argc, argv, &filename);
+  if (argc < 2) {
+    /* printf("argc = %d\n", argc); */
+  } else {
+    init_abbreviations();
+    parsefile(filename);
+    free_abbreviations();
+  };
+  return(0);
 }
 

@@ -4,7 +4,7 @@
 # compilation #ifdefs - you may need to change these defined to get
 #                       the code to compile with a different C compiler.
 #
-# NOFTELL in midifile.c and tomidi.c selects a version of the file-writing
+# NOFTELL in midifile.c and genmidi.c selects a version of the file-writing
 #         code which doesn't use file seeking.
 #
 # PCCFIX in mftext.c midifile.c midi2abc.c
@@ -26,7 +26,7 @@ CFLAGS=-c -g -ansi -DANSILIBS -Wformat
 LNK=gcc
 
 all : abc2midi.exe midi2abc.exe abc2abc.exe mftext.exe yaps.exe\
-     midicopy.exe
+     midicopy.exe abcmatch.exe
 
 abc2midi.exe : parseabc.o store.o genmidi.o queues.o midifile.o parser2.o
 	$(LNK) -o abc2midi.exe parseabc.o genmidi.o store.o \
@@ -43,6 +43,9 @@ mftext.exe : midifile.o mftext.o crack.o
 
 midicopy.exe : midicopy.o
 	$(LNK) midicopy.o -o midicopy.exe
+
+abcmatch.exe : abcmatch.o matchsup.o parseabc.o
+	$(LNK) abcmatch.o matchsup.o parseabc.o -o abcmatch.exe
 
 
 yaps.exe : parseabc.o yapstree.o drawtune.o debug.o pslib.o position.o parser2.o
@@ -80,6 +83,9 @@ queues.o: queues.c genmidi.h
 midicopy.o: midicopy.c midicopy.h
 	$(CC) $(CFLAGS) midicopy.c
 
+abcmatch.o: abcmatch.c abc.h
+	$(CC) $(CFLAGS) abcmatch.c
+
 # common midifile library
 #
 # could use -DNOFTELL here
@@ -116,10 +122,16 @@ crack.o : crack.c
 mftext.o : mftext.c midifile.h
 	$(CC) $(CFLAGS) mftext.c
 
+# objects for abcmatch
+#
+matchsup.o : matchsup.c abc.h parseabc.h parser2.h
+	$(CC) $(CFLAGS) matchsup.c
+
+
 clean:
 	rm *.o
 	rm *.exe
 
 zipfile: midi2abc.exe abc2midi.exe mftext.exe yaps.exe\
-          abc2abc.exe midicopy.exe
+          abc2abc.exe midicopy.exe abcmatch.exe
 	zip pcexe2.zip *.exe readme.txt abcguide.txt demo.abc yaps.txt

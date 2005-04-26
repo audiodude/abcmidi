@@ -29,7 +29,7 @@ LNK=gcc
 LDFLAGS=-o
 
 all : abc2midi.exe midi2abc.exe abc2abc.exe mftext.exe yaps.exe \
-midicopy.exe
+midicopy.exe abcmatch.exe
 
 abc2midi.exe : parseabc.o store.o genmidi.o queues.o midifile.o parser2.o
 	$(LNK) $(LDFLAGS) abc2midi.exe parseabc.o genmidi.o store.o \
@@ -50,6 +50,11 @@ yaps.exe : parseabc.o yapstree.o drawtune.o debug.o pslib.o position.o parser2.o
 
 midicopy.exe: midicopy.o
 	$(LNK)  $(LDFLAGS) midicopy.exe midicopy.o
+
+abcmatch.exe : abcmatch.o matchsup.o parseabc.o
+	$(LNK) abcmatch.o matchsup.o parseabc.o -o abcmatch.exe
+
+
 
 # common parser object code
 #
@@ -116,7 +121,7 @@ mftext.o : mftext.c midifile.h
 	$(CC) $(CFLAGS) mftext.c
 
 # objects needed for midicopy
-$
+#
 midicopy.o : midicopy.c
 	$(CC) $(CFLAGS) midicopy.c
 

@@ -1,9 +1,10 @@
 abcMIDI :   abc <-> MIDI conversion utilities
 
-midi2abc version 2.80 April 10 2005
-abc2midi version 1.64 April 10 2005
-abc2abc  version 1.40 April 10 2005
-yaps     version 1.35 April 10 2005
+midi2abc version 2.81 April 15 2005
+abc2midi version 1.65 April 25 2005
+abc2abc  version 1.41 April 25 2005
+yaps     version 1.36 April 25 2005
+abcmatch version 1.24 April 25 2005
 midicopy version 1.01 July 17 2004
 
 24th January 2002
@@ -376,6 +377,8 @@ midicopy.exe input.mid output.mid
 does nothing interesting except copy the contents of input.mid to a
 new file output.mid.
 
+
+
 If you  include the -from parameter followed by a midi pulse number,
 then the program will select the appropriate data starting after the
 given midi pulse location so that will you play midi file it will start
@@ -399,6 +402,12 @@ track number and offset loc, by the byte whose value is val. This is
 used for changing the program number associated with a channel. The byte
 is replaced in the output file. If you use the -replace option, all
 other options like -from, -to, -chns etc. are ignored.
+
+
+-------------------------------------------------------------------------
+abcmatch.exe  - see abcmatch.txt
+
+
 
 -------------------------------------------------------------------------
 A Short Explanation of MIDI

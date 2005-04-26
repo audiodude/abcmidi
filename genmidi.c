@@ -1439,6 +1439,37 @@ int noteson;
     write_event(control_change, chan, data, n);
     done = 1;
   };
+
+  if (strcmp(command,"portamento") == 0) {
+   int chan, datum;
+   char data[4];
+   p = select_channel(&chan, p);
+   data[0] = 65;
+   data[1] = 127;
+   /* turn portamento on */
+   write_event(control_change, chan, data, 2);
+   data[0] = 5; /* coarse portamento */
+   datum = readnump(&p);
+   if (datum > 63) {
+        event_error("data must be in the range 0 - 63");
+        datum = 0;
+      };
+   data[1] =(char) datum;
+   write_event(control_change, chan, data, 2);
+   done = 1;
+   } 
+
+  if (strcmp(command,"noportamento") == 0) {
+   int chan, datum;
+   char data[4];
+   p = select_channel(&chan, p);
+   data[0] = 65;
+   data[1] = 0;
+   /* turn portamento off */
+   write_event(control_change, chan, data, 2);
+   done = 1;
+   }
+
   if (strcmp(command, "pitchbend") == 0) {
     int chan, n, datum;
     char data[2];
@@ -1458,7 +1489,11 @@ int noteson;
       skipspace(&p);
     };
 /* don't write pitchbend in the header track [SS] 2005-04-02 */
-    if (noteson) write_event(pitch_wheel, chan, data, 2);
+    if (noteson) {
+       write_event(pitch_wheel, chan, data, 2);
+       tracklen = tracklen + delta_time;
+       delta_time = 0L;
+       } 
     done = 1;
   };
   if (strcmp(command,"chordattack") == 0) {
@@ -1472,7 +1507,9 @@ int noteson;
     done = 1;
   };
   if (done == 0) {
-    event_error("Command not recognized");
+    char errmsg[80];
+    sprintf(errmsg, "%%%%MIDI command \"%s\" not recognized",command);
+    event_error(errmsg);
   };
 }
 

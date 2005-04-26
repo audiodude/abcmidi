@@ -5,7 +5,7 @@
 # compilation #ifdefs - you may need to change these defined to get
 #                       the code to compile with a different C compiler.
 #
-# NOFTELL in midifile.c and tomidi.c selects a version of the file-writing
+# NOFTELL in midifile.c and genmidi.c selects a version of the file-writing
 #         code which doesn't use file seeking.
 #
 # PCCFIX in mftext.c midifile.c midi2abc.c
@@ -27,7 +27,7 @@ LDFLAGS=sys nt name
 LDFLAGS2=d all op inc op st=200000 op maxe=25 op q op symf 
 LNK=wlink
 
-all : abc2midi.exe midi2abc.exe abc2abc.exe mftext.exe yaps.exe midicopy.exe
+all : abc2midi.exe midi2abc.exe abc2abc.exe mftext.exe yaps.exe midicopy.exe abcmatch.exe
 
 abc2midi.exe : parseabc.obj store.obj genmidi.obj queues.obj midifile.obj parser2.obj
 	$(LNK) $(LDFLAGS) abc2midi.exe $(LDFLAGS2) FILE parseabc.obj FILE genmidi.obj FILE store.obj \
@@ -47,6 +47,11 @@ midicopy.exe : midicopy.obj
 
 yaps.exe : parseabc.obj yapstree.obj drawtune.obj debug.obj pslib.obj position.obj parser2.obj
 	$(LNK) $(LDFLAGS) yaps.exe $(LDFLAGS2) FILE parseabc.obj FILE yapstree.obj FILE drawtune.obj FILE debug.obj FILE position.obj FILE pslib.obj FILE parser2.obj 
+
+
+abcmatch.exe : abcmatch.obj matchsup.obj parseabc.obj
+	$(LNK) $(LDFLAGS) abcmatch.exe $(LDFLAGS2) FILE abcmatch.obj FILE  matchsup.obj FILE parseabc.obj
+
 
 # common parser object code
 #
@@ -117,9 +122,17 @@ mftext.obj : mftext.c midifile.h
 midicopy.obj : midicopy.c midicopy.h
 	$(CC) $(CFLAGS) midicopy.c
 
+#objects for abcmtch
+#
+abcmatch.obj : abcmatch.c abc.h
+	$(CC) $(CFLAGS) abcmatch.c
+
+matchsup.obj : matchsup.c abc.h parseabc.h parser2.h genmidi.h
+	$(CC) $(CFLAGS) matchsup.c
+
 clean:
 	rm *.obj
 	rm *.exe
 
-zipfile: midi2abc.exe abc2midi.exe mftext.exe yaps.exe abc2abc.exe
+zipfile: midi2abc.exe abc2midi.exe mftext.exe yaps.exe abc2abc.exe abcmatch.exe
 	zip pcexe2.zip *.exe readme.txt abcguide.txt demo.abc yaps.txt
