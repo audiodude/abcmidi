@@ -24,6 +24,11 @@
 /* This file contains routines to calculate symbol positions within */
 /* a line of music. */
 
+/* for Microsoft Visual C++ 6.0 and higher */
+#ifdef _MSC_VER
+#define ANSILIBS
+#endif
+
 #include <stdio.h>
 #ifdef ANSILIBS
 #include <stdlib.h>

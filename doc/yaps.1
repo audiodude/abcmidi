@@ -4,8 +4,8 @@
 YAPS
 \- converts an abc file to a PostScript file
 .SH SYNOPSIS
-yaps \fiabc\ file\fP [-d] [-e\ <list>] [-E] [-l] [-M \fiXXXxYYY\fp] \
-[-N] [-k nn] [-o \fifile\ name\fp] [-P -\fiss\fp] [-s \fiXX\fp] [-V]\
+yaps \fiabc\ file\fP [-d] [-e\ <list>] [-E] [-l] [-M \fiXXXxYYY\fP] \
+[-N] [-k nn] [-o \fifile\ name\fP] [-P -\fiss\fP] [-s \fiXX\fP] [-V]\
 [-ver] [-x]
 
 
@@ -32,15 +32,15 @@ Adds page numbering.
 Adds bar numbering. If number nn is included, then every nn'th bar
 is numbered. Otherwise all bars are numbered.
 .TP
-.B -o \fifilename\fp 
+.B -o \fifilename\fP 
 Specifies the output postscript file name.
 .TP
-.B -P \fiss\fp
+.B -P \fiss\fP
 Specifies the paper size where 0 is A4 and 1 is US Letter
 or XXXxYYY sets the paper size in point units.
  units.
 .TP
-.B  -s \fiXX\fp
+.B  -s \fiXX\fP
 Specifies the scaling factor (default is 0.7)
 .TP
 .B -V

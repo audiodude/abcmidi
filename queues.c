@@ -94,6 +94,7 @@ int num, denom, pitch, chan, d;
     } else {
       if (Q[*ptr].delay > wait) {
         Q[*ptr].delay = Q[*ptr].delay - wait -notedelay;
+        if (Q[*ptr].delay < 0) Q[*ptr].delay = 0;
         Q[i].next = *ptr;
         Q[i].delay = wait;
         *ptr = i;

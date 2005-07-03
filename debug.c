@@ -203,7 +203,6 @@ void showtune(struct tune* t)
   char* atitle;
   int notesdone;
   struct voice* thisvoice;
-  int doneline;
 
   notesdone = 0;
   atitle = firstitem(&t->title);

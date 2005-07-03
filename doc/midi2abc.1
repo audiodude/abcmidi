@@ -1,14 +1,14 @@
-.TH MIDI2ABC 1 "10 April 2005"
+.TH MIDI2ABC 1 "27 June 2005"
 .SH NAME
 \fBmidi2abc\fP \- program to convert MIDI format files to abc notation
 .SH SYNOPSIS
 midi2abc -f \fIinfile\fP [-xa] [-ga]
 [-a \fIacbeats\fP] [-m \fItime signature\fP] 
 [-ppu \fiparts per unit\fP] [-aul \fidenominator of unit length\fP]
-[-gu] [-b \fIbars\fP] [-Q \fItempo\fP] [-u \fipulses\fp]
-[-k \fIkey\fP] [-c \fIchannel\fP] [-obpl] [-bpl \fibars\fp] [-bps \fpbars\fp]
-[-o \fIfilename\fP] [-s] [-sr \fiunits\fP] [-sum] [-nt] [-Midigram]
-[-mftext] [-nogr]
+[-gu] [-b \fIbars\fP] [-Q \fItempo\fP] [-u \fipulses\fP]
+[-k \fIkey\fP] [-c \fIchannel\fP] [-obpl] [-bpl \fibars\fP] [-bps \fPbars\fP]
+[-o \fIfilename\fP] [-s] [-sr \fiunits\fP] [-sum] [-nt]
+[-splitbars] [-splitvoices] [-Midigram] [-mftext] [-nogr]
 
 .SH DESCRIPTION
 \fImidi2abc\fP takes a MIDI format file and converts it to something as close
@@ -37,7 +37,7 @@ length is defined by the L: field. For example if L: 1/8, then a
 quarter note would be indicated by the value 4, (4 1/16 units). 
 .SS OPTIONS
 .TP
-.B -a \fIacbeats\fp
+.B -a \fIacbeats\fP
 where acbeats specifies the anacrusis in half unit lengths. 
 .TP
 .B -xa
@@ -59,14 +59,14 @@ tempo in quarter-notes per minute
 Allows you to specify directly the number of midi pulses per
 abc time unit.
 .TP
-.B -ppu \fiparts per abc unit length\fp
+.B -ppu \fiparts per abc unit length\fP
 Normally, the smallest note unit that midi2abc can extract
 is half the L: unit length.This is called the quantum unit.
 Thus for L: 1/8, midi2abc can extract 1/16 notes but not 1/32 notes.
 You can change this by specifying -ppu 4 for example. The number of parts
 should be a power of 2.
 .TP
-.B -aul \fidenominator of abc unit length\fp
+.B -aul \fidenominator of abc unit length\fP
 Normally midi2abc chooses a unit length of 1/8 or 1/16
 depending upon the time signature. For time signatures
 smaller than 3/4 the L: 1/16 is used and for larger time
@@ -128,6 +128,19 @@ Print nbars of music on every line followed by a backslash.
 .B -bps \finbars\fP
 When nbars have been printed (including those lines joined by
 a backslash continuation) go to a new line (with no backslash).
+.TP
+.B -splitbars
+This parameter changes the way midi2abc prints chords
+composed of notes of unequal length (polyphonic chords).
+Normally, midi2abc joins the longer notes to the notes in
+the following chord using ties. A more readable output, can
+be obtained if the measure is split into separate parts using
+the '&' feature in abc notation. This is a new feature and may
+not work correctly on all MIDI files.
+.TP
+.B -splitvoices
+This parameter like above handles polyphonic chords by
+splitting an entire voice into multi voices.
 .TP
 .B -Midigram
 When this option appears, all other options are ignored and
@@ -203,7 +216,7 @@ James Allwright <J.R.Allwright@westminster.ac.uk>
 .SH SUPPORTED
 Seymour Shlien <seymour.shlien@crc.ca>
 .SH VERSION
-This man page describes midi2abc version 2.80 from April 10 2005.
+This man page describes midi2abc version 2.85 from June 27 2005.
 .SH COPYRIGHT
 Copyright 1999 James Allwright
 .PP

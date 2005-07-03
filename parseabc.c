@@ -89,7 +89,7 @@ int chord_n,chord_m ; /* for event_chordoff */
 int fileline_number = 1;
 int intune = 1;
 
-extern programname program;
+extern programname fileprogram;
 
 
 int* checkmalloc(bytes)
@@ -870,7 +870,7 @@ char* str;
       }
       minor = 0;
       foundmode = 0;
-      if (strlen(word) == j) {
+      if ( (int) strlen(word) == j) {
         /* look at next word for mode */
         skipspace(&s);
         moveon = readword(modestr, s);
@@ -1017,10 +1017,10 @@ char **s;
   };
   /*check for decorated chord */
   if (**s == '[') {
-    if (program == YAPS) event_warning("decorations applied to chord");
+    if (fileprogram == YAPS) event_warning("decorations applied to chord");
     for (i = 0; i<DECSIZE; i++) chorddecorators[i] = decorators[i];
     event_chordon(chorddecorators);
-    if (program == ABC2ABC)
+    if (fileprogram == ABC2ABC)
       for (i=0; i<DECSIZE; i++) decorators[i] = 0;
     parserinchord = 1;
     *s = *s + 1;
@@ -1028,7 +1028,7 @@ char **s;
   };
   if (parserinchord) {
     /* inherit decorators */
-    if (program != ABC2ABC)
+    if (fileprogram != ABC2ABC)
        for (i = 0; i<DECSIZE; i++) {
           decorators[i] = decorators[i] | chorddecorators[i];
           };
@@ -1560,7 +1560,6 @@ char* field;
   int i;
   char playonrep_list[80];
   int decorators[DECSIZE];
-  int n,m;
 
   event_startmusicline();
   endchar = ' ';
@@ -1889,6 +1888,10 @@ char* field;
         p = p + 1;
         if (ingrace) event_acciaccatura();
         else event_error("stray / not in grace sequence");
+        break;
+      case '&':
+        p = p + 1;
+        event_split_voice();
         break;
       default:
         {

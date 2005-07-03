@@ -66,6 +66,7 @@ voice indications are ignored.
 #include "parseabc.h"
 #include "parser2.h"
 #include <stdio.h>
+#include <stdlib.h>
 
 #ifdef __MWERKS__
 #define __MACINTOSH__ 1
@@ -101,7 +102,7 @@ extern void reduce();
 
 FILE *fp;
 
-programname program = ABCMATCH;
+programname fileprogram = ABCMATCH;
 
 
 /* parsing stage */
@@ -153,6 +154,7 @@ int note_unit_length=8;
 int maxnotes;
 int *pitch, *num, *denom;
 featuretype *feature;
+int *pitchline;
 int notes;
 
 int verbose = 0;
@@ -206,6 +208,28 @@ extern int intune; /* signals to parsetune that tune is finished */
 As I have been forced to also modifiy parseabc, now called abcparse, these
 functions can also be removed eventually.
  */
+
+char *featname[] = {
+"SINGLE_BAR", "DOUBLE_BAR", "BAR_REP", "REP_BAR",
+"PLAY_ON_REP", "REP1", "REP2", "BAR1",
+"REP_BAR2", "DOUBLE_REP", "THICK_THIN", "THIN_THICK",
+"PART", "TEMPO", "TIME", "KEY",
+"REST", "TUPLE", "NOTE", "NONOTE",
+"OLDTIE", "TEXT", "SLUR_ON", "SLUR_OFF",
+"TIE", "CLOSE_TIE", "TITLE", "CHANNEL",
+"TRANSPOSE", "RTRANSPOSE", "GTRANSPOSE", "GRACEON",
+"GRACEOFF", "SETGRACE", "SETC", "GCHORD",
+"GCHORDON", "GCHORDOFF", "VOICE", "CHORDON",
+"CHORDOFF", "CHORDOFFEX", "DRUMON", "DRUMOFF",
+"DRONEON", "DRONEOFF", "SLUR_TIE", "TNOTE",
+"LT", "GT", "DYNAMIC", "LINENUM",
+"MUSICLINE", "MUSICSTOP", "WORDLINE", "WORDSTOP",
+"INSTRUCTION", "NOBEAM", "CHORDNOTE", "CLEF",
+"PRINTLINE", "NEWPAGE", "LEFT_TEXT", "CENTRE_TEXT",
+"VSKIP", "COPYRIGHT", "COMPOSER", "ARPEGGIO"
+};
+
+
 
 void event_info (place)
 char * place;
@@ -416,6 +440,11 @@ void event_acciaccatura()
 return;
 }
 
+void event_split_voice()
+{
+}
+
+
 
 void event_tex(s)
 /* TeX command found - ignore it */
@@ -490,6 +519,12 @@ int maxnotes;
   pitch = ptr;
   ptr = checkmalloc(newlimit*sizeof(int));
   for(i=0;i<maxnotes;i++){
+    ptr[i] = pitchline[i];
+  };
+  free(pitchline);
+  pitchline = ptr;
+  ptr = checkmalloc(newlimit*sizeof(int));
+  for(i=0;i<maxnotes;i++){
     ptr[i] = num[i];
   };
   free(num);
@@ -529,8 +564,6 @@ static void addfeature(f, p, n, d)
 /* place feature in internal table */
 int f, p, n, d;
 {
-float fract;
-int length;
   feature[notes] = f;
   pitch[notes] = p;
   num[notes] = n;
@@ -1210,12 +1243,12 @@ void event_chordoff(int chord_n, int chord_m)
   if (!v->inchord) {
     event_error("Chord already finished");
   } else {
-/*
-    if(chord_m == 1 && chord_n == 1) /* chord length not set outside [] 
+
+    if(chord_m == 1 && chord_n == 1) /* chord length not set outside [] */
       addfeature(CHORDOFF, 0, v->chord_num, v->chord_denom);
     else
       addfeature(CHORDOFFEX, 0, chord_n*4, chord_m*v->default_length);
-*/
+
     v->inchord = 0;
     v->chordcount = 0;
     marknoteend();
@@ -1312,6 +1345,7 @@ char accidental, note;
 int xoctave, n, m;
 {
   int pitch;
+  int pitch_noacc;
   int num, denom;
   int octave;
 
@@ -1349,6 +1383,7 @@ int xoctave, n, m;
     addunits(num, denom*(v->default_length));
   };
   pitch = pitchof(note, accidental, mult, octave, 1);
+  pitch_noacc = pitchof(note,0,0,octave,0);
   if (decorators[FERMATA]) {
     num = num*2;
   };
@@ -1357,6 +1392,7 @@ int xoctave, n, m;
     v->chord_denom = denom*(v->default_length);
   };
 
+   pitchline[notes] = pitch_noacc;
    addfeature(NOTE, pitch, num*4, denom*(v->default_length));
    marknote();
 }
@@ -1481,19 +1517,26 @@ int a, b;
   reduce(xnum, xdenom);
 }
 
-static void dotie(j, xinchord)
+
+static void dotie(j, xinchord,voiceno)
 /* called in preprocessing stage to handle ties */
-int j, xinchord;
+/* we need the voiceno in case a tie is broken by a */
+/* voice switch.                                    */
+int j, xinchord,voiceno;
 {
   int tienote, place;
   int tietodo, done;
   int lastnote, lasttie;
   int inchord;
   int tied_num, tied_denom;
+  int localvoiceno;
+  int samechord;
 
-  lastnote = 1;
   /* find note to be tied */
+  samechord = 0;
+  if (xinchord) samechord = 1;
   tienote = j;
+  localvoiceno = voiceno;
   while ((tienote > 0) && (feature[tienote] != NOTE) &&
          (feature[tienote] != REST)) {
     tienote = tienote - 1;
@@ -1515,18 +1558,23 @@ int j, xinchord;
     lastnote = -1;
     done = 0;
     while ((place < notes) && (tied_num >=0) && (done == 0)) {
+     /* printf("%d %s   %d %d/%d ",place,featname[feature[place]],pitch[place],num[place],denom[place]); */
       switch (feature[place]) {
         case NOTE:
+          if(localvoiceno != voiceno) break;
           lastnote = place;
           if ((tied_num == 0) && (tietodo == 0)) {
             done = 1;
           };
-          if ((pitch[place] == pitch[tienote]) && (tietodo == 1)) {
+          if ((pitchline[place] == pitchline[tienote])
+             && (tietodo == 1) && (samechord == 0)) {
             /* tie in note */
             if (tied_num != 0) {
               event_error("Time mismatch at tie");
             };
             tietodo = 0;
+	    pitch[place] = pitch[tienote]; /* in case accidentals did not
+					      propagate                   */
             /* add time to tied time */
             addfract(&tied_num, &tied_denom, num[place], denom[place]);
             /* add time to tied note */
@@ -1544,6 +1592,7 @@ int j, xinchord;
           };
           break;
         case REST:
+          if(localvoiceno != voiceno) break;
           if ((tied_num == 0) && (tietodo == 0)) {
             done = 1;
           };
@@ -1553,62 +1602,85 @@ int j, xinchord;
           };
           break;
         case TIE:
-         if (lastnote == -1) {
+          if(localvoiceno != voiceno) break;
+          if (lastnote == -1) {
             event_error("Bad tie: possibly two ties in a row");
           } else {
-            if (pitch[lastnote] == pitch[tienote]) {
+            if (pitch[lastnote] == pitch[tienote] && samechord == 0) {
               lasttie = place;
               tietodo = 1;
+              if (inchord) samechord = 1;
             };
           };
           break;
         case CHORDON:
+          if(localvoiceno != voiceno) break;
           inchord = 1;
           break;
         case CHORDOFF:
+        case CHORDOFFEX:
+          samechord = 0;
+          if(localvoiceno != voiceno) break;
           inchord = 0;
           /* subtract time from tied time */
           addfract(&tied_num, &tied_denom, -num[place], denom[place]);
           break;
+        case VOICE:
+          localvoiceno = pitch[place];
         default:
           break;
       };
+      /*printf("tied_num = %d done = %d inchord = %d\n",tied_num, done, inchord); */
       place = place + 1;
     };
     if (tietodo == 1) {
       event_error("Could not find note to be tied");
     };
   };
+/* printf("dotie finished\n"); */
 }
 
 static void tiefix()
-/* connect up tied notes */
+/* connect up tied notes and cleans up the */
+/* note lengths in the chords (eg [ace]3 ) */
 {
   int j;
   int inchord;
   int chord_num, chord_denom;
+  int chord_start,chord_end;
+  int voiceno;
 
   j = 0;
   inchord = 0;
+  voiceno = 1;
   while (j<notes) {
     switch (feature[j]) {
     case CHORDON:
       inchord = 1;
       chord_num = -1;
+      chord_start = j;
+      j = j + 1;
+      break;
+    case CHORDOFFEX:
+      inchord = 0;
+      chord_end=j;
       j = j + 1;
       break;
     case CHORDOFF:
       if (!((!inchord) || (chord_num == -1))) {
-        num[j] = chord_num;
-        denom[j] = chord_denom;
+        num[j] = chord_num; 
+        denom[j] = chord_denom; 
       };
       inchord = 0;
+      chord_end=j;
       j = j + 1;
       break;
     case NOTE:
       if ((inchord) && (chord_num == -1)) {
         chord_num = num[j];
         chord_denom = denom[j];
+        /* use note length in num,denom as chord length */
+        /* if chord length is not set outside []        */
       };
       j = j + 1;
       break;
@@ -1620,13 +1692,23 @@ static void tiefix()
       j = j + 1;
       break;
     case TIE:
-      dotie(j, inchord);
+/*
+      if (chord_end+1 == j) { /* did a TIE connect with a chord */
+	      /* removefeature(j);
+	       patchup and backtrack/
+	      j = patchup_chordtie(chord_start,chord_end);
+	      inchord=1;
+              }
+*/
+      dotie(j, inchord,voiceno);
       j = j + 1;
       break;
     case LINENUM:
       lineno = pitch[j];
       j = j + 1;
       break;
+    case VOICE:
+      voiceno = pitch[j];
     default:
       j = j + 1;
       break;
@@ -1753,7 +1835,7 @@ int j;
 }
 
 
-static void startfile()
+void startfile()
 /* called at the beginning of an abc tune by event_refno */
 /* This sets up all the default values */
 {
@@ -1905,7 +1987,7 @@ for (i=0;i<notes;i++) {
   printf("%d %d %s %d %d %d",i,feature[i],featurename[feature[i]],pitch[i],num[i],denom[i]);
   if (feature[i] == NOTE || feature[i] == TNOTE || feature[i] == REST) {
     fract = (float) num[i]/ (float) denom[i];
-    length = fract * 12.0 +0.1;
+    length = (int) (fract * 12.0 +0.1);
     printf(" %d",length);
     }
   printf("\n");
@@ -1999,6 +2081,7 @@ void event_eof()
 void free_feature_representation ()
 {
   free(pitch);
+  free(pitchline);
   free(num);
   free(denom);
   free(feature);

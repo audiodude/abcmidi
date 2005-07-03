@@ -1,11 +1,11 @@
 abcMIDI :   abc <-> MIDI conversion utilities
 
-midi2abc version 2.81 April 15 2005
-abc2midi version 1.65 April 25 2005
-abc2abc  version 1.41 April 25 2005
-yaps     version 1.36 April 25 2005
-abcmatch version 1.24 April 25 2005
-midicopy version 1.01 July 17 2004
+midi2abc version 2.86 June  30 2005
+abc2midi version 1.69 June  27 2005
+abc2abc  version 1.43 May   14 2005
+yaps     version 1.38 May   14 2005
+abcmatch version 1.27 July  02 2005
+midicopy version 1.02 May   22 2005
 
 24th January 2002
 
@@ -113,6 +113,8 @@ midi2abc <options>
          -bpl <number> of bars per printed line
          -bps <number> of bars per staff line
          -nogr No note grouping. Space put between every note.
+         -splitbars splits bars to avoid nonhomophonic chords. 
+         -splitvoices splits voices to avoid nonhomophonic chords. 
          -Midigram   No abc file is created, but a list
 		of all notes is produced. Other parameters
                 are ignored.
@@ -189,6 +191,25 @@ smaller parts.  Two new run time parameters were introduced:
 It should be a power of 2 (eg. 1,2,4,8,16 ...) and by default 
 it remains as 2 as before. The -aul specifies the L: value to use,
 for example, to get L: 1/32 you would put -aul 32.
+
+
+Keyboard and guitar music has a lot of chords which frequently
+poses a problem to midi2abc. If the notes in the chord do
+not share a common onset or end time, midi2abc uses ties to join
+the longer notes to other chords. This produces a mess looking
+somewhat like
+[AG-G-G-D-G,,,-][B/2-B/2-B/2-G/2G/2-G/2-D/2-G,,,/2-]...
+which does not convert into something easy to read when
+display in common music notation. Abcm2ps and abc2midi allow
+a bar to be split into separate voices using the & sign.
+Separating the notes which do not overlap exactly into
+individual voices provides some improvement. If you encountering
+this problem with your MIDI file, you may wish to try rerunning
+the file with either the -splitbars or -splitvoices parameter.
+This is a feature introduced in June 2005 (version 2.83) and may
+require more tuning at some later point. This feature may not
+work correctly with some MIDI file.
+
 
 The -Midigram option runs midi2abc in a completely different
 mode. It does not produce any abc file but outputs a list
@@ -384,12 +405,15 @@ then the program will select the appropriate data starting after the
 given midi pulse location so that will you play midi file it will start
 from that midi pulse number. In order to ensure that the right tempo,
 channel assignments are used, all of these commands prior to that
-pulse number are also copied, however the pulse number in the new file
-remains at zero for those commands.
+pulse number are also copied.
 
 If you include the -to command followed by a midi  pulse number, the
 midi file is truncated beyond that point, so that when you play the file
 it will stop at this point.
+
+If you have selected a time interval using the -from or -to parameters
+(or both), then the program will print out the estimated duration of
+the output midi file.
 
 All the tracks will be copied unless you specify them in the list following
 keyword -trks. You start counting tracks from 1.

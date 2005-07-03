@@ -39,7 +39,7 @@
 
 
 
-#define VERSION "1.01 July 17 2004"
+#define VERSION "1.02 May 22 2005"
 #include "midicopy.h"
 #define NULLFUNC 0
 #define NULL 0
@@ -108,7 +108,12 @@ int chnflag = 0;		/* flag indicating not all channels selected */
 FILE *F_in, *fp;
 int format, ntrks, division;
 int start_tick, end_tick, flag_metaeot;
+int current_tempo = 500000;
+float seconds_output;
 
+struct tempostruc {
+   int tick; int value;} tempo_array[1000];
+int temposize,tempo_index;
 
 /*          Support stuff                         */
 
@@ -133,6 +138,7 @@ open_note(int chan, int pitch)
 */
 {
     int index;
+    /*printf("%f %d\n",Mf_currtime/(float) division,pitch); */
     index = 128 * chan + pitch;
     if (index < 0 || index > 2047)
 	printf("illegal chan/pitch %d %d\n", chan, pitch);
@@ -454,11 +460,20 @@ void copytrack_verbatim()
 }
 
 
+int update_current_tempo ()
+{
+    if(Mf_currtime < tempo_array[tempo_index+1].tick) 
+            return tempo_array[tempo_index].value;
+    while (tempo_index < temposize)
+       {
+       tempo_index++;
+       if (Mf_currtime < tempo_array[tempo_index].tick) break;
+       }
+  tempo_index--;
+   return tempo_array[tempo_index].value;
+}
 
-
-
-
-readtrack()
+float readtrack()
 {				/* read a track chunk */
     /* This array is indexed by the high half of a status byte.  It's */
     /* value is either the number of bytes needed (1 or 2) for a channel */
@@ -474,6 +489,13 @@ readtrack()
     int status = 0;		/* status value (e.g. 0x90==note-on) */
     int needed;
     long varinum;
+    float delta_seconds; 
+    float accumulated_seconds;
+    int accumulating;
+
+    accumulated_seconds = 0.0;
+    accumulating = 0;
+    tempo_index = 0;
 
     if (readmt("MTrk") == EOF)
 	return (0);
@@ -491,6 +513,7 @@ readtrack()
 
     while (Mf_toberead > 0) {
 
+        current_tempo = update_current_tempo(); 
 	delta_time = readvarinum();
 	Mf_currtime += delta_time;
 	if (end_tick > 0 && Mf_currtime > end_tick) {
@@ -499,7 +522,6 @@ readtrack()
 	    Mf_currtime = end_tick;
 	    break;
 	}
-
 
 	c = egetc();
 
@@ -518,6 +540,13 @@ readtrack()
 	needed = chantype[(status >> 4) & 0xf];
 
 	if (needed) {		/* ie. is it a channel message? */
+
+        if (accumulating) {
+          delta_seconds = (float) delta_time*current_tempo/
+                            ((float) division*1000000.0);
+          accumulated_seconds += delta_seconds;
+          }
+          if (Mf_currtime > Mf_currcopytime) accumulating = 1;
 
 	    if (running)
 		c1 = c;
@@ -582,7 +611,7 @@ readtrack()
 	    break;
 	}
     }
-    return (1);
+    return accumulated_seconds;
 }
 
 
@@ -876,6 +905,10 @@ FILE *fp;
 {
     int i;
     void mf_write_track_chunk();
+    float track_time;
+
+    seconds_output = 0.0;    
+    temposize = 0;
 
     /* In format 1 files, the first track is a tempo map */
     if (format == 1 && (Mf_writetempotrack)) {
@@ -889,7 +922,8 @@ FILE *fp;
 	else {
 	    flag_metaeot = 0;
 	    init_notechan();
-	    readtrack();
+	    track_time = readtrack();
+            if (track_time > seconds_output) seconds_output = track_time;
 	    turn_off_all_playing_notes();
 	    if (flag_metaeot)
 		copy_metaeot();	/*need end of track message*/
@@ -1055,7 +1089,17 @@ long tempo;
     /* Write tempo */
     /* all tempos are written as 120 beats/minute, */
     /* expressed in microseconds/quarter note     */
-    eputc(0);
+
+    void WriteVarLen();
+    current_tempo = tempo;
+    tempo_array[temposize].tick = Mf_currtime;
+    tempo_array[temposize].value = current_tempo;
+    if (temposize < 999) temposize++;
+
+    if (Mf_currtime - Mf_currcopytime < 0) eputc(0); 
+    else { WriteVarLen(Mf_currtime - Mf_currcopytime);
+	 Mf_currcopytime = Mf_currtime;}
+
     eputc((char) meta_event);
     eputc(set_tempo);
 
@@ -1248,6 +1292,7 @@ main(int argc, char *argv[])
     int repflag;
     char val;
 
+
     for (i = 0; i < 32; i++)
 	tocopy[i] = 1;
     for (i = 0; i < 16; i++)
@@ -1289,7 +1334,7 @@ main(int argc, char *argv[])
 		       &trk[5], &trk[6], &trk[7], &trk[8]
 		       , &trk[9], &trk[10], &trk[11]);
     if (mtrks > 0) {
-	printf("%d tracks specified\n", mtrks);
+	/* printf("%d tracks specified\n", mtrks); */
 	for (i = 0; i < 32; i++)
 	    tocopy[i] = 0;
 	for (i = 0; i < mtrks; i++)
@@ -1325,7 +1370,7 @@ main(int argc, char *argv[])
 
     F_in = fopen(argv[argc - 2], "rb");
     if (F_in == NULL) {
-	printf("cannot open input file%s\n", argv[argc - 2]);
+	printf("cannot open input file %s\n", argv[argc - 2]);
 	exit(1);
     }
     fp = fopen(argv[argc - 1], "wb");
@@ -1346,4 +1391,6 @@ main(int argc, char *argv[])
     free(trackdata);
     fclose(F_in);
     fclose(fp);
+    printf("%f\n",seconds_output);
+    return(0);
 }

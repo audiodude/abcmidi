@@ -77,6 +77,7 @@ extern int verbose;
 extern int sf, mi;
 extern int gchordvoice, wordvoice, drumvoice, dronevoice;
 extern int gchordtrack, drumtrack, dronetrack;
+extern int nsplits;
 
 /* Part handling */
 extern struct vstring part;
@@ -116,6 +117,7 @@ extern int header_time_num,header_time_denom;
 /* generating MIDI output */
 int beat;
 int loudnote, mednote, softnote;
+int velocity_increment = 10; /* for crescendo and decrescendo */
 char beatstring[100]; 
 int nbeats;
 int channel, program;
@@ -1403,6 +1405,22 @@ int noteson;
     };
     done = 1;
   };
+
+  if (strcmp(command, "beatmod") == 0) {
+    skipspace(&p);
+    velocity_increment = readsnump(&p);
+    loudnote += velocity_increment;
+    mednote  += velocity_increment;
+    softnote += velocity_increment;
+    if (loudnote > 127) loudnote = 127;
+    if (mednote  > 127) mednote = 127;
+    if (softnote > 127) softnote = 127;
+    if (loudnote < 0)   loudnote = 0;
+    if (mednote  < 0)   mednote = 0;
+    if (softnote < 0)   softnote = 0;
+    done = 1;
+    }
+
   if (strcmp(command, "beatstring") == 0) {
     int count;
 
@@ -1460,7 +1478,7 @@ int noteson;
    } 
 
   if (strcmp(command,"noportamento") == 0) {
-   int chan, datum;
+   int chan;
    char data[4];
    p = select_channel(&chan, p);
    data[0] = 65;
@@ -1548,7 +1566,7 @@ void dogchords(i)
 int i;
 {
 int j;
-  if ((i == g_ptr) && (g_ptr < strlen(gchord_seq))) {
+  if ((i == g_ptr) && (g_ptr < (int) strlen(gchord_seq))) {
     int len;
     char action;
 
@@ -1640,7 +1658,7 @@ void dodrums(i)
 /* generate drum notes */
 int i;
 {
-  if ((i == drum_ptr) && (drum_ptr < strlen(drum_seq))) {
+  if ((i == drum_ptr) && (drum_ptr < (int) strlen(drum_seq))) {
     int len;
     char action;
 
@@ -1788,6 +1806,7 @@ int xtrack;
   tracklen = 0L;
   delta_time = 0L;
   trackvoice = xtrack;
+ /* if (trackvoice >= ntracks) trackvoice = xtrack-ntracks+32; */
   wordson = 0;
   noteson = 1;
   gchordson = 0;
@@ -1896,7 +1915,7 @@ int xtrack;
         if (inchord) {
            notecount++;
            if (notecount > 1) {
-                if(chordattack > 0) notedelay = chordattack*ranfrac();
+                if(chordattack > 0) notedelay = (int) (chordattack*ranfrac());
                 delta_time += notedelay;
                 totalnotedelay += notedelay;
                 }
@@ -2277,6 +2296,38 @@ int xtrack;
   };
   return (delta_time);
 }
+
+
+char *featname[] = {
+"SINGLE_BAR", "DOUBLE_BAR", "BAR_REP", "REP_BAR",
+"PLAY_ON_REP", "REP1", "REP2", "BAR1",
+"REP_BAR2", "DOUBLE_REP", "THICK_THIN", "THIN_THICK",
+"PART", "TEMPO", "TIME", "KEY",
+"REST", "TUPLE", "NOTE", "NONOTE",
+"OLDTIE", "TEXT", "SLUR_ON", "SLUR_OFF",
+"TIE", "CLOSE_TIE", "TITLE", "CHANNEL",
+"TRANSPOSE", "RTRANSPOSE", "GTRANSPOSE", "GRACEON",
+"GRACEOFF", "SETGRACE", "SETC", "GCHORD",
+"GCHORDON", "GCHORDOFF", "VOICE", "CHORDON",
+"CHORDOFF", "CHORDOFFEX", "DRUMON", "DRUMOFF",
+"DRONEON", "DRONEOFF", "SLUR_TIE", "TNOTE",
+"LT", "GT", "DYNAMIC", "LINENUM",
+"MUSICLINE", "MUSICSTOP", "WORDLINE", "WORDSTOP",
+"INSTRUCTION", "NOBEAM", "CHORDNOTE", "CLEF",
+"PRINTLINE", "NEWPAGE", "LEFT_TEXT", "CENTRE_TEXT",
+"VSKIP", "COPYRIGHT", "COMPOSER", "ARPEGGIO"
+}; 
+
+dumpfeat (int from, int to)
+{
+int i,j;
+for (i=from;i<=to;i++)
+  {
+  j = feature[i]; 
+  printf("%d %s   %d %d/%d \n",i,featname[j],pitch[i],num[i],denom[i]);
+  }
+}
+
 
 /* see file queues.c for routines to handle note queue */
 

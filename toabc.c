@@ -21,7 +21,7 @@
 
 /* back-end for outputting (possibly modified) abc */
 
-#define VERSION "1.41 April 25 2005"
+#define VERSION "1.43 May 14 2005"
 
 /* for Microsoft Visual C++ 6.0 or higher */
 #ifdef _MSC_VER
@@ -48,7 +48,7 @@ extern char* strchr();
 #define MAX_VOICES 30
 /* should be plenty! */
 
-programname program = ABC2ABC;
+programname fileprogram = ABC2ABC;
 
 struct fract {
   int num;
@@ -2163,6 +2163,10 @@ void event_acciaccatura()
 emit_string("/");
 }
 
+void event_split_voice ()
+{
+emit_string("&");
+}
 
 /* The following functions provide an alternative
    method for transposing. The note is converted
@@ -2182,7 +2186,6 @@ int pitchof(char note, int accidental, int mult, int octave)
 /* accidental = 10 nothing specified, determine from context        */
 {
   int p;
-  int acc;
   int mul, noteno;
   static int scale[7] = {0, 2, 4, 5, 7, 9, 11};
   char *anoctave = "cdefgab";
@@ -2305,7 +2308,6 @@ int argc;
 char *argv[];
 {
   char *filename;
-  int i;
 
   /*for (i=0;i<DECSIZE;i++) decorators_passback[i]=0; */
 

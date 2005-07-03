@@ -46,7 +46,8 @@
  * based on public domain 'midifilelib' package.
  */
 
-#define VERSION "2.81 April 15 2005"
+#define VERSION "2.86 June 30 2005"
+#define SPLITCODE
 
 /* Microsoft Visual C++ Version 6.0 or higher */
 #ifdef _MSC_VER
@@ -124,6 +125,9 @@ int summary;  /* flag - output summary info of MIDI file        */
 int keep_short; /*flag - preserve short notes                   */
 int swallow_rests; /* flag - absorb short rests                 */
 int midiprint; /* flag - run midigram instead of midi2abc       */
+#ifdef SPLITCODE
+int usesplits; /* flag - split measure into parts if needed     */
+#endif
 int restsize; /* smallest rest to absorb                        */
 int no_triplets; /* flag - suppress triplets or broken rhythm   */
 int obpl = 0; /* flag to specify one bar per abc text line      */
@@ -158,9 +162,11 @@ struct anote {
   long time;  /* MIDI onset time in pulses */
   long dtnext; /* time increment to next note in pulses */
   long tplay;  /* note duration in pulses */
-  int xnum;    /* note duration in number of xunits */
-  int playnum;
-  int denom;
+  int xnum;    /* number of xunits to next note */
+  int playnum; /* note duration in number of xunits */
+  int posnum; /* note position in xunits */
+  int splitnum; /* voice split number */
+  /* int denom; */
 };
 
 
@@ -215,6 +221,8 @@ int last_tick; /* for getting last pulse number in MIDI file */
 
 void remove_carriage_returns();
 int validnote();
+void printpitch(struct anote*);
+void printfract(int, int);
 
 
 
@@ -825,7 +833,7 @@ int prtime()
   if(linecount > maxlines) {fclose(F); exit(0);}
 */
   int units;
-  units = 1;
+  units = 2;
   if(units==1)
  /*seconds*/
      printf("%6.2f   ",mf_ticks2sec(Mf_currtime,division,tempo));
@@ -1269,16 +1277,18 @@ int trackno, xunit;
   int spare;
   int toterror;
   int quantum;
+  int posnum;
 
   /* fix to avoid division by zero errors in strange MIDI */
   if (xunit == 0) {
     return(10000);
   };
-  quantum = 2.*xunit/parts_per_unitlen; /* xunit assume 2 parts_per_unit */
+  quantum = (int) (2.*xunit/parts_per_unitlen); /* xunit assume 2 parts_per_unit */
   track[trackno].startunits = (2*(track[trackno].startwait + (quantum/4)))/quantum;
   spare = 0;
   toterror = 0;
   j = track[trackno].head;
+  posnum = 0;
   while (j != NULL) {
     this = j->note;
     /* this->xnum is the quantized inter onset time */
@@ -1295,8 +1305,8 @@ int trackno, xunit;
 		        && this->xnum > 0) {
       this->playnum = this->xnum;
     };
-    this->denom = parts_per_unitlen; /* this variable is never used ! */
-    spare = spare + this->dtnext - (this->xnum*xunit/this->denom);
+   /* this->denom = parts_per_unitlen;  this variable is never used ! */
+    spare = spare + this->dtnext - (this->xnum*xunit/parts_per_unitlen);
     if (spare > 0) {
       toterror = toterror + spare;
     } 
@@ -1306,6 +1316,8 @@ int trackno, xunit;
     /* gradually forget old errors so that if xunit is slightly off,
        errors don't accumulate over several bars */
     spare = (spare * 96)/100;
+    this->posnum = posnum;
+    posnum += this->xnum;
     j = j->next;
   };
   return(toterror);
@@ -1326,7 +1338,7 @@ int trackno;
     return;
   };
   avlen = ((float)(min))/((float)(track[trackno].notes));
-  tryx = avlen * 0.75;
+  tryx = avlen * (float) 0.75;
   factor = tryx/100;
   for (i=0; i<100; i++) {
     trial[i] = quantize(trackno, (int) tryx);
@@ -1682,6 +1694,37 @@ void freshline()
   };
 }
 
+
+void printnote (struct listx *i)
+{
+      printf("%ld ",i->note->time);
+      printpitch(i->note);
+      printfract(i->note->playnum, parts_per_unitlen);
+      printf(" %d %d %d %d\n",i->note->xnum, i->note->playnum,
+       i->note->posnum,i->note->splitnum); 
+}
+
+void listnotes(int trackno, int start, int end)
+/* A diagnostic like scannotes. I usually call it when
+   I am in the debugger (for example in printtrack).
+*/
+{
+struct listx* i;
+int k;
+i = track[trackno].head;
+k = 0;
+printf("ticks pitch xnum,playnum,posnum,splitnum\n");
+while (i != NULL && k < end)
+  {
+  if (k >= start) 
+    printnote(i);
+  k++;
+  i = i->next;
+  }
+}
+
+
+
 int testtrack(trackno, barbeats, anacrusis)
 /* print out one track as abc */
 int trackno, barbeats, anacrusis;
@@ -1825,7 +1868,11 @@ int len;
   i = chordhead;
   if (i == NULL) {
     /* no notes in chord */
+#ifdef SPLITCODE
+    fprintf(outhandle,"x");
+#else
     fprintf(outhandle,"z");
+#endif
     printfract(len, parts_per_unitlen);
     midline = 1;
   } 
@@ -2056,6 +2103,552 @@ int trackno;
  }
 }
 
+
+#ifdef SPLITCODE
+
+/* This function identifies irregular chords, (notes which
+   do not exactly overlap in time). The notes in the
+   chords are split into separate lines (split numbers).
+   The xnum (delay) to next note is updated.
+*/
+
+int splitstart[10],splitend[10]; /* used in forming chords from notes*/
+int lastposnum[10]; /* posnum of previous note in linked list */
+int endposnum; /* posnum at last note in linked list */
+struct anote* prevnote[10]; /*previous note in linked list */
+struct listx*  last_i[10];  /*note after finishing processing bar*/
+int existingsplits[10]; /* existing splits in active bar */
+struct dlistx* splitchordhead[10]; /* chordhead list for splitnum */
+struct dlistx* splitchordtail[10]; /* chordtail list for splitnum */
+int splitgap[10]; /* gap to next note at end of split measure */
+
+void label_split(struct anote *note, int activesplit)
+{
+/* The function assigns a split number (activesplit), to
+   a specific note, (*note). We also update splitstart
+   and splitend which specifies the region in time where
+   the another note must occur if it forms a proper chord.
+   After assigning a split number to the note we need to
+   update note->xnum as this indicates the gap to the
+   next note in the same split number.
+*/
+     note->splitnum = activesplit;
+     splitstart[activesplit] = note->posnum;
+     splitend[activesplit] = splitstart[activesplit] + note->playnum;
+     if (prevnote[activesplit]) 
+         prevnote[activesplit]->xnum = note->posnum - lastposnum[activesplit];
+     lastposnum[activesplit] = note->posnum;
+     prevnote[activesplit] = note;
+     /* in case this is the last activesplit note make sure it
+        xnum points to end of track. Otherwise it will be changed
+        when the next activesplit note is labeled.
+     */
+     note->xnum = endposnum - note->posnum;
+     existingsplits[activesplit]++;
+}
+
+
+void label_split_voices (int trackno)
+{
+/* This function sorts all the notes in the track into
+   separate split part. A note is placed into a separate
+   part if it forms a chord in the current part but
+   does not have the same onset time and same end time.
+   If this occurs, we search for another part where
+   this does not happen. If we can't find such a part
+   a new part (split) is created.
+   The heuristic used needs to be improved, so
+   that split number 0 always contains notes and so
+   that notes in the same pitch range or duration are
+   given the same split number.
+*/ 
+int activesplit,nsplits;
+int done;
+struct listx* i;
+int k;
+int firstposnum;
+/* initializations */
+activesplit = 0;
+nsplits = 0;
+for (k=0;k<10;k++) {
+       splitstart[k]=splitend[k]=lastposnum[k]=0;
+       prevnote[k] = NULL;
+       existingsplits[k] = 0;
+       splitgap[k]=0;
+       }
+i = track[trackno].head;
+if (track[trackno].tail == 0x0) return;
+endposnum =track[trackno].tail->note->posnum +
+           track[trackno].tail->note->playnum;
+
+if (i != NULL) label_split(i->note, activesplit);
+/* now label all the notes in the track */
+while (i != NULL)
+  {
+  done =0;
+  if (nsplits == 0) { /*no splits exist, create split number 0 */
+     activesplit = 0;
+     nsplits++;
+     i->note->splitnum = activesplit;
+     splitstart[activesplit] = i->note->posnum;
+     splitend[activesplit] = splitstart[activesplit] + i->note->playnum;
+     firstposnum = splitstart[activesplit];
+     } else {  /* do a compatibility check with the last split number */
+  if (  (   i->note->posnum == splitstart[activesplit] 
+         && i->note->playnum == (splitend[activesplit] - splitstart[activesplit]))
+      || i->note->posnum >= splitend[activesplit])
+     {
+     if (existingsplits[activesplit] == 0) {
+         last_i[activesplit] = i;
+         splitgap[activesplit] = i->note->posnum - firstposnum;
+         }
+     label_split(i->note, activesplit);
+     done = 1;
+     }
+/* need to search for any other compatible split numbers  */
+  if (done == 0) for (activesplit=0;activesplit<nsplits;activesplit++) {
+      if (  (   i->note->posnum == splitstart[activesplit] 
+             && i->note->playnum == splitend[activesplit] - splitstart[activesplit])
+          || i->note->posnum >= splitend[activesplit])
+       {
+        if (existingsplits[activesplit] == 0) {
+           last_i[activesplit] = i;
+           splitgap[activesplit] = i->note->posnum - firstposnum;
+           }
+        label_split(i->note,activesplit);
+        done = 1;
+        break;
+        }
+      }
+     
+/* No compatible split number found. Create new split */
+   if (done == 0) {
+     if(nsplits < 10) {nsplits++; activesplit = nsplits-1;}  
+     if (existingsplits[activesplit] == 0) {
+         last_i[activesplit] = i;
+         splitgap[activesplit] = i->note->posnum - firstposnum;
+         }
+     label_split(i->note,activesplit);
+     }
+   } 
+/*  printf("note %d links to %d  %d (%d %d)\n",i->note->pitch,activesplit,
+i->note->posnum,splitstart[activesplit],splitend[activesplit]);
+*/
+  i = i->next;
+  } /* end while loop */
+}
+
+
+int nextsplitnum(int splitnum)
+  {
+  while (splitnum < 9) {
+      splitnum++;
+      if (existingsplits[splitnum]) return splitnum;
+      } 
+     return -1;
+}
+
+
+int count_splits()
+{
+int i,n;
+n = 0;
+for (i=0;i<10;i++)
+  if (existingsplits[i]) n++;
+return n;
+}
+
+
+
+
+
+void printtrack_with_splits(trackno, anacrusis)
+int trackno,  anacrusis;
+/* This function is an adaption of printtrack so that
+   notes with separate split numbers are in separated
+   regions in the measure. (Separated with &'s).
+   To do this we must make multiple passes through
+   each bar and maintain separate chordlists (in
+   event that some chords overlap over more than
+   one measure).
+*/
+{
+  struct listx* i;
+  struct tlistx* textplace;
+  struct tlistx* textplace0; /* track 0 text storage */
+  int step, gap;
+  int barnotes;
+  int barcount;
+  int bars_on_line;
+  long now;
+  char broken;
+  int featurecount;
+  int last_barsize,barnotes_correction;
+  int splitnum = 0;
+  int j;
+  int nlines;
+  int done;
+
+  nlines= 0;
+  label_split_voices (trackno);
+
+  midline = 0;
+  featurecount = 0;
+  inkaraoke = 0;
+  now = 0L;
+  broken = ' ';
+  for (j=0;j<10;j++) {
+      splitchordhead[j] = NULL;
+      splitchordtail[j] = NULL;
+      }
+  i = track[trackno].head;
+  textplace = track[trackno].texthead;
+  textplace0 = track[0].texthead;
+  /*gap = track[trackno].startunits;*/ gap = 0;
+  if (anacrusis > 0) {
+    barnotes = anacrusis;
+    barcount = -1;
+  } 
+  else {
+    barnotes = barsize;
+    barcount = 0;
+  };
+  bars_on_line = 0;
+  last_barsize = barsize;
+  active_asig = header_asig;
+  active_bsig = header_bsig;
+  setup_timesig(header_asig,header_bsig,header_bb);
+  active_keysig = header_keysig;
+  handletext(now, &textplace, trackno);
+  splitnum = 0;
+  chordhead = splitchordhead[splitnum]; 
+  chordtail = splitchordtail[splitnum]; 
+  gap = splitgap[splitnum];
+
+  while((i != NULL)||(gap != 0)) {
+    if (gap == 0) {
+      /* do triplet here */
+      if (featurecount == 0) {
+	if (!no_triplets) {
+	  broken = dospecial(i, &barnotes, &featurecount);
+	};
+      };
+
+/* ignore any notes that are not in the current splitnum */
+      if (i->note->splitnum == splitnum) {
+               /*printf("\nadding ");
+                 printnote(i); */
+	addtochord(i->note);
+	gap = i->note->xnum;
+	now = i->note->time;
+	}
+
+      i = i->next;
+      advancechord(0); /* get rid of any zero length notes */
+      if (trackcount > 1 && trackno !=0)
+	      handletext(now, &textplace0, trackno);
+      handletext(now, &textplace,trackno);
+      barnotes_correction = barsize - last_barsize;
+      barnotes += barnotes_correction;
+      last_barsize = barsize;
+    } 
+    else {
+      step = findshortest(gap);
+      if (step > barnotes) {
+	step = barnotes;
+      };
+      step = validnote(step);
+      if (step == 0) {
+	fatal_error("Advancing by 0 in printtrack!");
+      };
+      if (featurecount == 3)
+        {
+        fprintf(outhandle," (3");
+        };
+      printchord(step); if ( featurecount > 0) { featurecount = featurecount - 1; };
+      if ((featurecount == 1) && (broken != ' ')) {
+        fprintf(outhandle,"%c", broken);
+      };
+      advancechord(step);
+      gap = gap - step;
+      barnotes = barnotes - step;
+
+/* at the end of the bar we must decide whether to place
+   a | or &. If we place a & then we have to return to
+   the beginning of the bar and process the next split number.
+*/  
+      if (barnotes == 0) { /* end of bar  ? */
+        nlines++;
+        if (nlines > 5000) {
+            printf("\nProbably infinite loop: aborting\n");
+            fprintf(outhandle,"\n\nProbably infinite loop: aborting\n");
+            return;
+            }
+/* save state for the last splitnum before going to the next */
+        last_i[splitnum] = i;
+        splitchordhead[splitnum] = chordhead;
+        splitchordtail[splitnum] = chordtail;
+        splitgap[splitnum] = gap;
+
+/*     look for the next splitnum which contains notes in
+       the current measure. If not, end the measure.
+*/
+        done = 0;
+        while (done != 1) {
+           splitnum = nextsplitnum(splitnum);
+
+           if (splitnum == -1) {
+              fprintf(outhandle," | ");
+              splitnum = nextsplitnum(splitnum);
+              done = 1;
+              break;
+              }
+
+           if (splitgap[splitnum] >= barsize)
+               {
+               splitgap[splitnum] -= barsize;
+               continue; /* look for other splits */
+               }
+ 
+           fprintf(outhandle, " & ");
+           i = last_i[splitnum]; 
+           done = 1;
+           }
+/* restore state for the next splitnum */
+       chordhead = splitchordhead[splitnum];
+       chordtail = splitchordtail[splitnum];
+       gap = splitgap[splitnum];
+       i = last_i[splitnum];
+
+       /*
+        printf("returning to %ld ",i->note->time);
+        printpitch(i->note);
+        printf("\n");
+       */
+     
+        barnotes = barsize;
+        barcount = barcount + 1;
+	bars_on_line++;
+        if (barcount >0 && barcount%bars_per_staff == 0)  {
+		freshline();
+		bars_on_line=0;
+	}
+     /* can't zero barcount because I use it for computing maxbarcount */
+        else if(bars_on_line >= bars_per_line && i != NULL) {
+		fprintf(outhandle," \\");
+	       	freshline();
+	        bars_on_line=0;}
+      }
+      else if (featurecount == 0) {
+          /* note grouping algorithm */
+          if ((barsize/parts_per_unitlen) % 3 == 0) {
+            if ( (barnotes/parts_per_unitlen) % 3 == 0
+               &&(barnotes%parts_per_unitlen) == 0) {
+              fprintf(outhandle," ");
+            };
+          } 
+	  else {
+            if (((barsize/parts_per_unitlen) % 2 == 0)
+                && (barnotes % parts_per_unitlen) == 0
+                && ((barnotes/parts_per_unitlen) % 2 == 0)) {
+              fprintf(outhandle," ");
+            };
+          };
+      }
+      if (nogr) fprintf(outhandle," ");
+    };
+   if (i == NULL) /* end of track before end of measure ? */
+    {
+     splitnum = nextsplitnum(splitnum);
+     if (splitnum == -1) break;
+     chordhead = splitchordhead[splitnum];
+     chordtail = splitchordtail[splitnum];
+     gap = splitgap[splitnum];
+     i = last_i[splitnum];
+     if (barnotes != barsize) fprintf(outhandle, " & ");
+     barnotes = barsize;
+    }
+ 
+  };
+  /* print out all extra text */
+  while (textplace != NULL) {
+    handletext(textplace->when, &textplace, trackno);
+  };
+  freshline();
+  if (barcount > maxbarcount) maxbarcount = barcount;
+}
+
+
+
+void printtrack_split_voice(trackno, anacrusis)
+/* print out one track as abc */
+int trackno,  anacrusis;
+{
+  struct listx* i;
+  struct tlistx* textplace;
+  struct tlistx* textplace0; /* track 0 text storage */
+  int step, gap;
+  int barnotes;
+  int barcount;
+  int bars_on_line;
+  long now;
+  char broken;
+  int featurecount;
+  int last_barsize,barnotes_correction;
+  int nlines;
+  int splitnum;
+  int lastnote_in_split;
+
+  nlines= 0;
+  lastnote_in_split = 0;
+  label_split_voices (trackno);
+  midline = 0;
+  featurecount = 0;
+  inkaraoke = 0;
+  now = 0L;
+  broken = ' ';
+  chordhead = NULL;
+  chordtail = NULL;
+  i = track[trackno].head;
+  textplace = track[trackno].texthead;
+  textplace0 = track[0].texthead;
+  gap = track[trackno].startunits;
+  if (anacrusis > 0) {
+    barnotes = anacrusis;
+    barcount = -1;
+  } 
+  else {
+    barnotes = barsize;
+    barcount = 0;
+  };
+  bars_on_line = 0;
+  last_barsize = barsize;
+  active_asig = header_asig;
+  active_bsig = header_bsig;
+  setup_timesig(header_asig,header_bsig,header_bb);
+  active_keysig = header_keysig;
+  handletext(now, &textplace, trackno);
+  splitnum = 0;
+  gap = splitgap[splitnum];
+  if (count_splits() > 1) fprintf(outhandle,"V: split%d%c\n",trackno+1,'A'+splitnum);
+
+  while((i != NULL)||(gap != 0)) {
+    if (gap == 0) {
+      if (i->note->posnum + i->note->xnum == endposnum) lastnote_in_split = 1;
+      /* do triplet here */
+      if (featurecount == 0) {
+        if (!no_triplets) {
+          broken = dospecial(i, &barnotes, &featurecount);
+        };
+      };
+/* ignore any notes that are not in the current splitnum */
+      if (i->note->splitnum == splitnum) {
+               /*printf("\nadding ");
+                 printnote(i); */
+	addtochord(i->note);
+	gap = i->note->xnum;
+	now = i->note->time;
+	}
+      i = i->next;
+      advancechord(0); /* get rid of any zero length notes */
+      if (trackcount > 1 && trackno !=0)
+	      handletext(now, &textplace0, trackno);
+      handletext(now, &textplace,trackno);
+      barnotes_correction = barsize - last_barsize;
+      barnotes += barnotes_correction;
+      last_barsize = barsize;
+    } 
+    else {
+      step = findshortest(gap);
+      if (step > barnotes) {
+        step = barnotes;
+      };
+      step = validnote(step);
+      if (step == 0) {
+        fatal_error("Advancing by 0 in printtrack!");
+      };
+      if (featurecount == 3)
+        {
+        fprintf(outhandle," (3");
+        };
+      printchord(step);
+      if ( featurecount > 0) {
+        featurecount = featurecount - 1;
+      };
+      if ((featurecount == 1) && (broken != ' ')) {
+        fprintf(outhandle,"%c", broken);
+      };
+      advancechord(step);
+      gap = gap - step;
+      barnotes = barnotes - step;
+      if (barnotes == 0) {
+        nlines++;
+        if (nlines > 5000) {
+            printf("\nProbably infinite loop: aborting\n");
+            fprintf(outhandle,"\n\nProbably infinite loop: aborting\n");
+            return;
+            }
+        fprintf(outhandle,"|");
+        barnotes = barsize;
+        barcount = barcount + 1;
+	bars_on_line++;
+        if (barcount >0 && barcount%bars_per_staff == 0)  {
+		freshline();
+		bars_on_line=0;
+	}
+     /* can't zero barcount because I use it for computing maxbarcount */
+        else if(bars_on_line >= bars_per_line && i != NULL) {
+		if (!lastnote_in_split) fprintf(outhandle," \\");
+	       	freshline();
+	        bars_on_line=0;}
+      }
+      else if (featurecount == 0) {
+          /* note grouping algorithm */
+          if ((barsize/parts_per_unitlen) % 3 == 0) {
+            if ( (barnotes/parts_per_unitlen) % 3 == 0
+               &&(barnotes%parts_per_unitlen) == 0) {
+              fprintf(outhandle," ");
+            };
+          } 
+	  else {
+            if (((barsize/parts_per_unitlen) % 2 == 0)
+                && (barnotes % parts_per_unitlen) == 0
+                && ((barnotes/parts_per_unitlen) % 2 == 0)) {
+              fprintf(outhandle," ");
+            };
+          };
+      }
+      if (nogr) fprintf(outhandle," ");
+    };
+  if (i == NULL && gap == 0) 
+    {
+    i = track[trackno].head;
+    splitnum = nextsplitnum(splitnum);
+    lastnote_in_split = 0;
+    if (splitnum == -1) break;
+    gap = splitgap[splitnum];
+    if(barnotes != barsize) freshline();
+    fprintf(outhandle,"V:split%d%c\n",trackno+1,'A'+splitnum);
+    if (anacrusis > 0) {
+      barnotes = anacrusis;
+      barcount = -1;
+      } 
+    else {
+      barnotes = barsize;
+      barcount = 0;
+      };
+    }
+  };
+  /* print out all extra text */
+  while (textplace != NULL) {
+    handletext(textplace->when, &textplace, trackno);
+  };
+  freshline();
+  if (barcount > maxbarcount) maxbarcount = barcount;
+}
+
+#endif
+
 void printtrack(trackno, anacrusis)
 /* print out one track as abc */
 int trackno,  anacrusis;
@@ -2206,7 +2799,7 @@ void printQ()
 {
   float Tnote, freq;
   Tnote = mf_ticks2sec((long)((xunit*unitlen)/4), division, tempo);
-  freq = 60.0/Tnote;
+  freq = (float) 60.0/Tnote;
   fprintf(outhandle,"Q:1/4=%d\n", (int) (freq+0.5));
   if (summary>0) printf("Tempo: %d quarter notes per minute\n",
     (int) (freq + 0.5));
@@ -2445,6 +3038,16 @@ int argc;
    midiprint = 1;
    }
 
+#ifdef SPLITCODE
+  usesplits = 0;
+  arg = getarg("-splitbars",argc,argv);
+  if (arg != -1) 
+   usesplits = 1;
+  arg = getarg("-splitvoices",argc,argv);
+  if (arg != -1) 
+   usesplits = 2;
+#endif 
+
   arg = getarg("-mftext",argc,argv);
   if (arg != -1) 
    {
@@ -2623,6 +3226,10 @@ int argc;
     printf("         -bps <number> of bars to be printed on staff\n");
     printf("         -obpl One bar per line\n");
     printf("         -nogr No note grouping. Space between all notes\n");
+#ifdef SPLITCODE
+    printf("         -splitbars  splits bars to avoid nonhomophonic chords\n");
+    printf("         -splitvoices  splits voices to avoid nonhomophonic chords\n");
+#endif
     printf("         -Midigram   Prints midigram instead of abc file\n");
     printf("         -mftext mftext output\n"); 
     printf("         -ver version number\n");
@@ -2750,11 +3357,23 @@ int argc;
 	if (track[j].drumtrack) fprintf(outhandle,"%%%%MIDI channel 10\n");
         voiceno = voiceno + 1;
       };
-      printtrack(j,anacrusis);
+#ifdef SPLITCODE
+      if (usesplits==1) printtrack_with_splits(j, anacrusis); 
+      else if (usesplits==2) printtrack_split_voice(j, anacrusis);
+      else printtrack(j,anacrusis);
+#else
+      printtrack(j,anacrusis); 
+#endif
     };
   }
   else {
-    printtrack(maintrack, anacrusis);
+#ifdef SPLITCODE
+     if (usesplits==1) printtrack_with_splits(maintrack, anacrusis);
+     else if (usesplits==2) printtrack_split_voice(maintrack, anacrusis);
+     else printtrack(maintrack,anacrusis);
+#else
+     printtrack(maintrack, anacrusis);  
+#endif
   };
 
   /* scannotes(maintrack); for debugging */

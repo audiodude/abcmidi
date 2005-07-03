@@ -3953,9 +3953,3 @@ June 28-30 2005
 
 Midi2abc: fixed numerous bugs in printtrack_split_voice()
 and printtrack_with_splits().
-
-July 02 2005
-
-Abcmatch: upgraded the handling of chords and ties to be
-compatible with abc2midi.
-

@@ -970,7 +970,7 @@ static void sizenote(struct note* n, struct feature* f, int ingrace)
   };
   if (n->accents != NULL) {
     decorators = n->accents;
-    for (i=0; i<strlen(decorators); i++) {
+    for (i=0; i<(int) strlen(decorators); i++) {
       switch(decorators[i]) {
       case 'H':
       case '~':
@@ -1678,7 +1678,7 @@ static void drawhead(struct note* n, double x, struct feature* ft)
     } else {
       ybot = ybot - n->stemlength;
     };
-    for (i=0; i<strlen(decorators); i++) {
+    for (i=0; i< (int) strlen(decorators); i++) {
       switch (decorators[i]) {
       case  '.':
         if (n->stemup) {
@@ -3489,7 +3489,7 @@ void printtune(struct tune* t)
   while (atitle != NULL) {
     if (titleno == 1) {
       if (titlecaps) {
-        for (i=0; i<strlen(atitle); i++) {
+        for (i=0; i< (int) strlen(atitle); i++) {
           if (islower(atitle[i])) {
             atitle[i] = atitle[i] + 'A' - 'a';
           };

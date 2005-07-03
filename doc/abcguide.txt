@@ -429,6 +429,16 @@ a larger delay between the onset of each note in the chord. (See
 the text preceding %%MIDI chordattack in this file for more 
 explanations.)
 
+The !crescendo(! and !crescendo)! delineate the start and
+end of a crescendo. Alternatively, you can use !<(! and !<)!.
+Abc2midi does not implement a gradual loudness increase,
+but instead increases the loudness at the start and end
+of the crescendo by a fixed amount. (See %%MIDI beatmod
+and %%MIDI deltaloudness for more information.)
+
+The !diminuendo(! and !diminuendo)! behave similarly but
+reduce the loudness. These instructions have not been
+implemented in yaps.
 
 A line of music may contain any number of notes, barlines and guitar
 chords. Spaces may be used to separate these.
@@ -616,6 +626,16 @@ following :
 !ff!  = %%MIDI beat 120 110 95 1
 !fff! = %%MIDI beat 127 125 110 1
 
+%%MIDI beatmod n
+increments by n (or decrements if n is negative) the velocities a, b and
+c described above. It is also used in implementing crescendo and
+diminuendo (eg. !<(!, !crescendo(! etc.)
+
+%%MIDI deltaloudness n
+where n is a small positive number.  By default the crescendo and 
+dimuendo instructions modify the beat variables a, b, and c by
+15 velocity units. This instruction allows you to change this default.
+
 %%MIDI beatstring <string of f, m and p>
 
 This provides an alternative way of specifying where the strong and weak
@@ -625,6 +645,7 @@ For example, if the time signature is 7/8 with stresses on the first, fourth
 and sixth notes in the bar, we could use the following 
 
 %%MIDI beatstring fppmpmp
+
 
 %%MIDI transpose n
 
@@ -951,8 +972,69 @@ where n is a small number. This is similar to above, except the
 delay of each note in the chord varies randomly between 0 and n-1.
 Therefore each chord is played differently.
 
+To avoid the problem of breaking up a music line
+in order to place a %%MIDI command, for example, 
+A2 B2|\
+%%MIDI drumon
+C2 D2|
+you can place the MIDI instruction inside an info field
+using the following syntax.
+
+A2 B2|[I:MIDI= drumon] C2 D2|
+
+The '=' following the MIDI is very important. The info field
+syntax allows you to place several MIDI commands in one inline
+block, for example
+[I: MIDI = program 73 MIDI=chordprog 29]
+(Spaces are optional.)
+Other examples can be seen in the file CHANGES in the
+following the March 25 2005 entry.
+
+
+Global settings for abc2midi
+----------------------------
+
+If you are creating an abc file with many tunes, abc2ps and abcm2ps
+allows you to declare certain settings that apply to all tunes
+by placing them at the beginning of the file prior to the
+start of the tune. Abc2midi provides this feature but presently
+only to a limited extent. The following MIDI commands will
+change the defaults for all tunes if they are placed outside
+of any tune.
+
+%%MIDI C ...
+%%MIDI nobarlines ...
+%%MIDI barlines ...
+%%MIDI fermatafixed 
+%%MIDI fermataproportional
+%%MIDI ratio ...
+%%MIDI chordname ...
+%%MIDI deltaloudness ...
+
+All other MIDI commands placed outside of a tune will be
+ineffective and return a warning message
+
+"cannot handle this MIDI directive here"
+
+(For more details see CHANGES, May 06 2005 entry.)
+
+Any of these defaults can be changed as many times as you like
+provided that they are occur outside a tune which is usually
+delineated by a X: reference number and a blank line.
+
+Voice Splitting
+---------------
+
+Abcm2ps allows a voice to separate into two or more voices
+in a specific bar using the symbol '&'. This feature
+now works in abc2midi. Abc2midi places the split voice
+into a separate MIDI track with intervening rests.
+When a voice splits, the new voice inherits the program
+number (musical instrument) from the parent voice.
+
 
 Compatibility with proposed abc standard version 2.0
+----------------------------------------------------
 
 The proposed standard introduces a new copyright field
 using the syntax

@@ -10,9 +10,10 @@ midicopy \- Copy selected track, channel, time interval of a MIDI file to anothe
 .B midicopy
 is used to copy part of a MIDI file to another MIDI file. You can select
 a particular time interval, particular channels, and particular tracks
-or any combinations.
-Midicopy was developed by Seymour Shlien from the midifilelib distribution
-available from
+or any combinations. If one or both of the run time parameters -from or -to
+are included, the program returns the playing time in seconds of the
+output file.  Midicopy was developed by Seymour Shlien from the
+midifilelib distribution available from
 .IR http://www.harmony-central.com/MIDI/midifilelib.tar.gz .
 .SH OPTIONS
 .TP
@@ -59,4 +60,4 @@ Midicopy will copy tracks 1 and 5 starting from midi pulse position
 .SH AUTHOR
 This manual page was written by Seymour Shlien.
 .SH VERSION
-This man page describes midicopy version 1.0 from June 11 2004.
+This man page describes midicopy version 1.02 from May 22 2005.

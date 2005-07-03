@@ -22,7 +22,7 @@
 /* yapstree.c - back-end for abc parser. */
 /* generates a data structure suitable for typeset music */
 
-#define VERSION "1.36 April 25 2005"
+#define VERSION "1.38 May 14 2005"
 #include <stdio.h>
 #ifdef USE_INDEX
 #define strchr index
@@ -52,7 +52,7 @@ extern void setup_fonts();
 extern void printtune(struct tune *t);
 extern void set_keysig(struct key *k, struct key *newval);
 
-programname program = YAPS;
+programname fileprogram = YAPS;
 
 struct voice* cv;
 struct tune thetune;
@@ -1314,6 +1314,11 @@ void event_acciaccatura()
 {
 /* does nothing but outputs a / in toabc.c */
 return;
+}
+
+void event_split_voice()
+{
+event_error("voice split not implemented in yaps");
 }
 
 void event_tex(s)

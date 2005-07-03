@@ -31,7 +31,7 @@
  * Wil Macaulay (wil@syndesis.com)
  */
 
-#define VERSION "1.65 April 25 2005"
+#define VERSION "1.69 June 27 2005"
 /* enables reading V: indication in header */
 #define XTEN1 1
 /*#define INFO_OCTAVE_DISABLED 1*/
@@ -83,7 +83,7 @@ extern void reduce();
 
 FILE *fp;
 
-programname program = ABC2MIDI;
+programname fileprogram = ABC2MIDI;
 
 /* parsing stage */
 int tuplecount, tfact_num, tfact_denom, tnote_num, tnote_denom;
@@ -95,6 +95,8 @@ int hornpipe, last_num, last_denom;
 int timesigset;
 int retain_accidentals;
 int ratio_a, ratio_b;
+int velocitychange = 15;
+int chordstart=0;
 
 struct voicecontext {
   /* maps of accidentals for each stave line */
@@ -109,6 +111,9 @@ struct voicecontext {
   int inslur;
   int ingrace;
   int octaveshift;
+  int nbars;      /* number of bars */
+  int lastbarloc;  /* position of last bar line parsed */
+  int tosplitno,fromsplitno;  
   /* chord handling */
   int inchord, chordcount;
   int chord_num, chord_denom;
@@ -123,6 +128,8 @@ struct voicecontext global;
 struct voicecontext* v;
 struct voicecontext* head;
 int voicecount;
+int numsplits=0;
+int splitdepth = 0;
 
 /* storage structure for strings */
 int maxtexts = INITTEXTS;
@@ -204,9 +211,16 @@ in parseabc.c */
 int header_time_num,header_time_denom;
 
 int dummydecorator[DECSIZE]; /* used in event_chord */
+extern char* featname[];
 
 static void addfract(int *xnum, int *xdenom, int a, int b);
+static void zerobar();
+static void addfeature(int f,int p,int n,int d);
+static void replacefeature(int f, int p, int n, int d, int loc);
+static void textfeature(int type, char *s);
 extern long writetrack();
+static void fix_enclosed_note_lengths(int from, int end);
+static int patchup_chordtie(int chordstart,int chordend);
 
 static struct voicecontext* newvoice(n)
 /* allocate and initialize the data for a new voice */
@@ -226,11 +240,15 @@ int n;
   s->ingrace = 0;
   s->inchord = 0;
   s->chordcount = 0;
+  s->nbars = 0;
+  s->lastbarloc = -1;
   s->laststart = -1;
   s->lastend = -1;
   s->thisstart = -1;
   s->thisend = -1;
   s->brokenpending = -1;
+  s->tosplitno = -1;
+  s->fromsplitno = -1;  
   s->next = NULL;
   for (i=0; i<7; i++) {
     s->basemap[i] = global.basemap[i];
@@ -493,7 +511,7 @@ char **filename;
     };
     *filename = argv[1];
     outbase = addstring(argv[1]);
-    for (j = 0; j<strlen(outbase); j++) {
+    for (j = 0; j< (int) strlen(outbase); j++) {
       if (outbase[j] == '.') outbase[j] = '\0';
     };
   };
@@ -586,6 +604,168 @@ void event_acciaccatura()
 /* does nothing here but outputs a / in abc2abc */
 return;
 }
+
+
+/* support functions for split voices */
+
+static int locate_voice(int start, int indexno)
+{
+int j;
+j = start;
+while (j < notes) {
+   if (feature[j] == VOICE && pitch[j] == indexno) {
+       return j;
+       }
+  j++;
+  }
+return j;
+}
+
+static void start_new_voice_and_sync (int voiceno, int indexno)
+{
+int j;
+char *p;
+char command[40];
+int maxnotes,begin;
+
+begin =0; /* to bypass double bar or single bar at beginning */
+if (voiceno == 1) j=0;
+else j = locate_voice(0,indexno);
+maxnotes = notes-3; /* bypass last bar and voice change */
+while (j<maxnotes) {
+  switch (feature[j]) {
+    case VOICE:
+       if (pitch[j] != indexno) 
+          j = locate_voice(j,indexno);
+          break;
+       break;
+    case SINGLE_BAR:
+    case DOUBLE_BAR:
+    case BAR_REP:
+    case REP_BAR:
+    case PLAY_ON_REP:
+    case DOUBLE_REP:
+       if (begin) {  /* bypass REST if no notes processed */
+         addfeature(REST,0,4*time_num,time_denom);
+         v->nbars++;
+         }
+
+       addfeature(feature[j], 0, 0, 0); /* in case it is a repeat */
+       break;
+    case DYNAMIC:
+       p = atext[pitch[j]];
+       skipspace(&p);
+       readstr(command, &p, 40);
+       if (strcmp(command, "program") == 0) {
+          textfeature(DYNAMIC, atext[pitch[j]]);
+         }
+       break;
+    case NOTE:
+    case TNOTE:
+    case REST:
+      begin = 1;
+    default:
+       break;
+   }
+   j++;
+  }
+}
+
+
+void resync_split_voice(int nbars, struct voicecontext *p)
+{
+/*printf("%d resyncing by %d bars\n",notes,nbars-p->nbars); */
+while (p->nbars < nbars)
+   {
+   addfeature(REST, 0, 4*time_num, time_denom);
+   addfeature(SINGLE_BAR,0,0,0);
+   p->nbars++;
+   }
+}
+
+void event_split_voice()
+{
+int splitno;
+int nbars;
+int voiceno,indexno;
+int program;
+voicesused = 1; /* multivoice file */
+splitno = v->tosplitno;
+nbars = v->nbars;
+program = 0;
+
+/* a voice split in bar is just like a bar line */
+v->nbars++;
+zerobar();
+v->lastbarloc = notes;  /* in case we need to change it */
+addfeature(SINGLE_BAR,0,0,0);
+
+voiceno = v->voiceno;
+indexno = v->indexno;
+if (splitno == -1) {splitno = 32+numsplits++;
+                   v->tosplitno = splitno;
+                   }
+v = getvoicecontext(splitno);
+splitdepth++;
+addfeature(VOICE, v->indexno, 0, 0);
+if (v->fromsplitno == -1) {
+  v->fromsplitno = voiceno;
+  start_new_voice_and_sync (voiceno,indexno);}
+else resync_split_voice (nbars, v); 
+}
+
+
+
+
+void recurse_back_to_original_voice ()
+{
+int previous_voice;
+previous_voice = v->fromsplitno;
+while (previous_voice >-1 && splitdepth > 0) {
+  v = getvoicecontext(previous_voice);
+  previous_voice = v->fromsplitno;
+  splitdepth--;
+  }
+addfeature(VOICE, v->indexno, 0, 0);
+}
+
+
+void recurse_back_and_change_bar (int type)
+{
+int previous_voice;
+previous_voice = v->fromsplitno;
+while (previous_voice >-1 && splitdepth > 0) {
+  v = getvoicecontext(previous_voice);
+  if (v->lastbarloc > -1) replacefeature(type, 0,0,0, v->lastbarloc);
+  previous_voice = v->fromsplitno;
+  splitdepth--;
+  }
+addfeature(VOICE, v->indexno, 0, 0);
+}
+
+
+complete_all_split_voices ()
+{
+int nbars,splitno;
+struct voicecontext *p;
+
+v = head;
+while (v != NULL) {
+    splitno = v->tosplitno;
+    if (splitno > -1) {
+      nbars = v->nbars;
+      p = getvoicecontext(splitno);
+      addfeature(VOICE, p->indexno, 0, 0);
+      resync_split_voice (nbars,p);
+      /* complete fraction of bar */
+      if(bar_num >0) addfeature(REST, 0, 4*bar_num, bar_denom);
+      }
+    v = v->next;
+  };
+}
+
+/* end of code for split voices */
+
 
 void event_tex(s)
 /* TeX command found - ignore it */
@@ -714,6 +894,16 @@ int f, p, n, d;
   };
 }
 
+static void replacefeature(f, p, n, d, loc)
+int f, p, n, d, loc;
+{
+  feature[loc] = f;
+  pitch[loc] = p;
+  num[loc] = n;
+  denom[loc] = d;
+}
+
+
 static void insertfeature(f, p, n, d, loc)
 /* insert feature in internal table */
 int f,p,n,d,loc;
@@ -770,11 +960,9 @@ char endchar;
   addfeature(MUSICSTOP, 0, 0, 0);
 }
 
-static void textfeature(type, s)
+static void textfeature(int type, char *s)
 /* called while parsing abc - stores an item which requires an */
 /* associared string */
-int type;
-char* s;
 {
   atext[ntexts] = addstring(s);
   addfeature(type, ntexts, 0, 0);
@@ -805,8 +993,12 @@ char *package, *s;
   char msg[200], command[40];
   char *p;
   int done;
-  int bytesleft;
 
+  if (dotune == 0) {
+        event_specific_in_header(package,s);
+        return;
+        }
+ 
   if (strcmp(package, "MIDI") == 0) {
     int ch;
     int trans, rtrans;
@@ -996,6 +1188,12 @@ char *package, *s;
        done = 1;
     }
 
+    if (strcmp(command, "deltaloudness") == 0) {
+      skipspace(&p);
+      velocitychange = readnump(&p);
+      done = 1;
+      }
+
 
     if (done == 0) {
       /* add as a command to be interpreted later */
@@ -1105,6 +1303,116 @@ char *package, *s;
     }
   }
 }
+
+
+
+/* global variables that can altered by %%MIDI before tune */
+int default_middle_c = 60;
+int default_retain_accidentals = 1;
+int default_fermata_fixed = 0;
+int default_ratio_a = 2;
+int default_ratio_b = 4;
+
+
+void event_specific_in_header(package, s)
+/* package-specific command found i.e. %%NAME */
+/* only %%MIDI commands are actually handled */
+char *package, *s;
+{
+  char  command[40];
+  char *p;
+  int done;
+
+  if (strcmp(package, "MIDI") == 0) {
+
+    p = s;
+    done = 0;
+    skipspace(&p);
+    readstr(command, &p, 40);
+
+
+
+    if (strcmp(command, "C") == 0) {
+      int val;
+
+      skipspace(&p);
+      val = readnump(&p);
+      default_middle_c = val;
+      done = 1;
+    };
+    if (strcmp(command, "nobarlines") == 0) {
+      default_retain_accidentals = 0;
+      done = 1;
+    };
+    if (strcmp(command, "barlines") == 0) {
+      default_retain_accidentals = 1;
+      done = 1;
+    };
+    if (strcmp(command, "fermatafixed") == 0) {
+      default_fermata_fixed = 1;
+      done = 1;
+    };
+    if (strcmp(command, "fermataproportional") == 0) {
+      default_fermata_fixed = 0;
+      done = 1;
+    };
+    if (strcmp(command, "ratio") == 0) {
+      int a, b;
+      skipspace(&p);
+      b = readnump(&p);
+      skipspace(&p);
+      a = readnump(&p);
+      if ((a > 0) && (b > 0)) {
+        default_ratio_a = a;
+        default_ratio_b = b;
+        if (default_ratio_a + default_ratio_b % 2 == 1) {
+          default_ratio_a = 2 * a;
+          default_ratio_b = 2 * b;
+        };
+      } else {
+        event_error("Invalid ratio");
+      };
+      done = 1;
+    };
+
+    if (strcmp(command, "chordname") == 0) {
+      char name[20];
+      int i, notes[6];
+      skipspace(&p);
+      i = 0;
+      while ((i<19) && (*p != ' ') && (*p != '\0')) {
+        name[i] = *p;
+        p = p + 1;
+        i = i + 1;
+      };
+      name[i] = '\0';
+      if (*p != ' ') {
+        event_error("Bad format for chordname command");
+      } else {
+        i = 0;
+        while ((i<=6) && (*p == ' ')) {
+          skipspace(&p);
+          notes[i] = readsnump(&p); 
+          i = i + 1;
+        };
+        addchordname(name, i, notes);
+      };
+      done = 1;
+    };
+
+
+    if (strcmp(command, "deltaloudness") == 0) {
+      skipspace(&p);
+      velocitychange = readnump(&p);
+      done = 1;
+      }
+
+    if (done == 0) {
+       event_warning("cannot handle this MIDI directive here");
+    }
+  }
+}
+
 
 void event_startinline()
 /* start of in-line field in abc music line */
@@ -1600,6 +1908,7 @@ char* s;
 {
   int num, converted;
   char seps[2];
+  int nbars;
 
   converted = sscanf(s, "%d%1[,-]", &num, seps);
   if (converted == 0) {
@@ -1611,6 +1920,19 @@ char* s;
       textfeature(PLAY_ON_REP, s);
     };
   };
+
+/* to handle split voices */
+if (v->tosplitno == -1) return;
+nbars = v->nbars; /* nbars now includes last bar, when we resync */
+while (v->tosplitno != -1)
+     { 
+      v = getvoicecontext(v->tosplitno);
+      splitdepth++;
+      addfeature(VOICE, v->indexno, 0, 0);
+      resync_split_voice (nbars,v);
+      event_playonrep(s);
+     }
+recurse_back_to_original_voice();
 }
 
 static void slurtotie()
@@ -1693,6 +2015,11 @@ int t;
 void event_tie()
 /* a tie - has been encountered in the abc */
 {
+if (feature[notes-1] == CHORDOFF ||
+    feature[notes-1] == CHORDOFFEX) { /* did a TIE connect with a chord */
+       patchup_chordtie(chordstart,notes-1);
+      }
+  else
   addfeature(TIE, 0, 0, 0);
 }
 
@@ -2090,6 +2417,7 @@ void event_chordon(int chorddecorators[])
   if (v->inchord) {
     event_error("Attempt to nest chords");
   } else {
+    chordstart = notes;
     addfeature(CHORDON, 0, 0, 0);
     v->inchord = 1;
     v->chordcount = 0;
@@ -2109,7 +2437,11 @@ void event_chordoff(int chord_n, int chord_m)
     if(chord_m == 1 && chord_n == 1) /* chord length not set outside [] */
       addfeature(CHORDOFF, 0, v->chord_num, v->chord_denom); 
     else
+      {
       addfeature(CHORDOFFEX, 0, chord_n*4, chord_m*v->default_length);
+      fix_enclosed_note_lengths(chordstart, notes-1);
+      }
+      
     v->inchord = 0;
     v->chordcount = 0;
     marknoteend();
@@ -2545,6 +2877,7 @@ char* s;
   char* p;
   char* q;
   int done;
+  char midimsg[40];
 
   p = s;
   /* remove any leading spaces */
@@ -2592,6 +2925,22 @@ if (nofnop == 0) {
     event_specific("MIDI", "beat 127 125 110 1");
     done = 1;
   };
+
+  if ((strcmp(p,"crescendo(") == 0) || (strcmp(p,"<(") == 0) || 
+      (strcmp(p,"crescendo)") == 0) || (strcmp(p,"<)") == 0)) {
+          sprintf(midimsg,"beatmod %d",velocitychange);
+          event_specific("MIDI", midimsg);
+          done = 1;
+   }
+
+  if (
+      (strcmp(p,"diminuendo)") == 0) || (strcmp(p,">)") == 0) || 
+      (strcmp(p,"diminuendo(") == 0) || (strcmp(p,">(") == 0)) {
+          sprintf(midimsg,"beatmod -%d",velocitychange);
+          event_specific("MIDI", midimsg);
+          done = 1;
+   }
+
 }; /* end nofnop */
   if (strcmp(p, "drum") == 0) {
     addfeature(DRUMON, 0, 0, 0);
@@ -2703,6 +3052,7 @@ static void addfract(int *xnum, int *xdenom, int a, int b)
 {
   *xnum = (*xnum)*b + a*(*xdenom);
   *xdenom = (*xdenom) * b;
+  if (*xnum < 0 && *xdenom < 0) {*xnum = -*xnum; *xdenom = -*xdenom;}
   reduce(xnum, xdenom);
 }
 
@@ -2718,8 +3068,11 @@ int j, xinchord,voiceno;
   int inchord;
   int tied_num, tied_denom;
   int localvoiceno;
+  int samechord;
 
   /* find note to be tied */
+  samechord = 0;
+  if (xinchord) samechord = 1;
   tienote = j;
   localvoiceno = voiceno;
   while ((tienote > 0) && (feature[tienote] != NOTE) &&
@@ -2743,6 +3096,7 @@ int j, xinchord,voiceno;
     lastnote = -1;
     done = 0;
     while ((place < notes) && (tied_num >=0) && (done == 0)) {
+      /*printf("%d %s   %d %d/%d ",place,featname[feature[place]],pitch[place],num[place],denom[place]); */
       switch (feature[place]) {
         case NOTE:
           if(localvoiceno != voiceno) break;
@@ -2750,7 +3104,8 @@ int j, xinchord,voiceno;
           if ((tied_num == 0) && (tietodo == 0)) {
             done = 1;
           };
-          if ((pitchline[place] == pitchline[tienote]) && (tietodo == 1)) {
+          if ((pitchline[place] == pitchline[tienote])
+             && (tietodo == 1) && (samechord == 0)) {
             /* tie in note */
             if (tied_num != 0) {
               event_error("Time mismatch at tie");
@@ -2789,9 +3144,10 @@ int j, xinchord,voiceno;
           if (lastnote == -1) {
             event_error("Bad tie: possibly two ties in a row");
           } else {
-            if (pitch[lastnote] == pitch[tienote]) {
+            if (pitch[lastnote] == pitch[tienote] && samechord == 0) {
               lasttie = place;
               tietodo = 1;
+              if (inchord) samechord = 1;
             };
           };
           break;
@@ -2801,6 +3157,7 @@ int j, xinchord,voiceno;
           break;
         case CHORDOFF:
         case CHORDOFFEX:
+          samechord = 0;
           if(localvoiceno != voiceno) break;
           inchord = 0;
           /* subtract time from tied time */
@@ -2811,12 +3168,14 @@ int j, xinchord,voiceno;
         default:
           break;
       };
+      /*printf("tied_num = %d done = %d inchord = %d\n",tied_num, done, inchord);*/
       place = place + 1;
     };
     if (tietodo == 1) {
       event_error("Could not find note to be tied");
     };
   };
+/*printf("dotie finished\n");*/ 
 }
 
 static void fix_enclosed_note_lengths(int from, int end) 
@@ -2858,12 +3217,10 @@ static void tiefix()
   int inchord;
   int chord_num, chord_denom;
   int chord_start,chord_end;
-  int nochordfix;
   int voiceno;
 
   j = 0;
   inchord = 0;
-  nochordfix=0;
   voiceno = 1;
   while (j<notes) {
     switch (feature[j]) {
@@ -2874,11 +3231,9 @@ static void tiefix()
       j = j + 1;
       break;
     case CHORDOFFEX:
-      if(nochordfix == 0) fix_enclosed_note_lengths(chord_start,j);
       inchord = 0;
       chord_end=j;
       j = j + 1;
-      nochordfix=0;
       break;
     case CHORDOFF:
       if (!((!inchord) || (chord_num == -1))) {
@@ -2906,14 +3261,14 @@ static void tiefix()
       j = j + 1;
       break;
     case TIE:
+/*
       if (chord_end+1 == j) { /* did a TIE connect with a chord */
-	      removefeature(j);
-	      /* patchup and backtrack */
+	      /* removefeature(j);
+	       patchup and backtrack/
 	      j = patchup_chordtie(chord_start,chord_end);
 	      inchord=1;
-             /* make sure we don't run fix_enclosed_notes_again */
-              nochordfix=1; 
               }
+*/
       dotie(j, inchord,voiceno);
       j = j + 1;
       break;
@@ -3208,32 +3563,54 @@ int type;
 char* replist;
 {
   int newtype;
+  int nbars;
+  int depth;
+
+  depth = splitdepth;
 
   newtype = type;
   if ((type == THIN_THICK) || (type == THICK_THIN)) {
     newtype = DOUBLE_BAR;
   };
-  if (type == BAR1) {
-    newtype = SINGLE_BAR;
-  };
-  if (type == REP_BAR2) {
-    newtype = REP_BAR;
-  };
   addfeature(newtype, 0, 0, 0);
   copymap(v);
+  nbars = v->nbars;
+  if (bar_num > 0) v->nbars++;
   zerobar();
   if (strlen(replist) > 0) {
     event_playonrep(replist);
   };
-/*
-  if (type == BAR1) {
-    addfeature(PLAY_ON_REP, 0, 0, 1);
-  };
-  if (type == REP_BAR2) {
-    addfeature(PLAY_ON_REP, 0, 0, 2);
-  };
+
+if (splitdepth > 0) {
+  /* we encountered the repeat while in a split voice; the
+     repeat goes there but we need to also copy it to all
+     its ancestors.
+  */
+  if (type != SINGLE_BAR)  recurse_back_and_change_bar (type);
+  else recurse_back_to_original_voice();
+  }
+if (     v->tosplitno != -1
+     && (newtype != SINGLE_BAR || strlen(replist) > 0)
+     && depth == 0) {
+/* depth == 0 implies the repeat symbol was encountered while
+   we are not in a split voice but we need to put repeat symbol
+   in all split voices
 */
+ nbars = v->nbars; /* nbars now includes last bar, when we resync */
+ while (v->tosplitno != -1)
+     { 
+      v = getvoicecontext(v->tosplitno);
+      splitdepth++;
+      addfeature(VOICE, v->indexno, 0, 0);
+      resync_split_voice (nbars,v);
+      addfeature(newtype,0 ,0, 0);
+      if (strlen(replist) > 0) event_playonrep(replist);
+     }
+     recurse_back_to_original_voice();
+    };
+  if (splitdepth > 0)  recurse_back_to_original_voice ();
 }
+
 
 static void delendrep(j)
 int j;
@@ -3407,17 +3784,19 @@ static void startfile()
   gfact_denom = 4;
   hornpipe = 0;
   karaoke = 0;
-  retain_accidentals = 1;
+  numsplits = 0;
+  retain_accidentals = default_retain_accidentals;
+  fermata_fixed = default_fermata_fixed;
   if (ratio_standard == -1) {
-    ratio_a = 2;
-    ratio_b = 4;
+    ratio_a = default_ratio_a;
+    ratio_b = default_ratio_b;
   } else {
      ratio_a = 2;
      ratio_b = 6;
    }
   wcount = 0;
   parts = -1;
-  middle_c = 60;
+  middle_c = default_middle_c;
   for (j=0; j<26; j++) {
     part_start[j] = -1;
   };
@@ -3555,6 +3934,7 @@ static void finishfile()
   
 
 
+  complete_all_split_voices ();
   clearvoicecontexts();
   if (!pastheader) {
     event_error("No valid K: field found at start of tune");
@@ -3677,10 +4057,10 @@ int n;
         free(outname);
       };
       sprintf(numstr, "%d", n);
-      if (strlen(numstr) > namelimit - 1) {
+      if ( (int) strlen(numstr) > namelimit - 1) {
         numstr[namelimit - 1] = '\0';
       };
-      if (strlen(outbase) + strlen(numstr) > namelimit) {
+      if ((int) (strlen(outbase) + strlen(numstr)) > namelimit) {
         strncpy(newname, outbase, namelimit - strlen(numstr));
         strcpy(&newname[namelimit - strlen(numstr)], numstr);
         strcpy(&newname[strlen(newname)], ".mid");
