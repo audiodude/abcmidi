@@ -91,6 +91,10 @@ struct note {
   float stemlength;
 };
 
+struct dynamic {
+  char color;
+  };
+
 /* elemental unit of a voice list */
 /* item points to a note, bar-line or other feature */
 struct feature {

@@ -49,6 +49,7 @@
 #endif
 #include <stdlib.h>
 
+void   single_note_tuning_change(int midikey, float midipitch);
 
 float ranfrac ()
 {
@@ -56,6 +57,7 @@ return rand()/(float) RAND_MAX;
 }
 
 void setbeat();
+static void parse_drummap(char **s);
 
 /* global variables grouped roughly by function */
 
@@ -117,6 +119,7 @@ extern int header_time_num,header_time_denom;
 /* generating MIDI output */
 int beat;
 int loudnote, mednote, softnote;
+int beataccents;
 int velocity_increment = 10; /* for crescendo and decrescendo */
 char beatstring[100]; 
 int nbeats;
@@ -184,6 +187,10 @@ int chordattack=0;
 int staticnotedelay=10;  /* introduced to handle !arpeggio! */
 int staticchordattack=0;
 int totalnotedelay=0; /* total time delay introduced */
+
+
+/* channel 10 drum handling */
+int drum_map[256];
 
 void reduce(a, b)
 /* elimate common factors in fraction a/b */
@@ -1160,8 +1167,8 @@ int pitch, chan, vel;
 #ifdef NOFTELL
   extern int nullpass;
 #endif
-
-  data[0] = (char) pitch;
+  if (chan == 9) data[0] = (char) drum_map[pitch];
+  else           data[0] = (char) pitch;
   data[1] = (char) vel;
   if (channel >= MAXCHANS) {
     event_error("Channel limit exceeded\n");
@@ -1184,7 +1191,8 @@ int pitch, chan;
 {
   char data[2];
 
-  data[0] = (char) pitch;
+  if (chan == 9) data[0] = (char) drum_map[pitch];
+  else           data[0] = (char) pitch;
   data[1] = (char) 0;
   if (channel >= MAXCHANS) {
     event_error("Channel limit exceeded\n");
@@ -1209,42 +1217,45 @@ int n;
   int i, vel;
 
   /* set velocity */
-  if (nbeats > 0) {
-    if ((bar_num*nbeats)%(bar_denom*barsize) != 0) {
-      /* not at a defined beat boundary */
-      vel = softnote;
-    } else {
-      /* find place in beatstring */
-      i = ((bar_num*nbeats)/(bar_denom*barsize))%nbeats;
-      switch(beatstring[i]) {
-      case 'f':
-      case 'F':
-        vel = loudnote;
-        break;
-      case 'm':
-      case 'M':
-        vel = mednote;
-        break;
-      default:
-      case 'p':
-      case 'P':
+  if(beataccents == 0) 
+    vel = mednote;
+  else if (nbeats > 0) {
+      if ((bar_num*nbeats)%(bar_denom*barsize) != 0) {
+        /* not at a defined beat boundary */
         vel = softnote;
-        break;
-      };
-    };
-  } else {
-    /* no beatstring - use beat algorithm */
-    if (bar_num == 0) {
-        vel = loudnote;
-    } else {
-      if ((bar_denom == 1) && ((bar_num % beat) == 0)) {
-        vel = mednote;
       } else {
-        vel = softnote;
+        /* find place in beatstring */
+        i = ((bar_num*nbeats)/(bar_denom*barsize))%nbeats;
+        switch(beatstring[i]) {
+        case 'f':
+        case 'F':
+          vel = loudnote;
+          break;
+        case 'm':
+        case 'M':
+          vel = mednote;
+          break;
+        default:
+        case 'p':
+        case 'P':
+          vel = softnote;
+          break;
+        };
       };
-    };
-  }
-  noteon_data(pitch[n] + transpose + global_transpose, channel, vel);
+     } else {
+      /* no beatstring - use beat algorithm */
+      if (bar_num == 0) {
+          vel = loudnote;
+     } else {
+        if ((bar_denom == 1) && ((bar_num % beat) == 0)) {
+          vel = mednote;
+     } else {
+          vel = softnote;
+        };
+      };
+    }
+  if (channel == 9) noteon_data(pitch[n],channel,vel);
+  else noteon_data(pitch[n] + transpose + global_transpose, channel, vel);
 }
 
 static void write_program(p, channel)
@@ -1458,6 +1469,15 @@ int noteson;
     done = 1;
   };
 
+  if( strcmp(command, "beataccents") == 0) {
+    beataccents = 1;
+    done = 1;
+  }
+  if( strcmp(command, "nobeataccents") == 0) {
+    beataccents = 0;
+    done = 1;
+  }
+
   if (strcmp(command,"portamento") == 0) {
    int chan, datum;
    char data[4];
@@ -1514,6 +1534,17 @@ int noteson;
        } 
     done = 1;
   };
+
+  if (strcmp(command, "snt") == 0) {  /*single note tuning */
+    int midikey;
+    float midipitch;
+    midikey = readnump(&p);
+    sscanf(p,"%f", &midipitch);
+    single_note_tuning_change(midikey,  midipitch);
+    done = 1;
+    }
+   
+
   if (strcmp(command,"chordattack") == 0) {
     staticnotedelay = readnump(&p);
     notedelay = staticnotedelay;
@@ -1524,6 +1555,12 @@ int noteson;
     chordattack = staticchordattack;
     done = 1;
   };
+  if (strcmp(command,"drummap") == 0) {
+    parse_drummap(&p);
+    done = 1;
+  };
+
+
   if (done == 0) {
     char errmsg[80];
     sprintf(errmsg, "%%%%MIDI command \"%s\" not recognized",command);
@@ -1715,6 +1752,119 @@ int i;
   };
 }
 
+void init_drum_map()
+{
+int i;
+for (i=0;i<256;i++)
+   drum_map[i] = i;
+}
+
+static void parse_drummap(char **s)
+/* parse abc note and advance character pointer */
+/* code stolen from parseabc.c and simplified */
+{
+  int mult;
+  char accidental, note;
+  int octave;
+  int midipitch;
+  int mapto;
+  char msg[80];
+  char *anoctave = "cdefgab";
+  int scale[7] = {0, 2, 4, 5, 7, 9, 11};
+
+  mult = 1;
+  accidental = ' ';
+  note = ' ';
+  /* read accidental */
+  switch (**s) {
+  case '_':
+    accidental = **s;
+    *s = *s + 1;
+    if (**s == '_') {
+      *s = *s + 1;
+      mult = 2;
+    };
+    break;
+  case '^':
+    accidental = **s;
+    *s = *s + 1;
+    if (**s == '^') {
+      *s = *s + 1;
+      mult = 2;
+    };
+    break;
+  case '=':
+    accidental = **s;
+    *s = *s + 1;
+    if (**s == '^') {
+      accidental = **s;
+      *s = *s + 1;
+      } 
+    else if (**s == '_') { 
+      accidental = **s;
+      *s = *s + 1;
+      } 
+    break;
+  default:
+    /* do nothing */
+    break;
+  };
+  if ((**s >= 'a') && (**s <= 'g')) {
+    note = **s;
+    octave = 1;
+    *s = *s + 1;
+    while ((**s == '\'') || (**s == ',')) {
+      if (**s == '\'') {
+        octave = octave + 1;
+        *s = *s + 1;
+      };
+      if (**s == ',') {
+        sprintf(msg, "Bad pitch specifier , after note %c", note);
+        event_error(msg);
+        octave = octave - 1;
+        *s = *s + 1;
+      };
+    };
+  } else {
+    octave = 0;
+    if ((**s >= 'A') && (**s <= 'G')) {
+      note = **s + 'a' - 'A';
+      *s = *s + 1;
+      while ((**s == '\'') || (**s == ',')) {
+        if (**s == ',') {
+          octave = octave - 1;
+          *s = *s + 1;
+        };
+        if (**s == '\'') {
+          sprintf(msg, "Bad pitch specifier ' after note %c", note + 'A' - 'a');
+          event_error(msg);
+          octave = octave + 1;
+          *s = *s + 1;
+        };
+      };
+    };
+  };
+  /*printf("note = %d octave = %d accidental = %d\n",note,octave,accidental);*/
+  midipitch = (int) ((long) strchr(anoctave, note) - (long) anoctave);
+  if (midipitch <0 || midipitch > 6) {
+    event_error("Malformed note in drummap : expecting a-g or A-G");
+    return;
+    } 
+  midipitch = scale[midipitch];
+  if (accidental == '^') midipitch += mult;
+  if (accidental == '_') midipitch -= mult;
+  midipitch = midipitch + 12*octave + 60;
+  skipspace(s);
+  mapto = readnump(s);
+  if (mapto == 0) {
+      event_error("Bad drummap: expecting note followed by space and number");
+       return;
+      }
+  if (mapto < 35 || mapto > 81) event_warning ("drummap destination should be between 35 and 81 inclusive");
+  /*printf("midipitch = %d map to %d \n",midipitch,mapto);*/ 
+  drum_map[midipitch] = mapto;
+}
+
 static void starttrack()
 /* called at the start of each MIDI track. Sets up all necessary default */
 /* and initial values */
@@ -1725,6 +1875,7 @@ static void starttrack()
   mednote = 95;
   softnote = 80;
   beatstring[0] = '\0';
+  beataccents = 1;
   nbeats = 0;
   transpose = 0;
 /* make sure meter is reinitialized for every track
@@ -1922,7 +2073,9 @@ int xtrack;
            }
         noteon(j);
         /* set up note off */
-        addtoQ(num[j], denom[j], pitch[j] + transpose +global_transpose, channel, -totalnotedelay -1);
+       if (channel == 9) 
+        addtoQ(num[j], denom[j], drum_map[pitch[j]], channel, -totalnotedelay -1);
+        else addtoQ(num[j], denom[j], pitch[j] + transpose +global_transpose, channel, -totalnotedelay -1);
       };
       if (!inchord) {
         delay(num[j], denom[j], 0);
@@ -1944,7 +2097,9 @@ int xtrack;
       if (noteson) {
         noteon(j);
         /* set up note off */
-        addtoQ(num[j], denom[j], pitch[j] + transpose + global_transpose, channel, -1);
+       if (channel == 9) 
+        addtoQ(num[j], denom[j], drum_map[pitch[j]], channel, -totalnotedelay -1);
+        else addtoQ(num[j], denom[j], pitch[j] + transpose +global_transpose, channel, -totalnotedelay -1);
       };
       break;
     case OLDTIE:
@@ -2315,7 +2470,8 @@ char *featname[] = {
 "MUSICLINE", "MUSICSTOP", "WORDLINE", "WORDSTOP",
 "INSTRUCTION", "NOBEAM", "CHORDNOTE", "CLEF",
 "PRINTLINE", "NEWPAGE", "LEFT_TEXT", "CENTRE_TEXT",
-"VSKIP", "COPYRIGHT", "COMPOSER", "ARPEGGIO"
+"VSKIP", "COPYRIGHT", "COMPOSER", "ARPEGGIO",
+"SPLITVOICE"
 }; 
 
 dumpfeat (int from, int to)

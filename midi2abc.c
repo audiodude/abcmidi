@@ -46,7 +46,7 @@
  * based on public domain 'midifilelib' package.
  */
 
-#define VERSION "2.86 June 30 2005"
+#define VERSION "2.88 July 23 2005"
 #define SPLITCODE
 
 /* Microsoft Visual C++ Version 6.0 or higher */
@@ -202,7 +202,7 @@ struct atrack {
 struct atrack track[64];
 int trackcount = 0;
 int maxbarcount = 0;
-/* maxbarcount  is used to return the numbers of bars created.
+/* maxbarcount  is used to return the numbers of bars created.*/
 /* obpl is a flag for one bar per line. */
 
 /* double linked list of notes */
@@ -758,10 +758,14 @@ open_note(chan, pitch, vol);
 else {
   start_time = close_note(chan, pitch,&initvol);
   if (start_time >= 0)
-      printf("%8.4f %8.4f %d %d %d %d\n",
+     /* printf("%8.4f %8.4f %d %d %d %d\n",
        (double) start_time/(double) division,
        (double) Mf_currtime/(double) division,
        trackno+1, chan +1, pitch,initvol);
+     */
+       printf("%d %ld %d %d %d %d\n",
+       start_time, Mf_currtime, trackno+1, chan +1, pitch,initvol);
+
       if(Mf_currtime > last_tick) last_tick = Mf_currtime;
    }
 }
@@ -774,10 +778,14 @@ int start_time,initvol;
 
 start_time = close_note(chan, pitch, &initvol);
 if (start_time >= 0)
+/*
     printf("%8.4f %8.4f %d %d %d %d\n",
      (double) start_time/(double) division,
      (double) Mf_currtime/(double) division,
      trackno+1, chan+1, pitch,initvol);
+*/
+     printf("%d %ld %d %d %d %d\n",
+       start_time, Mf_currtime, trackno+1, chan +1, pitch,initvol);
     if(Mf_currtime > last_tick) last_tick = Mf_currtime;
 }
 
@@ -791,7 +799,7 @@ if (start_time >= 0)
  * and 128 pitches, we initialize an array 128*16 = 2048 elements
  * long.
 **/
-init_notechan()
+void init_notechan()
 {
 /* signal that there are no active notes */
  int i;
@@ -1348,6 +1356,7 @@ int trackno;
     };
     tryx = tryx + factor;
   };
+xunit_set = 1;
 }
 
 
@@ -2021,7 +2030,7 @@ int n;
 void handletext(t, textplace, trackno)
 /* print out text occuring in the body of the track */
 /* The text is printed out at the appropriate place within the track */
-/* In addition the function handles key signature and time
+/* In addition the function handles key signature and time */
 /* signature changes that can occur in the middle of the tune. */
 long t;
 struct tlistx** textplace;
@@ -2130,7 +2139,12 @@ void label_split(struct anote *note, int activesplit)
    the another note must occur if it forms a proper chord.
    After assigning a split number to the note we need to
    update note->xnum as this indicates the gap to the
-   next note in the same split number.
+   next note in the same split number. The function uses
+   a greedy algorithm. It assigns a note to the first
+   splitnumber code which satisfies the above constraint.
+   If it cannot find a splitnumber, a new one (voice or track)
+   is created. It would be nice if the voices kept the
+   high and low notes (in pitch) separate.
 */
      note->splitnum = activesplit;
      splitstart[activesplit] = note->posnum;
@@ -2417,6 +2431,7 @@ int trackno,  anacrusis;
 /* restore state for the next splitnum */
        chordhead = splitchordhead[splitnum];
        chordtail = splitchordtail[splitnum];
+       checkchordlist();
        gap = splitgap[splitnum];
        i = last_i[splitnum];
 
@@ -2459,6 +2474,10 @@ int trackno,  anacrusis;
     };
    if (i == NULL) /* end of track before end of measure ? */
     {
+     last_i[splitnum] = i;
+     splitchordhead[splitnum] = chordhead;
+     splitchordtail[splitnum] = chordtail;
+     splitgap[splitnum] = gap;
      splitnum = nextsplitnum(splitnum);
      if (splitnum == -1) break;
      chordhead = splitchordhead[splitnum];
@@ -3032,7 +3051,7 @@ int argc;
   arg = getarg("-ver",argc,argv);
   if (arg != -1) {printf("%s\n",VERSION); exit(0);}
   midiprint = 0;
-  arg = getarg("-Midigram",argc,argv);
+  arg = getarg("-midigram",argc,argv);
   if (arg != -1) 
    {
    midiprint = 1;
@@ -3230,7 +3249,7 @@ int argc;
     printf("         -splitbars  splits bars to avoid nonhomophonic chords\n");
     printf("         -splitvoices  splits voices to avoid nonhomophonic chords\n");
 #endif
-    printf("         -Midigram   Prints midigram instead of abc file\n");
+    printf("         -midigram   Prints midigram instead of abc file\n");
     printf("         -mftext mftext output\n"); 
     printf("         -ver version number\n");
     printf(" None or only one of the options -gu, -b, -Q -u should\n");
@@ -3338,7 +3357,7 @@ int argc;
   };
 
 /* If key signature is not known find the best one.              */
-  if (keysig == -50 && gotkeysig ==0 || guessk) {
+  if ((keysig == -50 && gotkeysig ==0) || guessk) {
        keysig = findkey(maintrack);
        if (summary>0) printf("Best key signature = %d flats/sharps\n",keysig);
        }

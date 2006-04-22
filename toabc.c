@@ -21,7 +21,7 @@
 
 /* back-end for outputting (possibly modified) abc */
 
-#define VERSION "1.43 May 14 2005"
+#define VERSION "1.48 April 21 2006"
 
 /* for Microsoft Visual C++ 6.0 or higher */
 #ifdef _MSC_VER
@@ -49,6 +49,7 @@ extern char* strchr();
 /* should be plenty! */
 
 programname fileprogram = ABC2ABC;
+extern int oldchordconvention; /* for handling +..+ chords */
 
 struct fract {
   int num;
@@ -489,6 +490,8 @@ char** filename;
     printf("  -V X to output only voice X\n");
     printf("  -ver  prints version number and exits\n");
     printf("  -X n renumber the all X: fields as n, n+1, ..\n");
+    printf("  -OCC old chord convention (eg. +CE+)\n");
+
     exit(0);
   } else {
     *filename = argv[1];
@@ -502,6 +505,7 @@ char** filename;
     cleanup = 0;
   } else {
     cleanup = 1;
+    oldchordconvention = 1;
   };
   if (getarg("-s", argc, argv) == -1) {
     newspacing = 0;
@@ -598,7 +602,7 @@ char** filename;
      if (usekey >5) usekey = 5;
      setup_sharps_flats (usekey);
      }
-
+  if (getarg("-OCC",argc,argv) != -1) oldchordconvention=1;
 
   /* printf("%% output from abc2abc\n"); */
   startline = 1;
@@ -1107,15 +1111,10 @@ int num;
   return(voice_index);
 }
 
-void event_voice(n, s, gotclef, gotoctave, gottranspose, gotname,
-	       	gotsname, clefname, octave, transpose, namestring,
-                snamestring)
+void event_voice(n, s, vp)
 int n;
 char *s;
-int gotclef, gotoctave, gottranspose, gotname, gotsname;
-char *clefname;
-int octave, transpose;
-char *namestring,*snamestring;
+struct voice_params *vp;
 {
   char output[32];
   if (xinbody) {
@@ -1137,26 +1136,30 @@ char *namestring,*snamestring;
   if (strlen(s) == 0) {
     if(voicecodes >= n) emit_string_sprintf("V:%s",voicecode[n-1]);
     else emit_int_sprintf("V:%d", n);
-    if (gotclef) {sprintf(output," clef=%s",clefname);
+    if (vp->gotclef) {sprintf(output," clef=%s", vp->clefname);
 	    emit_string(output);}
-    if (gotoctave) {sprintf(output," octave=%d",octave);
+    if (vp->gotoctave) {sprintf(output," octave=%d", vp->octave);
 	    emit_string(output);}
-    if (gottranspose) {sprintf(output," transpose=%d",transpose);
+    if (vp->gottranspose) {sprintf(output," transpose=%d", vp->transpose);
 	    emit_string(output);}
-     if (gotname) {sprintf(output," name=%s",namestring);
+     if (vp->gotname) {sprintf(output," name=%s", vp->namestring);
             emit_string(output);}
-     if (gotsname) {sprintf(output," sname=%s",snamestring);
+     if (vp->gotsname) {sprintf(output," sname=%s", vp->snamestring);
+            emit_string(output);}
+     if( vp->gotmiddle ) { sprintf(output, " middle=%s", vp->middlestring);
             emit_string(output);}
   } else {
     if(voicecodes >= n) emit_string_sprintf("V:%s",voicecode[n-1]);
     emit_int_sprintf("V:%d ", n);
-    if (gotclef) {sprintf(output," clef=%s",clefname);
+    if (vp->gotclef) {sprintf(output," clef=%s", vp->clefname);
 	    emit_string(output);}
-    if (gotoctave) {sprintf(output," octave=%d",octave);
+    if (vp->gotoctave) {sprintf(output," octave=%d", vp->octave);
 	    emit_string(output);}
-    if (gottranspose) {sprintf(output," transpose=%d",transpose);
+    if (vp->gottranspose) {sprintf(output," transpose=%d", vp->transpose);
 	    emit_string(output);}
-     if (gotname) {sprintf(output," name=%s",namestring);
+     if (vp->gotname) {sprintf(output," name=%s", vp->namestring);
+            emit_string(output);}
+     if( vp->gotmiddle ) { sprintf(output, " middle=%s", vp->middlestring);
             emit_string(output);}
     emit_string(s);
   };
@@ -1397,6 +1400,14 @@ int a, b;
     emit_int_sprintf("/%d", b);
   };
 }
+
+void event_spacing(n, m)
+int n, m;
+{
+  emit_string("y");
+  printlen(n, m);
+}
+
 
 void event_rest(decorators,n,m,type)
 int n, m, type;
@@ -1867,7 +1878,8 @@ char* s;
 void event_instruction(s)
 char* s;
 {
-  emit_string_sprintf("!%s!", s);
+  if (oldchordconvention) emit_string_sprintf("!%s!", s);
+  else emit_string_sprintf("+%s+", s);
 }
 
 void event_slur(t)
@@ -2308,6 +2320,8 @@ int argc;
 char *argv[];
 {
   char *filename;
+
+  oldchordconvention = 0; /* for handling +..+ chords */
 
   /*for (i=0;i<DECSIZE;i++) decorators_passback[i]=0; */
 

@@ -166,6 +166,9 @@ stave.
 12. Supports optional text enclosed in quotes before and after the
 tempo specification in the Q: field. This extension comes from abc2ps.
 
+13. Allows highlighting notes by switching output from black to
+red and vice-versa using the !red! and !black! instructions.
+
 Known bugs and Limitations
 --------------------------
 1. Overfull lines of music are not split over multiple lines.

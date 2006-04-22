@@ -83,7 +83,8 @@ CENTRE_TEXT,
 VSKIP,
 COPYRIGHT,
 COMPOSER,
-ARPEGGIO
+ARPEGGIO,
+SPLITVOICE
 } featuretype;
 
 /* note decorations */

@@ -33,6 +33,7 @@
  */
 
 #include <stdio.h>
+#include <stdlib.h>
 #include "queues.h"
 #include "abc.h"
 #include "genmidi.h"

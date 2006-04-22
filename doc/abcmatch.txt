@@ -1,4 +1,4 @@
-abcmatch		version 1.2		February 23 2003.
+abcmatch		version 1.35	January 15 2006.
 
 seymour.shlien@crc.ca
 
@@ -104,14 +104,16 @@ Here is now an explanation of the program and its run time
 parameters.  If you run abcmatch without any parameters you
 will see:
 
-abcmatch version 1.20
+abcmatch version 1.28
 Usage : abcmatch <abc file> [reference number] [-options]
         [reference number] selects a tune
         -c returns error and warning messages
         -v selects verbose option
         -r resolution for matching
         -con  pitch contour match
+        -qnt quantized pitch contour
         -a report any matching bars (default all bars)
+        -ign ignore simple bars
         -br %d only report number of matched bars when
             above given threshold
         -ver returns version number
@@ -141,7 +143,7 @@ of each note in the bar must match exactly in order to be
 reported. For larger values a looser match will be performed
 as described below. Note lengths are converted into temporal
 units where a quarter note normally is assigned a value of
-24. Therefore an eigth note has a value of 12, a sixteenth has
+24. Therefore an eight note has a value of 12, a sixteenth has
 a value of 6, a half note has a value of 48 and etc. If you
 specify a temporal resolution of 12, then the pitch values
 of the notes only need to match at time units which are multiples
@@ -162,19 +164,22 @@ In other words any matching bar found is reported.
 
 The -con option specifies contour matching. In this case,
 the program uses the key signature only to indicate accidentals.
-The pitch contour is computed and is matched with the
-other tunes. The pitch contour may be displaced up or
-down by any amount in the other tune to allow for different
-key signatures.
+The pitch contour is computed from the pitch difference
+or interval between adjacent notes.
 
 Thus C2 DE| and c2 de| and G2 AB| all have the same pitch
-contour. Contour matching is only implemented when you
-are matching all the bars in the template. (i.e. -a flag
-is not passed.) It is assumed that the bars in the
-template are all contiguous, (i.e nothing skipped or
-out of order.)
+contour.
 
-The -br followed by a threshold, runs the program in a 
+The -qnt option will use the contour matching algorithm
+but also quantize the intervals using the following table
+
+unison and semitone    0
+major 2nd to major 3rd 1
+perfect 4 and greater  2
+
+negative numbers are descending intervals.
+
+The -br followed by a threshold, runs the program in a brief
 mode designed to identify groups of tunes sharing common bars.
 (-br stands for brief mode; I cannot think of a better name
 right now.) In this mode, the program counts the numbers of bars

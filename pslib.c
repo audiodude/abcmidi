@@ -38,6 +38,8 @@
 /*  /mrest              - multiple bar rest (taken from abcm2ps)      */
 
 #include <stdio.h>
+#include <stdlib.h>
+
 /*  #define ANSILIBS is just used to access time functions for */
 /*  %%CreationDate . This can safely be removed if it causes   */
 /*  compilation problems */

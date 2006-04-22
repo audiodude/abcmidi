@@ -4,6 +4,7 @@ midicopy \- Copy selected track, channel, time interval of a MIDI file to anothe
 .SH SYNOPSIS
 \fBmidicopy\fP [\fB-ver\fP] [\fB-trks\fP \fIn1,n2,..\fP] [\fB-chans\fP \fIn1,n2,...\fP]\
     [\fB-from\fP \fIn (in midi ticks)\fP] [\fB-to\fP \fIn (in midi ticks)\fP]\
+    [\fB-fromsec %f\fP \fIn (in seconds)\fP] [\fB-tosec\fP \fIn (in seconds)\fP]\
     [\fB-replace\fP \fItrk,loc,val\fP] \fIinput.mid output.mid\fP
 .SH "DESCRIPTION"
 .PP
@@ -41,6 +42,17 @@ of the MIDI file.
 Stops copying all events after midi pulse number n. By default
 the file is copied to the end.
 .TP
+.B -fromsec n
+The program will copy all MIDI commands starting from time n 
+in seconds.
+.TP
+.B -tosec n
+Stops copying all events after time n in seconds. These two
+options (-fromsec and -tosec) do not work accurately if the
+MIDI file has more than one tempo command. Only the first
+one is used for converting seconds into MIDI pulse units.
+It is therefore preferable to use the -from and -to options.
+.TP
 .B -replace trk,loc,val
 This option should be used alone. Midicopy will copy the entire
 file verbatim except it will replace a byte by val, where the
@@ -60,4 +72,4 @@ Midicopy will copy tracks 1 and 5 starting from midi pulse position
 .SH AUTHOR
 This manual page was written by Seymour Shlien.
 .SH VERSION
-This man page describes midicopy version 1.02 from May 22 2005.
+This man page describes midicopy version 1.04 from September 19 2005.

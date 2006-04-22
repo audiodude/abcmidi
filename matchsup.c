@@ -226,7 +226,8 @@ char *featname[] = {
 "MUSICLINE", "MUSICSTOP", "WORDLINE", "WORDSTOP",
 "INSTRUCTION", "NOBEAM", "CHORDNOTE", "CLEF",
 "PRINTLINE", "NEWPAGE", "LEFT_TEXT", "CENTRE_TEXT",
-"VSKIP", "COPYRIGHT", "COMPOSER", "ARPEGGIO"
+"VSKIP", "COPYRIGHT", "COMPOSER", "ARPEGGIO",
+"SPLITVOICE"
 };
 
 
@@ -538,27 +539,6 @@ int maxnotes;
   return(newlimit);
 }
 
-static int textextend(maxstrings, stringarray)
-/* resize an array of pointers to strings */
-/* used with arrays words and atext */
-int maxstrings;
-char*** stringarray;
-{
-  int i, newlimit;
-  char** ptr;
-
-  newlimit = maxstrings*2;
-  if (verbose) {
-    event_warning("Extending text capacity");
-  };
-  ptr = (char**) checkmalloc(newlimit*sizeof(char*));
-  for(i=0;i<maxstrings;i++){
-    ptr[i] = (*stringarray)[i];
-  };
-  free(*stringarray);
-  *stringarray = ptr;
-  return(newlimit);
-}
 
 static void addfeature(f, p, n, d)
 /* place feature in internal table */
@@ -734,26 +714,22 @@ char* s;
   };
 }
 
-void event_voice(n, s, gotclef,gotoctave,gottranspose,gotname,gotsname,
-                clefname,octave,transpose,namestring,snamestring)
+void event_voice(n, s, vp)
 /* handles a V: field in the abc */
 int n;
 char *s;
-int gotclef,gotoctave,gottranspose,gotname,gotsname;
-char *clefname;
-int octave,transpose;
-char *namestring,*snamestring;
+struct voice_params *vp;
 {
   if (pastheader || XTEN1) {
     voicesused = 1;
     if (pastheader)  checkbreak();
     v = getvoicecontext(n);
     addfeature(VOICE, v->indexno, 0, 0);
-    if (gotoctave) {
-      event_octave(octave,1);
+    if (vp->gotoctave) {
+      event_octave(vp->octave,1);
     };
-    if (gottranspose) {
-      addfeature(TRANSPOSE, transpose, 0, 0);
+    if (vp->gottranspose) {
+      addfeature(TRANSPOSE, vp->transpose, 0, 0);
     };
   } else {
     event_warning("V: in header ignored");
@@ -1155,6 +1131,12 @@ static void marknote()
   marknoteend();
 }
 
+/* just a stub to ignore 'y' */
+void event_spacing(n, m)
+int n,m;
+{
+}
+
 void event_rest(decorators,n,m,type)
 /* rest of n/m in the abc */
 int n, m,type;
@@ -1298,21 +1280,6 @@ int propogate_accs;
   return p + 12*octave + middle_c;
 }
 
-static void doroll(note, octave, n, m, pitch)
-/* applies a roll to a note */
-char note;
-int octave, n, m;
-int pitch;
-{
-}
-
-static void dotrill(note, octave, n, m, pitch)
-/* applies a trill to a note */
-char note;
-int octave, n, m;
-int pitch;
-{
-}
 
 
 static void hornp(num, denom)
@@ -1692,14 +1659,6 @@ static void tiefix()
       j = j + 1;
       break;
     case TIE:
-/*
-      if (chord_end+1 == j) { /* did a TIE connect with a chord */
-	      /* removefeature(j);
-	       patchup and backtrack/
-	      j = patchup_chordtie(chord_start,chord_end);
-	      inchord=1;
-              }
-*/
       dotie(j, inchord,voiceno);
       j = j + 1;
       break;
@@ -1716,16 +1675,6 @@ static void tiefix()
   };
 }
 
-static void applygrace(place)
-int place;
-/* assign lengths to grace notes before generating MIDI */
-{
-}
-
-static void dograce()
-/* assign lengths to grace notes before generating MIDI */
-{
-}
 
 static void zerobar()
 /* start a new count of beats in the bar */
@@ -1769,70 +1718,7 @@ char* replist;
 */
 }
 
-static void delendrep(j)
-int j;
-/* remove bogus repeat */
-{
-  event_error("spurious repeat after second ending");
-  switch(feature[j]) {
-  case REP_BAR:
-    feature[j] = DOUBLE_BAR;
-    break;
-  case DOUBLE_REP:
-    feature[j] = BAR_REP;
-    break;
-  default:
-    break;
-  };
-}
 
-static void placeendrep(j)
-/* patch up missing repeat */
-int j;
-{
-  event_warning("Assuming repeat");
-  switch(feature[j]) {
-  case DOUBLE_BAR:
-    feature[j] = REP_BAR;
-    break;
-  case SINGLE_BAR:
-    feature[j] = REP_BAR;
-    break;
-  case BAR_REP:
-    feature[j] = DOUBLE_REP;
-    break;
-  default:
-    event_error("Internal error - please report");
-    break;
-  };
-}
-
-static void placestartrep(j)
-/* patch up missing repeat */
-int j;
-{
-  event_warning("Assuming repeat");
-  switch(feature[j]) {
-  case DOUBLE_BAR:
-    feature[j] = BAR_REP;
-    break;
-  case SINGLE_BAR:
-    feature[j] = BAR_REP;
-    break;
-  case REP_BAR:
-    feature[j] = DOUBLE_REP;
-    break;
-  case BAR_REP:
-    event_error("Too many end repeats");
-    break;
-  case DOUBLE_REP:
-    event_error("Too many end repeats");
-    break;
-  default:
-    event_error("Internal error - please report");
-    break;
-  };
-}
 
 
 void startfile()
@@ -1964,17 +1850,17 @@ char* clefname;
 }
 
 
-char *featurename[] = {"SINGLE_BAR", "DOUBLE_BAR", "BAR_REP", "REP_BAR", "PLAY_ON_REP",\
-"REP1", "REP2", "BAR1", "REP_BAR2", "DOUBLE_REP",\
-"THICK_THIN", "THIN_THICK", "PART", "TEMPO", "TIME",\
-"KEY", "REST", "TUPLE", "NOTE", "NONOTE",\
-"OLDTIE", "TEXT", "SLUR_ON", "SLUR_OFF", "TIE",\
-"CLOSE_TIE", "TITLE", "CHANNEL", "TRANSPOSE", "RTRANSPOSE",\
-"GRACEON", "GRACEOFF", "SETGRACE", "SETC", "GCHORD",\
-"GCHORDON", "GCHORDOFF", "VOICE", "CHORDON", "CHORDOFF",\
-"DRUMON", "DRUMOFF", "SLUR_TIE", "TNOTE", "LT",\
-"GT", "DYNAMIC", "LINENUM", "MUSICLINE", "MUSICSTOP",\
-"WORDLINE", "WORDSTOP", "INSTRUCTION", "NOBEAM", "CHORDNOTE",\
+char *featurename[] = {"SINGLE_BAR", "DOUBLE_BAR", "BAR_REP", "REP_BAR", "PLAY_ON_REP",
+"REP1", "REP2", "BAR1", "REP_BAR2", "DOUBLE_REP",
+"THICK_THIN", "THIN_THICK", "PART", "TEMPO", "TIME",
+"KEY", "REST", "TUPLE", "NOTE", "NONOTE",
+"OLDTIE", "TEXT", "SLUR_ON", "SLUR_OFF", "TIE",
+"CLOSE_TIE", "TITLE", "CHANNEL", "TRANSPOSE", "RTRANSPOSE",
+"GRACEON", "GRACEOFF", "SETGRACE", "SETC", "GCHORD",
+"GCHORDON", "GCHORDOFF", "VOICE", "CHORDON", "CHORDOFF",
+"DRUMON", "DRUMOFF", "SLUR_TIE", "TNOTE", "LT",
+"GT", "DYNAMIC", "LINENUM", "MUSICLINE", "MUSICSTOP",
+"WORDLINE", "WORDSTOP", "INSTRUCTION", "NOBEAM", "CHORDNOTE",
 "CLEF", "PRINTLINE", "NEWPAGE", "LEFT_TEXT", "CENTRE_TEXT", "VSKIP"
 };
 

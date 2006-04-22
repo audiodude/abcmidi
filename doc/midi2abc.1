@@ -1,4 +1,4 @@
-.TH MIDI2ABC 1 "27 June 2005"
+.TH MIDI2ABC 1 "09 July 2005"
 .SH NAME
 \fBmidi2abc\fP \- program to convert MIDI format files to abc notation
 .SH SYNOPSIS
@@ -8,7 +8,7 @@ midi2abc -f \fIinfile\fP [-xa] [-ga]
 [-gu] [-b \fIbars\fP] [-Q \fItempo\fP] [-u \fipulses\fP]
 [-k \fIkey\fP] [-c \fIchannel\fP] [-obpl] [-bpl \fibars\fP] [-bps \fPbars\fP]
 [-o \fIfilename\fP] [-s] [-sr \fiunits\fP] [-sum] [-nt]
-[-splitbars] [-splitvoices] [-Midigram] [-mftext] [-nogr]
+[-splitbars] [-splitvoices] [-midigram] [-mftext] [-nogr]
 
 .SH DESCRIPTION
 \fImidi2abc\fP takes a MIDI format file and converts it to something as close
@@ -135,14 +135,15 @@ composed of notes of unequal length (polyphonic chords).
 Normally, midi2abc joins the longer notes to the notes in
 the following chord using ties. A more readable output, can
 be obtained if the measure is split into separate parts using
-the '&' feature in abc notation. This is a new feature and may
-not work correctly on all MIDI files.
+the '&' feature in abc notation. The algorithm for dividing
+the notes in a polyphonic chord to separate voices (label_splits
+in midi2abc.c) needs some improvement. I welcome any assistance.
 .TP
 .B -splitvoices
 This parameter like above handles polyphonic chords by
 splitting an entire voice into multi voices.
 .TP
-.B -Midigram
+.B -midigram
 When this option appears, all other options are ignored and
 no abc file is produced. Instead a list of all notes in the
 MIDI file are printed in a fixed format. Each line represents
@@ -216,7 +217,7 @@ James Allwright <J.R.Allwright@westminster.ac.uk>
 .SH SUPPORTED
 Seymour Shlien <seymour.shlien@crc.ca>
 .SH VERSION
-This man page describes midi2abc version 2.85 from June 27 2005.
+This man page describes midi2abc version 2.87 from July 09 2005.
 .SH COPYRIGHT
 Copyright 1999 James Allwright
 .PP

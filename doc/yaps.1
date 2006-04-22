@@ -1,4 +1,4 @@
-.TH YAPS 1 "11 July 2004"
+.TH YAPS 1 "13 August 2005"
 .SH NAME
 .B
 YAPS
@@ -6,7 +6,7 @@ YAPS
 .SH SYNOPSIS
 yaps \fiabc\ file\fP [-d] [-e\ <list>] [-E] [-l] [-M \fiXXXxYYY\fP] \
 [-N] [-k nn] [-o \fifile\ name\fP] [-P -\fiss\fP] [-s \fiXX\fP] [-V]\
-[-ver] [-x]
+[-ver] [-x] [-OCC]
 
 
 .SH OPTIONS
@@ -52,6 +52,10 @@ Prints version number and exits.
 .TP
 .B  -x
 Print tune number in X: field
+.TP
+.B -OCC
+Required if the tune uses the old convention for chords delineated
+with +..+ instead of [...].
 
 .SH FEATURES
 
@@ -111,6 +115,9 @@ U:S = !segno!
 allows S to be used to produce the segno symbol. Currently this only
 allows new symbols to be defined and does not allow the existing
 pre-defined symbols M,L,R,H and T to be altered.
+.PP
+* Supports the !red! and !black! instructions for switching from
+black to red or vice-versa.
 .PP
 * Supports the following abc2ps extensions to abc :
 .PP
@@ -188,5 +195,5 @@ Seymour Shlien <seymour.shlien@crc.ca>
 More complete documentation can be found in abcguide.txt which
 comes with the abcMIDI distribution package.
 .SH VERSION
-This man page describes version 1.25 July 11 2004.
+This man page describes version 1.39 August 13 2005.
 

@@ -3370,7 +3370,7 @@ intended to be applied on the second note G.
 Analysis: Multivoiced files (i.e. using V:1, V:2 etc.) place a
 header track (track 0) in the MIDI file where global DYNAMIC
 features such as %%MIDI program may be defined for all other
-voices. The microtone is sinces it uses the %%MIDI pitchbend,
+voices.Since the microtone uses the %%MIDI pitchbend, it
 is also treated as a DYNAMIC feature. As a result the header
 track contains many pitchbends but no notes. This unfortunately
 handles all other notes in channel 0 in a random fashion.
@@ -3958,4 +3958,762 @@ July 02 2005
 
 Abcmatch: upgraded the handling of chords and ties to be
 compatible with abc2midi.
+
+July 09 2005
+
+Abcmatch: added an option to ignore simple bars.
+
+Midi2abc: withdrew -Midigram option and replaced it with -midigram.
+Note onset and offset time are now printed in MIDI time units rather
+than quarter notes units.
+
+July 14 2005
+
+Abc2midi: voice split causes infinite loop when play on repeat
+(eg [1 or [2) specified. For the following file
+
+
+X:1
+T:reproduce the bug in a smaller file
+C:H. C. L. Smith
+L:1/4
+M:1/4
+K:C
+D|:C|[1F:|[2F|E&C||
+
+abc2midi emits the following error message in an endless loop.
+
+Error in line 8 : Bad variant list : reproduce the bug in a smaller file
+Warning in line 8 : Bar 2 has 2 units instead of 1
+Error in line 8 : Bad variant list : reproduce the bug in a smaller file
+Warning in line 8 : Bar 2 has 2 units instead of 1
+Error in line 8 :....
+
+Analysis: when writing the voice split in bar E & C||, the function
+inlist (in genmidi.c) fails to get the repeat on repeat number (eg [2))
+which was set for top level voice but not for the split voice.
+
+Fix: the problem was traced to the function start_new_voice_and_sync
+in store.c. It copies the repeat BAR feature (SINGLE_BAR, DOUBLE_BAR,
+etc..) to the split voice but for the PLAY_ON_REP feature it must
+also copy the pointer to the part number stored in denom[]. Now
+both feature[j] and denom[j] are both copied for all bar type features.
+
+July 15 2005
+
+The above file exposes yet another problem leading to a loss of
+synchronization between the voices. The first indication that there is
+still something else wrong are the messages.
+Warning in line 8 : Bar 2 has 2 units instead of 1
+Warning in line 8 : Bar 3 has 3 units instead of 1 in repeat
+Warning in line 8 : Track 2 is 4320 units long not 2880
+
+When playing the output MIDI file, the note C in the split
+is played two bars late extending track 2.
+
+Analysis:
+A play on repeat symbol is always preceded by a bar or repeat bar
+(ie. | or :|). The function start_new_voice_and_sync treats the play
+on repeat symbol as another bar line and inserts a rest to complete 
+the bar when in fact, it should just insert a PLAY_ON_REP.
+Since this bar is played twice, the C note comes two bars late. 
+Treating PLAY_ON_REP as a separate case fixed the problem.
+
+July 17 2005
+Abc2midi: voice split synchronization error when not all measures
+are equal in length. In the following file, the tune begins
+with an incomplete measure.
+
+X:1
+T: anacrusis
+M: 2/4
+L: 1/8
+K: F
+AG|Fc Fc| d2 e2 & B2 c2|
+
+Analysis: start_new_voice_and_sync unfortunately assumes that
+every measure contains 2 beats. Fix: the function now counts
+the number of beats in each bar it processes.
+
+
+Abc2midi: MIDI attributes inheritance. As discussed in May 14, 2005
+split voices inherit the MIDI characteristics from their ancestor.
+The following file does not work as expected.
+
+X:1
+T:inherit 1 
+M:4/4
+L:1/16
+Q:1/4 =20
+K: C
+%%MIDI channel 2
+%%MIDI program 2 50
+B2G2A2B2 EDEF EGFA & z2E4 D2 C8|]
+
+The split voice z2E4 ... is played on the Acoustical Piano (program 0)
+instead of the synthetic strings.
+
+However the following file works correctly.
+
+X:2
+T:inherit 2
+M:4/4
+L:1/16
+Q:1/4 =20
+K: C
+%%MIDI program  50
+B2G2A2B2 EDEF EGFA & z2E4 D2 C8|]
+
+
+Analysis: Each split gets its own voice and each voice gets
+its own channel number unless it is changed explicitly. 
+
+The above should be equivalent to
+X:1
+T:inherit 1
+M:4/4
+L:1/16
+V:1
+%%MIDI channel 2
+%%MIDI program 2 50
+B2G2A2B2 EDEF EGFA| 
+V:2
+%%MIDI channel 2
+%%MIDI program 2 50
+z2E4 D2 C8
+
+Unfortunately, the %%MIDI channel 2 did not propogate
+to the split voice. Voice 1 was assigned channel 2 but voice 2
+still had channel 1 (writetrack automatically assigns the
+first channel which is not in use). The bug was fixed by
+ensuring the CHANNEL feature also propogates into the split voice.
+
+You may wonder why X:2 worked correctly. This is because
+the MIDI program command without the channel indication applies
+to whatever channel is currently active.
+
+
+July 23 2005.
+
+Fixed bug causing midi2abc.exe to produce a segmentation error when
+running with the -splitbars option. (Failed to save state
+when doing a split voice context switch due to encountering
+an end of track before an end of measure. As a result the restored
+chordhead would point to the wrong place.) Added more
+code around line 2480 in printtrack_with_splits in midi2abc.c.
+
+
+August 13 2005.
+
+Abc2midi.exe does not handle correctly chords of the form
+[CE]2 when embedded in a triplet. For example in the file,
+
+X:1
+T: triplet
+M: 4/4
+L: 1/4
+K:C
+(3C2 D2 [CE]2 |
+
+abc2midi produces an error messages 
+
+Warning in line 6 : Different length notes in tuple
+Warning in line 6 : Different length notes in tuple
+
+and the [CE] chord is the wrong length.
+
+Analysis: event_note processes the internal lengths
+of the notes in a chord before it encounters the end
+of chord marker (]) and it does not know that the
+internal lengths may be adjusted externally after
+the end of chord. It sees the wrong length, and
+sends a warning. Event_chordoff fails to make an
+adjustment for the triplet (tuple) so that the
+function fix_enclosed_note_lengths sets the lengths
+of the internal chord notes to the wrong length.
+
+Fix: event_note bypasses the tuple test (for triplets)
+if the notes are inside a chord. The tuple test
+was also added in event_chordoff. It adjusts the
+setting of the note lengths (chord_n, chord_m) if
+the chord is inside a tuple. If chord_n and chord_m
+are not 1,1 then fix_enclosed_note_lengths is called.
+
+ 
+August 13 2005
+
+Abc2midi.exe has difficulty handling tied notes enclosed
+in a slur. For example for the tune
+
+X:1
+T: slur 1
+M: 2/4
+L: 1/8
+K: G
+(GB-B) C|(DEF) B|
+
+the following messages appear
+
+Warning in line 6 : Slur in abc taken to mean a tie
+Error in line 6 : Bad tie: possibly two ties in a row
+Error in line 6 : Cannot find note before tie
+
+Surprisingly, the output MIDI file is still correct.
+
+Analysis and fix: Abc2midi does almost nothing when it encounters 
+slurs. However, when it sees repeated notes inside a slur it 
+tries to tie them together.  For example for (G B B), abc2midi 
+would try to tie the two B's together. This is the source
+of the above problem.  I do not think this is a very useful
+feature so I have turned this feature off (in event_sluroff store.c). 
+
+August 13 2005
+
+The abc2-draft standard, 
+http://abc.sourceforge.net/standard/abc2-draft.html
+has deprecated the !...! notation in favour of the +...+
+notation. In order to comply with the change, abc2midi, abc2abc
+and yaps were modified to accept either convention.
+Thus you can use +trill+, +fermata+ +pp+ etc. as well
+as the deprecated notation (!trill! etc.). There is one conflict:
+in the early days of abc notation chords were notated
+as +CEG+ instead of [CEG]. There is probably very little
+music using this old convention. If you need to handle the
+old chord notation, you must now add the option -OCC to
+abc2midi, abc2abc or yaps.
+
+Sample file:
+
+X:1
+T: decorations
+M: 2/4
+L: 1/8
+K: G
++<(+ [CE]4 +<)+  |[CE] +trill+  DEF|
+!<(! [CE]4 !<)!  |[CE] !trill!  DEF|
+
+Implementation:
+
+Introduced a new global, oldchordconvention into parseabc.c
+which is linked externally to store.c, toabc.c and yaps.c.
+If this global is unset (ie. 0), then parsemusic in parseabc.c
+treats + and ! in the same manner.
+
+
+August 17 2005
+ 
+Added new run time parameters to midicopy -fromsec and
+-tosec allowing you to select a section in terms of time
+in seconds.
+
+
+September 13 2005
+
+Midicopy using the -fromsec option to select the start of the
+output MIDI file causes the music to be delayed by the
+the same amount of seconds.
+
+Analysis, the first note on (or note off) of the track has
+a delta_time equal to the time of the first note in the
+selected section of the original file. TiMidity has no problem 
+since it ignores this delay. Other MIDI players are less
+compliant.
+
+This is a hard bug to fix properly when the tempo varies
+across the MIDI file. For such files, it is recommended that
+you use the -from and -to parameters and express the times
+in MIDI tick (pulse) units. The program now computes
+the right delay using the first tempo specification in the
+MIDI file.
+
+I noticed that when midicopy truncates the beginning of
+a file, a track may begin with a MIDI off command of a note
+that has not been turned on. I don't think this causes
+a problem.
+
+
+
+September 19 2005 
+
+Incorporated changes suggested by Mikhail Teterin into parseabc.c
+and store.c to modernize the C code. This includes the replacing
+of the functions casecmp(s1,s2) and stringcmp(s1,s2) with functions
+built into the C compiler. If this causes any problems with
+your compiler please notify me as soon as possible. Other
+changes were added to make the code more efficient and eliminate
+some warning messages.
+
+
+
+September 19 - October 8 2005
+
+Abc2midi: another bug related to split chords was found. In the
+following example
+
+X:1
+T: split test file
+M: 2/4
+L: 1/8
+Q: 50
+K: D
+CD |EF AB & CD FG| G2 | BD D2 & GB B2|
+
+The zero th and second bar are only one beat long. The fix described
+on June 17 th handles the zero'th bar correctly but it does not
+address the second bar since a different function resync_split_voice
+is called to maintain synchrony. This function assumes all bars are
+a fixed length as specified in the time signature.
+
+This was a difficult bug to fix since it required major changes
+to the code. A new function sync_voice replaces the code for
+start_new_voice_and_sync and resync_split_voice. A test file used
+to debug these changes, split.abc, is included in the programming directory.
+Hopefully, I will not need to return to this file many times.
+
+
+October 8 2005
+
+Abc2midi, yaps, abc2abc : extraneous warning "Slur within slur".
+For the following example, 
+
+X:1
+T: 2 slurs
+M: 2/4
+L: 1/8
+K: C
+V: 1
+C2 (C2 |\
+V: 2
+(A2 G2) |\
+V:1
+D2) E2|
+V:2
+G4|
+
+we get the warning
+Warning in line 9 : Slur within slur.
+
+Analysis, there are two overlapping slurs, but they are in 
+separate voices so this should be no problem. Parseabc.c
+merely keeps a count of the number of open slurs with the
+variable slur and does not note that they are associated
+with specific voices.
+
+Fix: the warning message has been moved to store.c.
+
+
+
+October 9 2005
+
+Abc2midi: grace notes are not applied correctly to a chord.
+In the following example,
+
+X:1
+T: grace/chord
+M:2/4
+L:1/8
+K:G
+V:1
+D4|{c'}[g3b3] c|z2 G2|
+V:2
+F4|G3 e|z2 D2|
+
+The length of the host chord [g3b3] is not adjusted correctly.
+This results in a loss of synchronization between voice 1 and 2.
+Analysis: several bugs related to host chords were fixed in
+my new function applygrace_new() in store.c. The original code,
+applygrace_orig was also fixed.
+
+October 10 2005
+
+Updated makefiles/unix.mak. Cleaned up some of the -Wall warning
+messages.
+
+
+November 6 2005
+
+New abc2midi feature for supporting drum tracks. Notes played on
+MIDI channel 10 (counting from 1), are interpreted by the General
+MIDI instrument as one of 47 percussion instruments (see abcguide.txt
+for list). Unfortunately, notating the music in this manner is
+rather awkward if you wish to convert it to common music notation
+using abcm2ps. Usually, only a few percussion instruments are
+used. To allow for better drum notation, you can alter the mapping
+between notes and percussion instruments using the new
+%%MIDI drummap command. For example for the tune:
+
+X:1
+T: illustrating drummap command
+M: 4/4
+L: 1/8
+K: none
+%%MIDI channel 10
+%%MIDI drummap E 36
+%%MIDI drummap G 38
+%%MIDI drummap _e 42
+|: E2 GE zE z2 & z_e z_e z_e z_e :|
+
+would be played on the percussion instruments
+bass drum (36)
+acoustic sname (38)
+and closed hi-hat (42).
+
+Implementation: added new function parse_drummap() genmidi.c
+which handles the %%MIDI drummap command. parse_drummap()
+is called from the function dodeferred().
+
+November 6 2005
+
+Abc2midi: split voice does not propogate the octave shift
+command. eg.
+
+X:15
+T: splits with octave=1
+M: 4/4
+L: 1/4
+K: G octave=1
+G A B C & E F G A|
+
+The notes E F G A are played an octave lower than intended.
+
+Fix: the v->octaveshift variable is passed to the
+split voice in the function event_split.  
+
+
+December 08 2005
+
+Abc2midi: the drummap feature illustrated on November 06 2005
+produces an improper MIDI file. eg.
+
+X:1
+T:unfinished
+M:2/4
+L:1/16
+K:F
+V:1
+%%MIDI channel 10
+%%MIDI drummap ^^g 72 % Long Whistle
+%%MIDI drummap  _a 58 % Vibraslap
+^^gz _a2-_a4 |]
+
+midi2abc.exe unfinished1.mid -mftext
+
+Header format=1 ntrks=2 division=480
+Track 1 contains 40 bytes
+  0.00   Metatext tempo = 120.00 bpm
+  0.00   Metatext key signature F (-1/0)
+  0.00   Metatext time signature=2/4
+  0.00   Metatext (Seqnce/Track Name) unfinished
+Track 2 contains 35 bytes
+  0.00   Metatext (Seqnce/Track Name) unfinished
+  0.00   Note on  10   c5 105
+  0.25   Note off 10   a5   0
+  0.50   Note on  10  a#3  80
+  2.00   Note off 10  g#5   0
+
+The note on's have the translated pitches but the
+note off's have the original pitches. As a result
+none of the MIDI note on's are properly terminated.
+
+For percussion instruments, this may not be noticeable
+since a decay is already built in. However, some midi
+players may complain.
+
+Fix: the function midi_noteoff in genmidi.c now checks for
+for channel 10.
+ 
+
+December 09 2005
+
+Abcmidi: transposition should not be applied to the music
+in channel 10. In the following example
+
+X:1
+T: drum transpose
+M: 2/4
+L: 1/8
+K: G transpose=-3
+V:1
+FAFA|EFG2|
+V:2
+%%MIDI channel 10
+%%MIDI drummap g 72 % Long Whistle
+%%MIDI drummap a 58 % Vibraslap
+agag|agag|
+
+The transpose=-3 changes percussion instruments.
+Fix: a test for channel 10 is made before the call to noteon_data()
+in the function noteon() in genmidi.c. Also in writetrack, a similar
+test was applied before addtoQ in two places (NOTE: and TNOTE:).
+
+
+December 17 2005
+
+Abc2midi new feature: certain instruments such as an organ have
+no greatly emphasized beat notes and sound unnatural when the beat
+algorithm accents the down and off beats. To turn this feature use
+%%MIDI nobeataccents
+To turn it back on
+%%MIDI beataccents
+By default beat accents are turned on for any new tune.
+Thanks to Mike Scott for contributing the code to genmidi.c
+
+Implementation: a new variable beataccents which acts as a
+flag was introduced.
+
+
+January 7 2006
+
+I have started looking into the problem of adding the
+split voice feature into yaps.  In order for yaps to
+handle split voices, it was necessary to introduce a new
+feature code SPLITVOICE into abc.h.  This had minor impact 
+on the debugging code for genmidi.c and matchsup.c.
+Event_split_voice in yapstree.c now needs to insert a
+SPLITVOICE feature. To avoid "unknown type" message
+originating from sizevoice (in drawtune.c) it was necessary
+to add a case statement for SPLITVOICE even though it does
+nothing. To assist in debugging, the code in the showline
+function was split into a new function showfeature in
+debug.c.
+
+The real work is done in the function advance(..) in 
+the file position.c (see additions in programming/yaps.txt).
+In order to allow spacemultiline to process all the notes
+playing at the same time, major changes are necessary. We
+want advance() to check a measure for splitvoices, and if
+found process all the notes in the bar in the order that
+they would be played. This means extending the voice
+structure defined in structs.h so that it maintains
+status information for v->tuplefactor, v->inchord, 
+v->place,v->time for all splitvoices and telling
+advance() to handle the splitvoices in parallel.
+This work is beyond me at the present time and
+no further work was done.
+
+January 13 2006
+
+abc2midi fails to tie note correctly in chord with
+an augmented unison interval. In the following example
+
+
+X:1
+T:A) Matching non-perfect primes
+M:C
+L:1/2
+K:C
+[=D^D-] [=D^D] z
+[=D-^D] [^D=D] z
+
+the D- tie and ^D- are done improperly.
+
+Analysis: In order to tie notes across bar lines where the 
+accidental is assumed, (e.g. A_B-|BD), the function dotie
+performs the tie based on the pitch line (in the staff) rather
+than the actual pitch. Unfortunately there are cases where we
+run into trouble such as above.
+
+Partial Fix: dotie() has a new flag called newbar, which is set to
+1 whenever a nonprocessed tie is followed by barline. The
+pitchline[] test is now only activated when newbar is set.
+
+Unfortunately, this is not a complete fix. The same
+problem reappears with this file for the second and
+third lines.
+
+
+X:1
+T:Matching non-perfect primes
+M:2/4
+L:1/2
+K:C
+[=D^D-]| [^D=D] | z2 |
+[=D^D-]| [=D^D] | z2 |
+[=D-^D]| [^D=D] | z2 |
+[=D-^D]| [=D^D] | z2 |
+
+The feature array does not record whether accidentals
+have been spelled out explicitly so further checks
+cannot be done when applying ties across bar lines.
+I recommend that one just changes the order of the
+notes in the chord in order to get it to work. Fortunately,
+this problem occurs rarely.
+
+
+January 14 2006
+
+Abc2midi fails to tie microtonal notes correctly.
+In the following example:
+
+
+X:1
+T: tied microtonal pitches
+M:C
+L:1/2
+K:C
+C
+^13/16C - ^13/16C
+^13/16C   ^13/16C
+^13/16C - C
+
+The two notes on the second line are tied together,
+but the first note is in C rather than ^13/16C causing
+an audible pitchbend. The notes in the third line
+are correct pitches but not joined. The tied notes
+in the fourth line are both incorrect pitches.
+
+Analyses: looking at the mftext output from midi2abc
+reveals the problem.
+
+midi2abc.exe tmp/X1.mid -mftext
+Header format=0 ntrks=1 division=480
+Track 1 contains 141 bytes
+  0.00   Metatext tempo = 227.00 bpm
+  0.00   Metatext key signature C (0/0)
+  0.00   Metatext time signature=4/4
+  0.00   Program   1 73 (Flute)
+  0.00   Metatext (Seqnce/Track Name) tied microtonal...
+  0.00   Note on   1   c4 127
+  2.00   Note off  1   c4   0
+  2.00   Pitchbnd  1 msb=0 lsb=90
+  2.00   Note on   1   c4 107
+  2.00   Pitchbnd  1 msb=0 lsb=64
+  4.00   Pitchbnd  1 msb=0 lsb=90
+  6.00   Note off  1   c4   0
+  6.00   Pitchbnd  1 msb=0 lsb=64
+  6.00   Pitchbnd  1 msb=0 lsb=90
+  6.00   Note on   1   c4 107
+  8.00   Note off  1   c4   0
+  8.00   Pitchbnd  1 msb=0 lsb=64
+  8.00   Pitchbnd  1 msb=0 lsb=90
+  8.00   Note on   1   c4 117
+ 10.00   Note off  1   c4   0
+ 10.00   Pitchbnd  1 msb=0 lsb=64
+ 10.00   Pitchbnd  1 msb=0 lsb=90
+ 10.00   Note on   1   c4 107
+ 10.00   Pitchbnd  1 msb=0 lsb=64
+ 14.00   Note off  1   c4   0
+
+This is another example where the handling of tied notes
+in dotie() store.c and writetrack() in genmidi.c have
+gets in the way. (The code was written before microtones
+was introduced into abcmidi.) The parser encircles
+every microtonal note with an event_microtone and
+event_normal_tone. The function dotie changes the
+tied note from NOTE to TNOTE, the TIE to a REST,
+and the note being tied to a REST. The function writetrack()
+unfortunately applies the delay() function for the
+NOTE feature but not for TNOTE. As a result, the
+pitchbend is restored to normal before the note
+even starts playing.
+
+Modernizing the tienote function (see February 12 2005
+comments) is not an option since there were too many
+cases to worry about and it would probably take a
+long time to get out all the bugs out.
+
+Fix: a small patch was added to tienote() in store.c.
+It removes the DYNAMIC feature restoring the pitchbend
+to normal if it finds one immediately following the
+TNOTE.
+
+
+
+January 15 2006
+
+The contour matching algorithm in abcmatch.c has
+been changed to use pitch interval between adjacent
+notes. A new run time parameter, -qnt was added
+which quantizes the contour interval. Details
+in abcmatch.txt.
+
+
+January 16 2006
+
+Added new feature to yaps that allows you to switch from black
+to red output using !red! or +red+ instruction command.
+To restore insert !black! or +black+ in the abc file.
+
+e.g.
+
+X: 356
+T:Banks of the Nile
+M:4/4
+L:1/4
+K:Eb
+B/2-G/2| F E F G| c B G E| F E- C C| C3 C|!red! E E G B!black!|
+c2 e c/2c/2| B B E F| G3 E/2E/2| E E G B| c c e c/2c/2| B B E F|
+ G3 B/2G/2| F E F G| c B G E| F- E C C| C3||
+
+The notes in the 6 bar are printed in red for emphasis.
+
+Implementation:
+In structs.h added a new structure
+  struct dynamic {char color;};
+
+In yapstree.c, added code to event_handle_instruction to detect
+!red! and !black! and addfeature(DYNAMIC,psaction) where psaction
+is a *dynamic struct. In drawtune.c added code to printvoiceline()
+to take appropriate issue a postscript command to change the
+color when it detects a DYNAMIC: feature.
+
+January 29 2006
+
+Abc2midi: improved the microtone pitch accuracy. Replaced the
+code event_microtone (in store.c) with the code contributed by
+Hudson Lacerda.
+
+Introduced some support for single note tuning change using
+the universal system exclusive messages. Added new function
+in midifile.c single_note_tuning_change(). In function
+dodeferred in  genmidi.c added a %%MIDI snt k pitch
+command where snt stands for single note tuning, k is the
+MIDI pitch being retuned (a number between 0 to 127) and
+pitch is a floating point number representing the new
+pitch value. Sample file follows.
+
+X:1
+T: single note tuning
+M: 2/4
+L: 1/8
+K: G
+C \
+%%MIDI snt 60 61.5
+C cd|
+
+I have not yet updated abcguide.txt since this feature
+is provisional right now. Not all MIDI devices support
+this universal system exclusive message.
+
+
+February 05 2006
+
+Abc2midi.exe eliminated the warning for microtones
+"divisor not a power of 2". Introduced a new copy
+of readlen (readlen_nocheck which is called by
+ismicrotone() and does not report this error.)
+
+
+March 14 2006
+
+Abc2abc does not recognize "middle=XXX" in the V: field
+which is used by abcm2ps and silently drops it when
+transposing abc files. The fix was provided by Mike
+Scott who also cleaned up the parameter calling sequence
+to event_voice in parseabc.c. This also involved altering
+the code in store.c, yapstree.c, matchsup.c, and toabc.c.
+Thank you.
+
+Added #include <stdlib.h> to crack.c, mftext.c,
+pslib.c and queues.c which cleans up some of the
+compilation warnings.(Thanks to Martin Tarenskeen.)
+
+
+Apr 21 2006
+
+(Mike Scott) The 'y' spacing character used by Barfly and
+abcm2ps was being silently dropped in parseabc.c. Added
+support for this (including a length specifier - is this
+used by anything?) to parseabc.c and abc2abc.c; stubs in
+the other modules including yaps mean they behave as before.
 

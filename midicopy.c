@@ -39,7 +39,7 @@
 
 
 
-#define VERSION "1.02 May 22 2005"
+#define VERSION "1.04 September 13 2005"
 #include "midicopy.h"
 #define NULLFUNC 0
 #define NULL 0
@@ -65,7 +65,7 @@ void mf_write_tempo(long);
 int mf_write_midi_event(int type, int chan, char *data, int size);
 int mf_write_meta_event(int type, char *data, int size);
 void mf_write_track_chunk(int which_track, FILE * fp);
-int mferror(char *s);
+void mferror(char *s);
 int eputc(char c);
 void append_to_string();
 void copy_noteoff(int chan, int c1, int c2);
@@ -75,6 +75,7 @@ int Mf_nomerge = 0;		/* 1 => continue'ed system exclusives are */
 long Mf_currtime = 0L;		/* current time in delta-time units */
 long Mf_toberead = 0L;
 long delta_time;
+float currentseconds =0.0;
 
 long Mf_currcopytime = 0L;	/* time of last copied event */
 char *trackdata = NULL;
@@ -108,6 +109,8 @@ int chnflag = 0;		/* flag indicating not all channels selected */
 FILE *F_in, *fp;
 int format, ntrks, division;
 int start_tick, end_tick, flag_metaeot;
+float start_seconds,end_seconds;
+int use_seconds = 0;
 int current_tempo = 500000;
 float seconds_output;
 
@@ -122,7 +125,7 @@ int temposize,tempo_index;
    notes still on are turned off at the end of the time
    segment.
 */
-init_notechan()
+int init_notechan()
 {
 /* indicate that there are no active notes */
     int i;
@@ -132,7 +135,7 @@ init_notechan()
 }
 
 
-open_note(int chan, int pitch)
+int open_note(int chan, int pitch)
 /* When a note for a specific channel is turned on, we save the
    time when it was switched on.
 */
@@ -147,7 +150,7 @@ open_note(int chan, int pitch)
 }
 
 
-close_note(int chan, int pitch)
+int close_note(int chan, int pitch)
 {
     int index;
     index = 128 * chan + pitch;
@@ -158,7 +161,7 @@ close_note(int chan, int pitch)
 }
 
 /* send a noteoff channel command for all notes still playing. */
-turn_off_all_playing_notes()
+void turn_off_all_playing_notes()
 {
     int i, chan, pitch;
     for (i = 0; i < 2048; i++)
@@ -188,10 +191,38 @@ void replace_byte_in_trackdata(int loc, char val)
 }
 
 
-error(char *s)
+void error(char *s)
 {
     fprintf(stderr, "Error: %s\n", s);
 }
+
+
+int cut_beginning()
+{
+if (use_seconds)
+  {
+  if (currentseconds < start_seconds) 
+        return 1;
+  return 0;
+  }
+if (Mf_currtime < start_tick)
+	return 1;
+return 0;
+}
+
+int cut_ending()
+{
+if (use_seconds)
+  {
+  if (end_seconds > 0.0 && currentseconds > end_seconds)
+      return 1;
+  return 0;
+  }
+if (end_tick > 0 && Mf_currtime > end_tick) return 1;
+return 0;
+}
+
+
 
 
 /*      Midi Channel Commands                            */
@@ -203,7 +234,7 @@ void copy_noteon(int chan, int c1, int c2)
 	open_note(chan, c1);
     else
 	close_note(chan, c1);
-    if (Mf_currtime < start_tick)
+    if (cut_beginning())
 	return;
     data[0] = (char) c1;
     data[1] = (char) c2;
@@ -216,7 +247,7 @@ void copy_noteoff(int chan, int c1, int c2)
 {
     char data[2];
     close_note(chan, c1);
-    if (Mf_currtime < start_tick)
+    if (cut_beginning())
 	return;
     data[0] = (char) c1;
     data[1] = (char) c2;
@@ -228,7 +259,7 @@ void copy_noteoff(int chan, int c1, int c2)
 void copy_pressure(int chan, int c1, int c2)
 {
     char data[2];
-    if (Mf_currtime < start_tick)
+    if (cut_beginning())
 	return;
     data[0] = (char) c1;
     data[1] = (char) c2;
@@ -239,21 +270,21 @@ void copy_pressure(int chan, int c1, int c2)
 void copy_parameter(int chan, int c1, int c2)
 {
     char data[2];
-    if (Mf_currtime < start_tick)
+    if (cut_beginning())
 	return;
     data[0] = (char) c1;
     data[1] = (char) c2;
     mf_write_midi_event(0xb0, chan, data, 2);
 }
 
-copy_program(int chan, int c1)
+void copy_program(int chan, int c1)
 {
     char data[1];
     data[0] = (char) c1;
     mf_write_midi_event(0xc0, chan, data, 1);
 }
 
-copy_chanpressure(int chan, int c1)
+void copy_chanpressure(int chan, int c1)
 {
     char data[1];
     data[0] = (char) c1;
@@ -263,7 +294,7 @@ copy_chanpressure(int chan, int c1)
 void copy_pitchbend(int chan, int c1, int c2)
 {
     char data[2];
-    if (Mf_currtime < start_tick)
+    if (cut_beginning())
 	return;
     data[0] = c1;
     data[1] = c2;
@@ -275,12 +306,12 @@ void copy_pitchbend(int chan, int c1, int c2)
 
 /*       Meta commands are handled here  */
 
-copy_metatext(int type, int length, char *m)
+void copy_metatext(int type, int length, char *m)
 {
     mf_write_meta_event(type, m, length);
 }
 
-copy_timesig(c1, c2, c3, c4)
+void copy_timesig(c1, c2, c3, c4)
 {
     char data[4];
     data[0] = c1;
@@ -290,7 +321,7 @@ copy_timesig(c1, c2, c3, c4)
     mf_write_meta_event(0x58, data, 4);
 }
 
-copy_keysig(c1, c2)
+void copy_keysig(c1, c2)
 {
     char data[2];
     data[0] = c1;
@@ -300,25 +331,25 @@ copy_keysig(c1, c2)
 
 
 /* Metaevents */
-copy_metaseqnum(int seq)
+void copy_metaseqnum(int seq)
 {
     mf_write_meta_event(0x00, (char *) seq, 2);
 }
 
 
-copy_metaspecial(int length, char *m)
+void copy_metaspecial(int length, char *m)
 {
     mf_write_meta_event(0x7f, m, length);
 }
 
-copy_metamisc(int type, int length, char *m)
+void copy_metamisc(int type, int length, char *m)
 {
     mf_write_meta_event(type, m, length);
 }
 
 
 
-copy_metaeot()
+void copy_metaeot()
 {
     void WriteVarLen();
     WriteVarLen(10);
@@ -330,7 +361,7 @@ copy_metaeot()
 
 
 
-copy_sysex(int length, char *s)
+void copy_sysex(int length, char *s)
 {
     void WriteVarLen();
     int i;
@@ -342,7 +373,7 @@ copy_sysex(int length, char *s)
    the sysex command.
 */
     WriteVarLen(Mf_currtime - Mf_currcopytime);
-    if (Mf_currtime > start_tick)
+    if (!cut_beginning())
 	Mf_currcopytime = Mf_currtime;
 /*printf("delta_time = %d\n",delta_time);*/
     eputc((char) 0xf0);
@@ -363,7 +394,7 @@ copy_sysex(int length, char *s)
    long.
 */
 
-alloc_trackdata()
+void alloc_trackdata()
 {
     if (trackdata != NULL)
 	free(trackdata);
@@ -379,7 +410,7 @@ alloc_trackdata()
 
 
 
-readmt(s)			/* read through the "MThd" or "MTrk" header string */
+int readmt(s)			/* read through the "MThd" or "MTrk" header string */
 char *s;
 {
     int n = 0;
@@ -400,7 +431,7 @@ char *s;
 
 
 
-static egetc()
+static int egetc()
 {				/* read a single character and abort on EOF */
     int c = getc(F_in);
 
@@ -432,7 +463,7 @@ void readheader()
 }
 
 
-append_rest_of_track()
+void append_rest_of_track()
 {
     int err;
     err = fread(trackdata + trackdata_length, 1, Mf_toberead, F_in);
@@ -443,7 +474,7 @@ append_rest_of_track()
 }
 
 
-ignore_rest_of_track()
+void ignore_rest_of_track()
 {
     while (Mf_toberead > 0)
 	egetc();
@@ -503,10 +534,11 @@ float readtrack()
     Mf_toberead = read32bit();
     Mf_currtime = 0;
     Mf_currcopytime = 0;
+    currentseconds = 0.0;
 
     alloc_trackdata();
 
-    if (Mf_currtime < start_tick) {
+    if (cut_beginning()) {
 	delta_time = 0;
 	Mf_currcopytime = start_tick;	/* to avoid long gap at begining */
     }
@@ -516,10 +548,13 @@ float readtrack()
         current_tempo = update_current_tempo(); 
 	delta_time = readvarinum();
 	Mf_currtime += delta_time;
-	if (end_tick > 0 && Mf_currtime > end_tick) {
+        delta_seconds = (float) delta_time*current_tempo/
+                            ((float) division*1000000.0);
+        currentseconds += delta_seconds;
+        if (cut_ending()) {
 	    flag_metaeot = 1;
 	    /*   delta_time += end_tick - Mf_currtime; */
-	    Mf_currtime = end_tick;
+	/*    Mf_currtime = end_tick; [SS] 2005-08-17*/
 	    break;
 	}
 
@@ -546,7 +581,8 @@ float readtrack()
                             ((float) division*1000000.0);
           accumulated_seconds += delta_seconds;
           }
-          if (Mf_currtime > Mf_currcopytime) accumulating = 1;
+          /*if (Mf_currtime > Mf_currcopytime) accumulating = 1;*/
+            if (!cut_beginning()) accumulating = 1;
 
 	    if (running)
 		c1 = c;
@@ -763,7 +799,7 @@ int c1, c2, c3, c4;
 
 
 
-to16bit(c1, c2)
+int to16bit(c1, c2)
 int c1, c2;
 {
     return ((c1 & 0xff) << 8) + (c2 & 0xff);
@@ -784,7 +820,7 @@ long read32bit()
 
 
 
-read16bit()
+int read16bit()
 {
     int c1, c2;
     c1 = egetc();
@@ -794,7 +830,7 @@ read16bit()
 
 
 
-int mferror(char *s)
+void mferror(char *s)
 {
     fprintf(stderr, "Error: %s\n", s);
     exit(1);
@@ -824,7 +860,7 @@ char *msg()
 }
 
 
-msgleng()
+int msgleng()
 {
     return (Msgindex);
 }
@@ -917,7 +953,7 @@ FILE *fp;
 
     /* The rest of the file is a series of tracks */
     for (i = 0; i < ntracks; i++) {
-	if (start_tick + end_tick < 0 && chnflag == 0)
+	if (start_tick + end_tick < 0 && chnflag == 0 && !use_seconds)
 	    copytrack_verbatim();	/*not necessary to read in detail*/
 	else {
 	    flag_metaeot = 0;
@@ -1017,7 +1053,7 @@ int mf_write_midi_event(int type, int chan, char *data, int size)
     char c;
 
     WriteVarLen(Mf_currtime - Mf_currcopytime);
-    if (Mf_currtime > start_tick)
+    if (!cut_beginning())
 	Mf_currcopytime = Mf_currtime;
     /* all MIDI events start with the type in the first four bits,
        and the channel in the lower four bits */
@@ -1060,7 +1096,7 @@ int mf_write_meta_event(int type, char *data, int size)
     void WriteVarLen();
 
     WriteVarLen(Mf_currtime - Mf_currcopytime);
-    if (Mf_currtime > start_tick)
+    if (!cut_beginning())
 	Mf_currcopytime = Mf_currtime;
 
     /* This marks the fact we're writing a meta-event */
@@ -1107,6 +1143,13 @@ long tempo;
     eputc((char) (0xff & (tempo >> 16)));
     eputc((char) (0xff & (tempo >> 8)));
     eputc((char) (0xff & tempo));
+
+/* fudge to avoid large time gap at beginning */
+/* It assumes a constant tempo. */
+    if (use_seconds && start_tick == -1 && start_seconds >0) {
+      start_tick = start_seconds * 1000000.0*division/tempo;
+      Mf_currcopytime = start_tick;
+      }
 }
 
 
@@ -1282,7 +1325,7 @@ int getarg(char *option, int argc, char *argv[])
 
 
 
-main(int argc, char *argv[])
+int main(int argc, char *argv[])
 {
     int arg;
     int trk[12], mtrks;
@@ -1301,6 +1344,9 @@ main(int argc, char *argv[])
     chns = 0;
     start_tick = -1;
     end_tick = -1;
+    start_seconds = -1.0;
+    end_seconds = -1.0;
+    use_seconds = 0;
 
     if (getarg("-ver", argc, argv) >= 0) {
 	printf("%s\n",VERSION);
@@ -1318,7 +1364,10 @@ main(int argc, char *argv[])
 	printf("-trks n1,n2,..(starting from 1)\n");
 	printf("-chns n1,n2,..(starting from 1)\n");
 	printf("-from n (in midi ticks)\n");
-	printf("-to n   (in midi ticks)\n" "-replace trk,loc,val\n");
+	printf("-to n   (in midi ticks)\n");
+        printf("-fromsec %%f (in seconds)\n");
+        printf("-tosec %%f (in seconds)\n");
+        printf("-replace trk,loc,val\n");
 	exit(1);
     }
 
@@ -1356,13 +1405,24 @@ main(int argc, char *argv[])
 		ctocopy[chn[i] - 1] = 1;
 	chnflag = 1;
     }
-    arg = getarg("-from", argc, argv); {
-	if (arg >= 0)
-	    sscanf(argv[arg], "%d", &start_tick);
-    }
+    arg = getarg("-from", argc, argv); 
+    if (arg >= 0)
+        sscanf(argv[arg], "%d", &start_tick);
+
     arg = getarg("-to", argc, argv);
     if (arg >= 0)
 	sscanf(argv[arg], "%d", &end_tick);
+
+    arg = getarg("-fromsec", argc, argv);
+    if (arg >= 0)
+        {sscanf(argv[arg], "%f", &start_seconds);
+         use_seconds = 1;
+        }
+    arg = getarg("-tosec", argc, argv);
+    if (arg >= 0)
+        {sscanf(argv[arg], "%f", &end_seconds);
+         use_seconds = 1;
+        }
 
     repflag = getarg("-replace", argc, argv);
     if (repflag >= 0)

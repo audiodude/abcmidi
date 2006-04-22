@@ -31,7 +31,7 @@
  * Wil Macaulay (wil@syndesis.com)
  */
 
-#define VERSION "1.69 June 27 2005"
+#define VERSION "1.84 April 22 2006"
 /* enables reading V: indication in header */
 #define XTEN1 1
 /*#define INFO_OCTAVE_DISABLED 1*/
@@ -73,6 +73,8 @@ int setOutFileCreator(char *fileName,unsigned long theType,
 extern char* strchr();
 extern void reduce();
 #endif
+int snprintf(char *str, size_t size, const char *format, ...);
+
 
 #define MAXLINE 500
 #define INITTEXTS 20
@@ -84,6 +86,7 @@ extern void reduce();
 FILE *fp;
 
 programname fileprogram = ABC2MIDI;
+extern int oldchordconvention; /* for handling +..+ chords */
 
 /* parsing stage */
 int tuplecount, tfact_num, tfact_denom, tnote_num, tnote_denom;
@@ -104,21 +107,27 @@ struct voicecontext {
   int  basemul[7], workmul[7];
   int  keyset; /* flag to indicate whether key signature set */
   int default_length;
-  int voiceno;
-  int indexno;
+  int voiceno; /* voice number referenced by V: command. To avoid
+                  conflicts with split voices, all split voices
+                  begin from 32. */
+  int indexno; /* voice index number in the feat array. It just
+                  increments by one and depends on the order the
+                  voices are created -- including split voices.
+               */
+  int topvoiceno,topindexno; /* links to original voice in the split */
   int hasgchords;
   int haswords;
   int inslur;
   int ingrace;
   int octaveshift;
-  int nbars;      /* number of bars */
   int lastbarloc;  /* position of last bar line parsed */
-  int tosplitno,fromsplitno;  
+  int tosplitno,fromsplitno; /* links to split voices and source voice*/ 
+  int last_resync_point;
   /* chord handling */
   int inchord, chordcount;
   int chord_num, chord_denom;
   /* details of last 2 notes/chords to apply length-modifiers to */
-  int laststart, lastend, thisstart, thisend;
+  int laststart, lastend, thisstart, thisend; /* for handling broken rhythms*/
   /* broken rythm handling */
   int brokentype, brokenmult, brokenpending;
   int broken_stack[7];
@@ -127,6 +136,9 @@ struct voicecontext {
 struct voicecontext global;
 struct voicecontext* v;
 struct voicecontext* head;
+struct voicecontext* vaddr[64]; /* address of all voices (by v->indexno) */
+/* vaddr is only a convenience for debugging */
+
 int voicecount;
 int numsplits=0;
 int splitdepth = 0;
@@ -217,8 +229,10 @@ static void addfract(int *xnum, int *xdenom, int a, int b);
 static void zerobar();
 static void addfeature(int f,int p,int n,int d);
 static void replacefeature(int f, int p, int n, int d, int loc);
+static void insertfeature(int f, int p, int n, int d, int loc);
 static void textfeature(int type, char *s);
 extern long writetrack();
+void init_drum_map();
 static void fix_enclosed_note_lengths(int from, int end);
 static int patchup_chordtie(int chordstart,int chordend);
 
@@ -233,6 +247,8 @@ int n;
   voicecount = voicecount + 1;
   s->voiceno = n;
   s->indexno = voicecount;
+  s->topvoiceno = n;
+  s->topindexno = voicecount;
   s->default_length = global.default_length;
   s->hasgchords = 0;
   s->haswords = 0;
@@ -240,7 +256,6 @@ int n;
   s->ingrace = 0;
   s->inchord = 0;
   s->chordcount = 0;
-  s->nbars = 0;
   s->lastbarloc = -1;
   s->laststart = -1;
   s->lastend = -1;
@@ -249,6 +264,7 @@ int n;
   s->brokenpending = -1;
   s->tosplitno = -1;
   s->fromsplitno = -1;  
+  s->last_resync_point=0;
   s->next = NULL;
   for (i=0; i<7; i++) {
     s->basemap[i] = global.basemap[i];
@@ -258,6 +274,7 @@ int n;
     };
   s->keyset = global.keyset;
   s->octaveshift = global.octaveshift;
+  vaddr[voicecount] = s;
   return(s);
 }
 
@@ -469,6 +486,8 @@ char **filename;
     nofnop = 0;
   }
 
+  if (getarg("-OCC",argc,argv) != -1) oldchordconvention=1;
+
   maxnotes = 500;
   /* allocate space for notes */
   pitch = checkmalloc(maxnotes*sizeof(int));
@@ -497,6 +516,7 @@ char **filename;
     printf("        -NAR suppress assuming repeat warning\n");
     printf("        -Q default tempo (quarter notes/minute)\n");
     printf("        -NFNP don't process !p! or !f!-like fields\n");
+    printf("        -OCC old chord convention (eg. +CE+)\n");
     printf(" The default action is to write a MIDI file for each abc tune\n");
     printf(" with the filename <stem>N.mid, where <stem> is the filestem\n");
     printf(" of the abc file and N is the tune reference number. If the -o\n");
@@ -609,6 +629,9 @@ return;
 /* support functions for split voices */
 
 static int locate_voice(int start, int indexno)
+/* This function finds the beginning of voice:indexno
+   in the feature array. It starts looking from j = start
+*/
 {
 int j;
 j = start;
@@ -621,37 +644,86 @@ while (j < notes) {
 return j;
 }
 
-static void start_new_voice_and_sync (int voiceno, int indexno)
+static void sync_voice (struct voicecontext *vv, int sync_to, int ignorecurrentbar)
 {
+/* The function scans the contents of the feature[] array between,
+   the last resync point and sync_to (or end of the feature array)
+   depending on the ignorecurrentbar flag. It counts the time
+   of all notes and rests in the topvoice voice belonging to
+   voice vv and adds rests each time it encounters a bar line,
+   to synchronize this voice with its topvoice. It also copies
+   all repeat signs and dynamic markings in the topvoice and
+   inserts them in the current voice. 
+
+   This function is called by event_split_voice, complete_all_voices
+   and event_bar (if split voices are present).
+
+   The last_resync_point keeps track of what has been scanned,
+   so we only scan the topvoice once.
+
+*/
 int j;
 char *p;
 char command[40];
 int maxnotes,begin;
-
+char message[80];
+int snum,sdenom;
+int insidechord;
+int voiceno,indexno;
+voiceno = vv->topvoiceno;
+indexno = vv->topindexno;
+snum = 0;
+sdenom = 1;
 begin =0; /* to bypass double bar or single bar at beginning */
-if (voiceno == 1) j=0;
-else j = locate_voice(0,indexno);
-maxnotes = notes-3; /* bypass last bar and voice change */
-while (j<maxnotes) {
+/* we have already synced to last_resync_point so we continue
+   from here.
+*/
+j = vv->last_resync_point;
+if (voiceno != 1 || j>2)
+ j = locate_voice(j,indexno);
+else j++; /* bypass bar */
+if (ignorecurrentbar) maxnotes = sync_to;
+else maxnotes = notes-1; /*ignore last voice change */
+insidechord = 0;
+/*printf("syncing voice %d to %d from %d to %d \n",vv->indexno,indexno,j,maxnotes);*/
+while (j<=maxnotes) {
+/*  dumpfeat(j,j); */
   switch (feature[j]) {
     case VOICE:
        if (pitch[j] != indexno) 
           j = locate_voice(j,indexno);
           break;
        break;
+    case CHORDON:
+       insidechord = 1;
+       break;
+    case CHORDOFF:
+    case CHORDOFFEX:
+       insidechord = 0;
+       break;
     case SINGLE_BAR:
     case DOUBLE_BAR:
     case BAR_REP:
     case REP_BAR:
-    case PLAY_ON_REP:
     case DOUBLE_REP:
-       if (begin) {  /* bypass REST if no notes processed */
-         addfeature(REST,0,4*time_num,time_denom);
-         v->nbars++;
+       if (snum>0) {  /* bypass REST if no notes processed */
+         addfeature(REST,0,snum,sdenom);
+         /*printf("  added %d/%d to voice %d\n",snum,sdenom,vv->indexno);*/
+         snum = 0;
+         sdenom =1;
          }
-
-       addfeature(feature[j], 0, 0, 0); /* in case it is a repeat */
+       addfeature(feature[j], 0, 0, denom[j]); /* copy feature */
        break;
+    case PLAY_ON_REP:
+        if (feature[j-1] == SINGLE_BAR || feature[j-1] == REP_BAR
+           || feature[j-1] == VOICE) 
+              addfeature(feature[j],0,0,denom[j]);
+        else {
+            sprintf(message,"expecting SINGLE_BAR or REP_BAR preceding"
+            " PLAY_ON_REP instead found %s at %d\n",featname[feature[j-1]],j-1);
+            event_error(message);
+            }
+        break;
     case DYNAMIC:
        p = atext[pitch[j]];
        skipspace(&p);
@@ -660,48 +732,81 @@ while (j<maxnotes) {
           textfeature(DYNAMIC, atext[pitch[j]]);
          }
        break;
+    case CHANNEL:
+       addfeature(feature[j], pitch[j], 0, 0); /* copy feature */
+       break;
     case NOTE:
     case TNOTE:
     case REST:
-      begin = 1;
+       if (insidechord < 2) addfract(&snum,&sdenom,num[j],denom[j]);
+       if (insidechord) insidechord++;
+       begin = 1;
+       break;
     default:
        break;
    }
    j++;
   }
+/* There are no more indexno notes between maxnotes and notes-1,
+   so set sync point at the end.
+*/
+vv->last_resync_point = notes-1;
 }
 
 
-void resync_split_voice(int nbars, struct voicecontext *p)
+int search_backwards_for_last_bar_line (int from)
 {
-/*printf("%d resyncing by %d bars\n",notes,nbars-p->nbars); */
-while (p->nbars < nbars)
-   {
-   addfeature(REST, 0, 4*time_num, time_denom);
-   addfeature(SINGLE_BAR,0,0,0);
-   p->nbars++;
-   }
+int found,j;
+found = 0;
+j = from;
+while (!found && j>0)
+  {
+  if (feature[j] ==  SINGLE_BAR || 
+      feature[j] ==  DOUBLE_BAR ||
+      feature[j] ==  BAR_REP    || 
+      feature[j] ==  REP_BAR    ||
+      feature[j] ==  PLAY_ON_REP ||
+      feature[j] ==  DOUBLE_REP)  {found = 1; break;}
+      j--;
+  }
+return j;
 }
+
+
+
+/* When a split voice is encountered for the first time, we
+   must create a new voice and insert the proper delay (rests)
+   so that it remains in sync with the starting voice. If
+   the split voice already exists, we still sync it to the
+   source voice (there may have been intervening bars with
+   no splits) by adding rests. 
+*/
+
+int sync_to;
 
 void event_split_voice()
 {
 int splitno;
-int nbars;
 int voiceno,indexno;
+int topvoiceno,topindexno;
 int program;
+int octaveshift;
 voicesused = 1; /* multivoice file */
 splitno = v->tosplitno;
-nbars = v->nbars;
 program = 0;
 
 /* a voice split in bar is just like a bar line */
-v->nbars++;
 zerobar();
 v->lastbarloc = notes;  /* in case we need to change it */
-addfeature(SINGLE_BAR,0,0,0);
 
 voiceno = v->voiceno;
 indexno = v->indexno;
+topvoiceno = v->topvoiceno;
+topindexno = v->topindexno;
+octaveshift = v->octaveshift;
+if (topvoiceno == voiceno) sync_to = search_backwards_for_last_bar_line(notes-1);
+addfeature(SINGLE_BAR,0,0,0);
+
 if (splitno == -1) {splitno = 32+numsplits++;
                    v->tosplitno = splitno;
                    }
@@ -710,8 +815,15 @@ splitdepth++;
 addfeature(VOICE, v->indexno, 0, 0);
 if (v->fromsplitno == -1) {
   v->fromsplitno = voiceno;
-  start_new_voice_and_sync (voiceno,indexno);}
-else resync_split_voice (nbars, v); 
+  v->topvoiceno = topvoiceno;
+  v->topindexno = topindexno;
+  v->octaveshift = octaveshift;
+ }
+/* when syncing the split voice we want to be sure that
+   we do not include the notes in the last bar in the source
+   voice the notes in the split voice take their place.
+*/
+sync_voice (v,sync_to,1);
 }
 
 
@@ -744,19 +856,22 @@ addfeature(VOICE, v->indexno, 0, 0);
 }
 
 
+static void
 complete_all_split_voices ()
 {
-int nbars,splitno;
+int splitno;
 struct voicecontext *p;
+int voiceno,indexno;
 
 v = head;
 while (v != NULL) {
     splitno = v->tosplitno;
     if (splitno > -1) {
-      nbars = v->nbars;
+      voiceno = v->voiceno;
+      indexno = v->indexno;
       p = getvoicecontext(splitno);
       addfeature(VOICE, p->indexno, 0, 0);
-      resync_split_voice (nbars,p);
+      sync_voice (p,0,0);
       /* complete fraction of bar */
       if(bar_num >0) addfeature(REST, 0, 4*bar_num, bar_denom);
       }
@@ -1569,7 +1684,7 @@ static void read_spec(spec, part)
 /* converts a P: field to a list of part labels */
 /* e.g. P:A(AB)3(CD)2 becomes P:AABABABCDCD */
 
-/********** This feature is not supported ********[SS] 2004-10-08
+/********** This feature is not supported ********[SS] 2004-10-08      */
 /* A '+' indicates 'additive' behaviour (a part may include repeats).  */
 /* A '-' indicates 'non-additive' behaviour (repeat marks in the music */
 /* are ignored and only repeats implied by the part order statement    */
@@ -1696,26 +1811,22 @@ char* s;
   };
 }
 
-void event_voice(n, s, gotclef,gotoctave,gottranspose,gotname,gotsname,
-		clefname,octave,transpose,namestring,snamestring)
+void event_voice(n, s, vp)
 /* handles a V: field in the abc */
 int n;
 char *s;
-int gotclef,gotoctave,gottranspose,gotname,gotsname;
-char *clefname;
-int octave,transpose;
-char *namestring,*snamestring;
+struct voice_params *vp;
 {
   if (pastheader || XTEN1) {
     voicesused = 1;
     if (pastheader)  checkbreak();
     v = getvoicecontext(n);
     addfeature(VOICE, v->indexno, 0, 0);
-    if (gotoctave) {
-      event_octave(octave,1);
+    if (vp->gotoctave) {
+      event_octave(vp->octave,1);
     };
-    if (gottranspose) {
-      addfeature(TRANSPOSE, transpose, 0, 0);
+    if (vp->gottranspose) {
+      addfeature(TRANSPOSE, vp->transpose, 0, 0);
     };
   } else {
     event_warning("V: in header ignored");
@@ -1908,7 +2019,6 @@ char* s;
 {
   int num, converted;
   char seps[2];
-  int nbars;
 
   converted = sscanf(s, "%d%1[,-]", &num, seps);
   if (converted == 0) {
@@ -1920,20 +2030,8 @@ char* s;
       textfeature(PLAY_ON_REP, s);
     };
   };
-
-/* to handle split voices */
-if (v->tosplitno == -1) return;
-nbars = v->nbars; /* nbars now includes last bar, when we resync */
-while (v->tosplitno != -1)
-     { 
-      v = getvoicecontext(v->tosplitno);
-      splitdepth++;
-      addfeature(VOICE, v->indexno, 0, 0);
-      resync_split_voice (nbars,v);
-      event_playonrep(s);
-     }
-recurse_back_to_original_voice();
 }
+
 
 static void slurtotie()
 /* converts a pair of identical slurred notes to tied notes */
@@ -1994,21 +2092,23 @@ void event_sluron(t)
 /* called when ( is encountered in the abc */
 int t;
 {
-  if (t == 1) {
-    addfeature(SLUR_ON, 0, 0, 0);
-    v->inslur = 1;
-  };
+ if (v->inslur) event_warning("Slur within slur");
+ else {
+      addfeature(SLUR_ON, 0, 0, 0);
+      v->inslur = 1;
+      }
 }
 
 void event_sluroff(t)
 /* called when ) is encountered */
 int t;
 {
-  if (t == 0) {
-    slurtotie();
+if (v->inslur) {
+    /*slurtotie(); [SS] 2005-08-13 */
     addfeature(SLUR_OFF, 0, 0, 0);
     v->inslur = 0;
-  };
+    }
+else event_warning("No slur to close");
 }
 
 
@@ -2343,6 +2443,12 @@ static void marknote()
   marknoteend();
 }
 
+/* just a stub to ignore 'y' */
+void event_spacing(n, m)
+int n,m;
+{
+}
+
 void event_rest(decorators,n,m,type)
 /* rest of n/m in the abc */
 int n, m,type;
@@ -2434,10 +2540,29 @@ void event_chordoff(int chord_n, int chord_m)
   if (!v->inchord) {
     event_error("Chord already finished");
   } else {
+  if (tuplecount > 0) {
+    chord_n = chord_n * tfact_num;
+    chord_m = chord_m * tfact_denom;
+    if (tnote_num == 0) {
+        tnote_num   = chord_n;
+        tnote_denom = chord_m;
+    } else {
+       if (tnote_num * chord_m != chord_n * tnote_denom) {
+          if (!specialtuple) {
+            event_warning("Different length notes in tuple for chord");
+           };
+        };
+     }
+     if ((!gracenotes) && (!v->inchord)) {
+        tuplecount = tuplecount - 1;
+        };
+    };
+
     if(chord_m == 1 && chord_n == 1) /* chord length not set outside [] */
       addfeature(CHORDOFF, 0, v->chord_num, v->chord_denom); 
     else
       {
+
       addfeature(CHORDOFFEX, 0, chord_n*4, chord_m*v->default_length);
       fix_enclosed_note_lengths(chordstart, notes-1);
       }
@@ -2559,22 +2684,6 @@ int pitch;
 }
 
 
-/******************************
-void makecut (mainpitch, shortpitch, n,m)
-int mainpitch,shortpitch,n,m;
-{
-int adjusted_num,adjusted_den;
-adjusted_num = n*gfact_denom -m;
-adjusted_den = m*gfact_denom;
-if (adjusted_den <0) 
-  addfeature(NOTE, mainpitch, n, m);
-else {
-  addfeature(NOTE, shortpitch, 4,gfact_denom*(v->default_length));
-  reduce(&adjusted_num,&adjusted_den);
-  addfeature(NOTE, mainpitch,4*adjusted_num,adjusted_den*(v->default_length));
-  }
-}
-*****************************/
 
 void makecut (mainpitch, shortpitch, n,m)
 int mainpitch,shortpitch,n,m;
@@ -2666,7 +2775,7 @@ int xoctave, n, m;
   num = n;
   denom = m;
   if (v->inchord) v->chordcount = v->chordcount + 1;
-  if (tuplecount > 0) {
+  if (tuplecount > 0 && !v->inchord) {
     num = num * tfact_num;
     denom = denom * tfact_denom;
     if (tnote_num == 0) {
@@ -2744,18 +2853,24 @@ int xoctave, n, m;
   };
 }
 
+
 void event_microtone(int dir, int a, int b)
 {
-int bend;
+int bend, lsb, msb;
 char buff[MAXLINE];
-/* pitchwheel range +/- 2 semitones according to General MIDI specification*/
-/* i.e. 64+32 shifts up by one semitone.                                   */
-bend = dir*32*a/b+64;
-if (bend <0) bend=0;
-if (bend >127) bend = 127;
-sprintf(buff,"pitchbend 0 %d",bend);
+/* pitchwheel range +/- 2 semitones according to General MIDI
+specification*/
+/* resolution of 14bit -- order of bytes is inverted for pitchbend */
+bend = dir*((int)(4096.0*a/b))+8192; /* sorry for the float! */
+bend = bend<0?0:(bend>16383?16383:bend);
+lsb = bend&127;
+lsb = lsb<0?0:(lsb>127?127:lsb); /* need? */
+msb = bend>>7;
+msb = msb<0?0:(msb>127?127:msb);
+sprintf(buff,"pitchbend %d %d",lsb,msb);
 event_specific("MIDI", buff);
 }
+
 
 void event_normal_tone()
 { 
@@ -3056,6 +3171,22 @@ static void addfract(int *xnum, int *xdenom, int a, int b)
   reduce(xnum, xdenom);
 }
 
+void nondestructive_readstr(out, in, limit)
+char out[];
+char **in;
+int limit;
+/* copy across alphanumeric string */
+{
+  int i;
+  i = 0;
+  while ((isalpha(*(*in+i))) && (i < limit-1)) {
+    out[i] = *(*in+i);
+    i = i + 1;
+  };
+  out[i] = '\0';
+}
+
+
 static void dotie(j, xinchord,voiceno)
 /* called in preprocessing stage to handle ties */
 /* we need the voiceno in case a tie is broken by a */
@@ -3064,14 +3195,17 @@ int j, xinchord,voiceno;
 {
   int tienote, place;
   int tietodo, done;
+  int newbar;
   int lastnote, lasttie;
   int inchord;
   int tied_num, tied_denom;
   int localvoiceno;
   int samechord;
+  char command[40];
 
   /* find note to be tied */
   samechord = 0;
+  newbar =0;  /* if 1 it allows pitchline[] == pitchline[] test */
   if (xinchord) samechord = 1;
   tienote = j;
   localvoiceno = voiceno;
@@ -3086,6 +3220,17 @@ int j, xinchord,voiceno;
     /* change NOTE + TIE to TNOTE + REST */
     feature[tienote] = TNOTE;
     feature[j] = REST;
+
+/* fix for tied microtone note */
+    if (feature[tienote+1] == DYNAMIC) {
+      nondestructive_readstr(command, &atext[pitch[tienote+1]], 40);
+      if (strcmp(command, "pitchbend") == 0) {
+        /*printf("need to remove pitchbend following TNOTE\n"); */
+        removefeature(tienote+1);
+        j = j-1;
+        }
+    }
+
     num[j] = num[tienote];
     denom[j] = denom[tienote];
     place = j;
@@ -3098,13 +3243,19 @@ int j, xinchord,voiceno;
     while ((place < notes) && (tied_num >=0) && (done == 0)) {
       /*printf("%d %s   %d %d/%d ",place,featname[feature[place]],pitch[place],num[place],denom[place]); */
       switch (feature[place]) {
+        case SINGLE_BAR:
+        case BAR_REP:
+        case REP_BAR:
+          if (tietodo) newbar = 1;
+          else newbar=0;
+          break; 
         case NOTE:
           if(localvoiceno != voiceno) break;
           lastnote = place;
           if ((tied_num == 0) && (tietodo == 0)) {
             done = 1;
           };
-          if ((pitchline[place] == pitchline[tienote])
+          if (((pitchline[place] == pitchline[tienote] && newbar) || (pitch[place] == pitch[tienote]))
              && (tietodo == 1) && (samechord == 0)) {
             /* tie in note */
             if (tied_num != 0) {
@@ -3355,7 +3506,7 @@ int place;
   if (nextinchord) {
     while ((hostnoteend == -1) && (j < notes)) {
       if (feature[j] == CHORDOFF) {
-        hostnotestart = j;
+        hostnoteend = j-1;
       };
       j = j + 1;
     };
@@ -3463,7 +3614,7 @@ int place;
   if (nextinchord) {
     while ((hostnoteend == -1) && (j < notes)) {
       if (feature[j] == CHORDOFF) {
-        hostnotestart = j;
+        hostnoteend = j-1;
       };
       j = j + 1;
     };
@@ -3489,6 +3640,7 @@ int place;
 /* new stuff starts here [SS] 2004/06/11 */
 
 /* is the following note long enough */
+   p = hostnotestart;
    adjusted_num = num[p]*grace_denom*gfact_denom - denom[p]*grace_num;
    adjusted_den = denom[p]*grace_denom*gfact_denom;
    if (adjusted_den <=0.0) /* not long enough*/
@@ -3563,8 +3715,8 @@ int type;
 char* replist;
 {
   int newtype;
-  int nbars;
   int depth;
+  int voiceno, indexno;
 
   depth = splitdepth;
 
@@ -3574,8 +3726,6 @@ char* replist;
   };
   addfeature(newtype, 0, 0, 0);
   copymap(v);
-  nbars = v->nbars;
-  if (bar_num > 0) v->nbars++;
   zerobar();
   if (strlen(replist) > 0) {
     event_playonrep(replist);
@@ -3589,26 +3739,25 @@ if (splitdepth > 0) {
   if (type != SINGLE_BAR)  recurse_back_and_change_bar (type);
   else recurse_back_to_original_voice();
   }
-if (     v->tosplitno != -1
-     && (newtype != SINGLE_BAR || strlen(replist) > 0)
-     && depth == 0) {
 /* depth == 0 implies the repeat symbol was encountered while
    we are not in a split voice but we need to put repeat symbol
    in all split voices
 */
- nbars = v->nbars; /* nbars now includes last bar, when we resync */
+else
+ {
+ voiceno = v->voiceno;
+ indexno = v->indexno;
  while (v->tosplitno != -1)
      { 
       v = getvoicecontext(v->tosplitno);
       splitdepth++;
       addfeature(VOICE, v->indexno, 0, 0);
-      resync_split_voice (nbars,v);
-      addfeature(newtype,0 ,0, 0);
+      sync_voice (v,0,0);
+      /*addfeature(newtype,0 ,0, 0); sync_voice does this*/
       if (strlen(replist) > 0) event_playonrep(replist);
      }
-     recurse_back_to_original_voice();
-    };
-  if (splitdepth > 0)  recurse_back_to_original_voice ();
+ if (v->fromsplitno != -1 || splitdepth >0) recurse_back_to_original_voice();
+ }
 }
 
 
@@ -3768,6 +3917,7 @@ static void startfile()
   global.keyset = 0;
   voicecount = 0;
   head = NULL;
+  for (j=0;j<64;j++) vaddr[j]=NULL; 
   v = NULL;
   got_titlename = 0;
   time_num = 4;
@@ -3933,9 +4083,9 @@ static void finishfile()
   extern int nullputc();
   
 
-
   complete_all_split_voices ();
   clearvoicecontexts();
+  init_drum_map();
   if (!pastheader) {
     event_error("No valid K: field found at start of tune");
   } else {
@@ -4050,6 +4200,8 @@ int n;
      
       v = newvoice(1);
       head = v;
+      vaddr[0] = v;
+      vaddr[v->indexno] = v;
 
     pastheader = 0;
     if (userfilename == 0) {
@@ -4103,6 +4255,7 @@ char *argv[];
 {
   char *filename;
   int i;
+  oldchordconvention = 0; /* for handling +..+ chords */
 
   for (i=0;i<DECSIZE;i++) decorators_passback[i]=0;
 

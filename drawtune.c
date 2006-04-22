@@ -1545,6 +1545,8 @@ static void sizevoice(struct voice* v, struct tune* t)
       break;
     case VSKIP:
       break;
+    case SPLITVOICE:
+      break;
     default:
       printf("unknown type %d\n", ft->type);
       break;
@@ -2928,6 +2930,7 @@ static int printvoiceline(struct voice* v)
   char endstr[80];
   int ingrace;
   struct vertspacing* spacing;
+  struct dynamic *psaction;
 
   /* skip over line number so we can check for end of tune */
   while ((v->place != NULL) && 
@@ -3214,6 +3217,9 @@ static int printvoiceline(struct voice* v)
     case GT: 
       break;
     case DYNAMIC: 
+      psaction = ft->item;
+      if(psaction->color == 'r') fprintf(f,"60 0 0 setrgbcolor\n");
+      if(psaction->color == 'b') fprintf(f,"0 setgray\n");
       break;
     case LINENUM: 
       lineno = (int)(ft->item);
@@ -3257,6 +3263,8 @@ static int printvoiceline(struct voice* v)
       break;
     case VSKIP:
       event_warning("%%vskip in music line ignored");
+      break;
+    case SPLITVOICE:
       break;
     default:
       printf("unknown type: %d\n", (int)ft->type);

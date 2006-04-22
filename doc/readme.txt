@@ -1,11 +1,11 @@
 abcMIDI :   abc <-> MIDI conversion utilities
 
-midi2abc version 2.86 June  30 2005
-abc2midi version 1.69 June  27 2005
-abc2abc  version 1.43 May   14 2005
-yaps     version 1.38 May   14 2005
-abcmatch version 1.27 July  02 2005
-midicopy version 1.02 May   22 2005
+midi2abc version 2.88 July  23 2005
+abc2midi version 1.83 Apr   22 2006
+abc2abc  version 1.48 Apr   21 2006
+yaps     version 1.44 Apr   22 2006
+abcmatch version 1.37 Apr   22 2006
+midicopy version 1.03 Aug   17 2005
 
 24th January 2002
 
@@ -14,7 +14,7 @@ J.R.Allwright@westminster.ac.uk
 University of Westminster,
 London, UK
 
-10 April 2005
+Apr 2006
 
 Seymour Shlien
 seymour.shlien@crc.ca
@@ -115,7 +115,7 @@ midi2abc <options>
          -nogr No note grouping. Space put between every note.
          -splitbars splits bars to avoid nonhomophonic chords. 
          -splitvoices splits voices to avoid nonhomophonic chords. 
-         -Midigram   No abc file is created, but a list
+         -midigram   No abc file is created, but a list
 		of all notes is produced. Other parameters
                 are ignored.
          -mftext  No abc file is created, but a list of all
@@ -206,16 +206,18 @@ Separating the notes which do not overlap exactly into
 individual voices provides some improvement. If you encountering
 this problem with your MIDI file, you may wish to try rerunning
 the file with either the -splitbars or -splitvoices parameter.
-This is a feature introduced in June 2005 (version 2.83) and may
-require more tuning at some later point. This feature may not
-work correctly with some MIDI file.
+This is a feature introduced in June 2005 (version 2.83).
+The algorithm which separates the notes in a voice into
+distinct voices (tracks) (label_split in midi2abc.c) is rather
+crude and needs improvement. I welcome any suggestions
+or improved code.
 
 
-The -Midigram option runs midi2abc in a completely different
+The -midigram option runs midi2abc in a completely different
 mode. It does not produce any abc file but outputs a list
 of all the notes found in the MIDI file. Each line of output
 represents one note. For each line, the on and off time
-in quarter note units, the track number, the channel number, 
+in MIDI time units, the track number, the channel number, 
 midi pitch, and midi velocity are listed. The last line
 contains a single value equal to the duration of the file
 in MIDI pulses.  The output is designed to eventually go into a
@@ -241,6 +243,7 @@ Usage : abc2midi <abc file> [reference number] [-c] [-v] [-o filename]
         -Q <tempo> in quarter notes/minute
         -NFNP ignore all dynamic indications (!f! !ff! !p! etc.)
         -ver prints version number and exits
+        -OCC old chord convention (eg. +CE+)
 
  The default action is to write a MIDI file for each abc tune
  with the filename <stem>N.mid, where <stem> is the filestem
@@ -249,7 +252,16 @@ Usage : abc2midi <abc file> [reference number] [-c] [-v] [-o filename]
  specified by the reference number or, if no reference number
  is given, the first tune in the file. The -Q parameter sets
  the default tempo in event the Q: command is not given in the
- abc header.
+ abc header. The program accepts both the deprecated (eg.
+ !trill!) and standard (+trill+) notation for decorations.
+ Older versions of this program handled the defunct convention
+ for chords (i.e +G2B2D2+ instead of [GBD]2). If you need to
+ handle the older notation, include the -OCC flag; however the
+ program will not accept the standard notation for decorations.
+ Broken rhythms indicated by > or < (eg. A > B) assume a
+ the hornpipe ratio of 2:1 rather than 3:1. To change it to
+ 3:1 include the -RS flag.  
+
 
 Features :
 
@@ -257,7 +269,7 @@ Features :
 repeats, in-tune tempo/length/meter changes are all supported.
 
 * R:hornpipe or r:hornpipe is recognized and note timings are adjusted to
-give a broken rythm (ab is converted to a>b).
+give a broken rhythm (ab is converted to a>b).
 
 * Most errors in the abc input will generate a suitable error message in
 the output and the converter keeps going.
@@ -323,6 +335,7 @@ Usage: abc2abc <filename> [-s] [-n X] [-b] [-r] [-e] [-t X]
   -ver prints version number and exits
   -X n renumber the all X: fields as n, n+1, ..
   -usekey sf Use key signature sf (flats/sharps)
+  -OCC old chord convention (eg. +CE+)
 
 A simple abc checker/re-formatter/transposer. If the -n option is selected, 
 error checking is turned off. 

@@ -32,8 +32,16 @@
 # return and line feed) to unix style end-of-line (line feed).
 
 CC=gcc
-CFLAGS=-c -DANSILIBS
+CFLAGS=-DANSILIBS -O2 
 LNK=gcc
+INSTALL=install
+
+prefix=/usr/local
+binaries=abc2midi midi2abc abc2abc mftext yaps midicopy abcmatch
+
+docdir=share/doc/abcmidi
+bindir=bin
+mandir=share/man/man1
 
 all : abc2midi midi2abc abc2abc mftext yaps midicopy abcmatch
 
@@ -61,66 +69,61 @@ abcmatch : abcmatch.o matchsup.o parseabc.o
 	$(LNK) abcmatch.o matchsup.o parseabc.o -o abcmatch
 
 parseabc.o : parseabc.c abc.h parseabc.h
-	$(CC) $(CFLAGS) parseabc.c 
 
 parser2.o : parser2.c abc.h parseabc.h parser2.h
-	$(CC) $(CFLAGS) parser2.c
 
 toabc.o : toabc.c abc.h parseabc.h
-	$(CC) $(CFLAGS) toabc.c 
 
 # could use -DNOFTELL here
 genmidi.o : genmidi.c abc.h midifile.h genmidi.h
-	$(CC) $(CFLAGS) genmidi.c
 
 store.o : store.c abc.h parseabc.h midifile.h genmidi.h
-	$(CC) $(CFLAGS) store.c
 
 queues.o : queues.c genmidi.h
-	$(CC) $(CFLAGS) queues.c
 
 # could use -DNOFTELL here
 midifile.o : midifile.c midifile.h
-	$(CC) $(CFLAGS) midifile.c
 
 midi2abc.o : midi2abc.c midifile.h
-	$(CC) $(CFLAGS) midi2abc.c
 
 midicopy.o : midicopy.c midicopy.h
-	$(CC) $(CFLAGS) midicopy.c
 
 abcmatch.o: abcmatch.c abc.h
-	$(CC) $(CFLAGS) abcmatch.c
 
 crack.o : crack.c
-	$(CC) $(CFLAGS) crack.c 
 
 mftext.o : mftext.c midifile.h
-	$(CC) $(CFLAGS) mftext.c
 
 # objects needed by yaps
 #
 yapstree.o: yapstree.c abc.h parseabc.h structs.h drawtune.h
-	$(CC) $(CFLAGS) yapstree.c
 
 drawtune.o: drawtune.c structs.h sizes.h abc.h drawtune.h
-	$(CC) $(CFLAGS) drawtune.c
 
 pslib.o: pslib.c drawtune.h
-	$(CC) $(CFLAGS) pslib.c
 
 position.o: position.c abc.h structs.h sizes.h
-	$(CC) $(CFLAGS) position.c
 
 debug.o: debug.c structs.h abc.h
-	$(CC) $(CFLAGS) debug.c
 
 #objects for abcmatch
 #
 matchsup.o : matchsup.c abc.h parseabc.h parser2.h
-	$(CC) $(CFLAGS) matchsup.c
 
 clean :
+	rm *.o ${binaries}
 
+install: abc2midi midi2abc abc2abc mftext midicopy yaps abcmatch
+	$(INSTALL) -m 755 ${binaries} ${prefix}/${bindir}
 
-	rm *.o abc2midi midi2abc abc2abc mftext midicopy yaps abcmatch
+	# install documentation
+	test -d ${PREFIX}/share/doc/abcmidi || mkdir -p ${prefix}/${docdir}
+	$(INSTALL) -m 644 doc/*.txt ${prefix}/${docdir}
+	$(INSTALL) -m 644 doc/AUTHORS ${prefix}/${docdir}
+	$(INSTALL) -m 644 doc/CHANGES ${prefix}/${docdir}
+	$(INSTALL) -m 644 VERSION ${prefix}/${docdir}
+
+	# install manpages
+	test -d ${prefix}/${mandir} || mkdir -p ${prefix}/${mandir};
+	$(INSTALL) -m 644 doc/*.1 ${prefix}/${mandir}
+

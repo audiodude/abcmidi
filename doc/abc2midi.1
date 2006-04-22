@@ -1,8 +1,8 @@
-.TH ABC2MIDI 1 "03 May 2005"
+.TH ABC2MIDI 1 "6 November 2005"
 .SH NAME
 \fBabc2midi\fP \- converts abc file to MIDI file(s)
 .SH SYNOPSIS
-abc2midi \fIinfile\fP [\fIrefnum\fP] [-c] [-v] [-ver] [-t] [-n limit] [-RS] [-NAR] [-Q tempo] [-NFNP] [-o outfile]
+abc2midi \fIinfile\fP [\fIrefnum\fP] [-c] [-v] [-ver] [-t] [-n limit] [-RS] [-NAR] [-Q tempo] [-NFNP] [-OCC] [-o outfile]
 .SH DESCRIPTION
  The default action is to write a MIDI file for each abc tune
  with the filename <stem>N.mid, where <stem> is the filestem
@@ -43,6 +43,9 @@ specified in the abc header.
 .B -NFNP
 Ignore any dynamic indications !f! !ff! etc.
 .TP
+.B -OCC
+Accept old chord convention (eg +D2G2+ instead of [DG]2).
+.TP
 .B -o \fIoutfile\fP
 write output to \fIoutfile\fP
 .SH FEATURES
@@ -74,6 +77,10 @@ abc standard is accepted.
 .PP
 * Invisible rests specified by x are treated the same way as
 normal rests (z).
+.PP
+* Decorations may be indicated using either the deprecated
+notation (eg. !fermata!) or the standard version 2.0 notation
+(eg. +fermata+).
 .PP
 .SH LIMITATIONS
 * No field is inherited from above the X: field of the tune.
@@ -149,6 +156,18 @@ where n is a small positive number.  By default the crescendo and
 diminuendo instructions modify the beat variables a, b, and c by
 15 velocity units. This instruction allows you to set this default
 to value n.
+
+.PP
+%%MIDI nobeataccents
+.PP
+For instruments such as church organ that have no greatly emphasized beat notes,
+using this will force use of the 'b' velocity (see %%MIDI beat)
+for every note irrespective of position in the bar.  This allows dynamics
+(ff, f, etc) to be used in the normal way.
+.PP
+%%MIDI beataccents
+.PP
+Revert to emphasizing notes the the usual way. (default)
 
 .PP
 %%MIDI beatstring <string of f, m and p>
@@ -370,6 +389,11 @@ chords.
 Like above except that the delay is a random variable uniformly
 distributed between 0 and n-1.
 
+.PP
+%%MIDI drummap note midipitch
+.PP
+Please see abcguide.txt.
+
 
 .SH "COMPATIBILITY WITH DRAFT STANDARD 2.0"
 
@@ -397,7 +421,7 @@ James Allwright <J.R.Allwright@westminster.ac.uk>
 .SH SUPPORTED
  by Seymour Shlien <seymour.shlien@crc.ca>
 .SH VERSION
-This man page describes abc2midi version 1.66  May 03 2005.
+This man page describes abc2midi version 1.73  August 13 2005.
 .SH COPYRIGHT
 Copyright 1999 James Allwright
 .PP

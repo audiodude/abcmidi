@@ -39,7 +39,11 @@
 
 #ifdef _MSC_VER
 #define ANSILIBS
+#define casecmp stricmp
+#else
+#define casecmp strcasecmp
 #endif
+#define	stringcmp	strcmp
 
 #ifdef __MWERKS__
 #define __MACINTOSH__ 1
@@ -90,6 +94,7 @@ int fileline_number = 1;
 int intune = 1;
 
 extern programname fileprogram;
+int oldchordconvention = 0;
 
 
 int* checkmalloc(bytes)
@@ -367,13 +372,46 @@ char **p;
   };
 }
 
+void readlen_nocheck(a, b, p)
+int *a, *b;
+char **p;
+/* read length part of a note and advance character pointer */
+{
+  int t;
+
+  *a = readnump(p);
+  if (*a == 0) {
+    *a = 1;
+  };
+  *b = 1;
+  if (**p == '/') {
+    *p = *p + 1;
+    *b = readnump(p);
+    if (*b == 0) {
+      *b = 2;
+      while (**p == '/') {
+        *b = *b * 2;
+        *p = *p + 1;
+      };
+    };
+  };
+  t = *b;
+  while (t > 1) {
+    if (t%2 != 0) {
+      /*event_warning("divisor not a power of 2"); */
+      t = 1;
+    } else {
+      t = t/2;
+    };
+  };
+}
 
 int ismicrotone(p,dir)
 char **p;
 int dir;
 {
 int a, b;
-readlen(&a, &b, p);
+readlen_nocheck(&a, &b, p);
 if (b != 1) {
   event_microtone(dir,a,b);
   return 1;}
@@ -486,75 +524,6 @@ char* s;
     };
     p = p + 1;
   };
-}
-
-static int casecmp(s1, s2)
-/* case-insensitive compare 2 strings */
-/* return 0 if equal   */
-/*        1 if s1 > s2 */
-/*       -1 if s1 > s2 */
-char s1[];
-char s2[];
-{
-  int i, val, done;
-  char c1, c2;
-
-  i = 0;
-  done = 0;
-  while (done == 0) {
-    c1 = tolower(s1[i]);
-    c2 = tolower(s2[i]);
-    if (c1 > c2) {
-      val = 1;
-      done = 1;
-    } else {
-      if (c1 < c2) {
-        val = -1;
-        done = 1;
-      } else {
-        if (c1 == '\0') {
-          val = 0;
-          done = 1;
-        } else {
-          i = i + 1;
-        };
-      };
-    };
-  };
-  return(val);
-}
-
-static int stringcmp(s1, s2)
-/* case sensitive compare 2 strings */
-/* return 0 if equal   */
-/*        1 if s1 > s2 */
-/*       -1 if s1 > s2 */
-char s1[];
-char s2[];
-{
-  int i, val, done;
-
-  i = 0;
-  done = 0;
-  while (done == 0) {
-    if (s1[i] > s2[i]) {
-      val = 1;
-      done = 1;
-    } else {
-      if (s1[i] < s2[i]) {
-        val = -1;
-        done = 1;
-      } else {
-        if (s1[i] == '\0') {
-          val = 0;
-          done = 1;
-        } else {
-          i = i + 1;
-        };
-      };
-    };
-  };
-  return(val);
 }
 
 
@@ -786,6 +755,38 @@ if (**s != '=') {
   return 1;
 };
 
+int parsemiddle(s, word, gotmiddle, middlestring, maxsize)
+/* parse string middle=X in V: command
+ for abcm2ps compatibility
+*/
+char **s;
+char * word;
+int *gotmiddle;
+char middlestring[];
+int maxsize;
+{
+int i;
+i = 0;
+if (casecmp(word, "middle") != 0) return 0;
+skipspace(s);
+if( **s != '=' ) {
+   event_error("middle must be followed by '='");
+   } else {
+	*s = *s + 1;
+	skipspace(s);
+/* we really ought to check the we have a proper note name; for now, just copy non-space
+characters */
+       while (i < maxsize && **s != ' ' && **s != '\0') {
+          middlestring[i] = (char) **s;
+          *s = *s + 1;
+          ++i;
+       }
+   middlestring[i] = '\0';
+   *gotmiddle = 1;
+   }
+   return 1;
+}
+
 
 
 int parsekey(str)
@@ -804,7 +805,7 @@ char* str;
   char modestr[30];
   char msg[80];
   char* moveon;
-  int sf, minor;
+  int sf = -1, minor = -1;
   char modmap[7];
   int modmul[7];
   int i, j;
@@ -856,7 +857,7 @@ char* str;
       gotkey = 1;
       parsed = 1;
       /* parse key itself */
-      sf = (int) strchr(key, word[0]) - (int) &key[0] - 1;
+      sf = strchr(key, word[0]) - key - 1;
       j = 1;
       /* deal with sharp/flat */
       if (word[1] == '#') {
@@ -942,25 +943,23 @@ char* str;
 static void parsevoice(s)
 char *s;
 {
-int num;
-int gotclef, gotkey, gotoctave, gottranspose, gotname, gotsname;
-int transpose, octave;
-char clefstr[30];
+int num;		/* voice number */
+struct voice_params vparams;
 char word[30];
-char namestring[64];
-char snamestring[64];
 int parsed;
-int coctave,cgotoctave;
-transpose = 0;
-gottranspose = 0;
-octave = 0;
-gotkey = 0;
-gotoctave = 0;
-gotclef = 0;
+int coctave, cgotoctave;
+
+vparams.transpose = 0;
+vparams.gottranspose = 0;
+vparams.octave = 0;
+vparams.gotoctave = 0;
+vparams.gotclef = 0;
 cgotoctave=0;
 coctave=0;
-gotname = 0;
-gotsname =0;
+vparams.gotname = 0;
+vparams.gotsname = 0;
+vparams.gotmiddle = 0;
+
 skipspace(&s);
 if ((*s >= '0') && (*s <= '9')) {
   num = readnump(&s);
@@ -973,19 +972,22 @@ if ((*s >= '0') && (*s <= '9')) {
   };
 skipspace(&s);
 while (*s != '\0') {
-  parsed = parseclef(&s,word,&gotclef,clefstr,&cgotoctave,&coctave);
-  if (!parsed) parsed = parsetranspose(&s,word,&gottranspose,&transpose);
-  if (!parsed) parsed = parseoctave(&s,word,&gotoctave,&octave);
-  if (!parsed) parsed = parsename(&s,word,&gotname,namestring,60);
-  if (!parsed) parsed = parsesname(&s,word,&gotsname,snamestring,60);
+  parsed = parseclef(&s,word, &vparams.gotclef, vparams.clefname, &cgotoctave,&coctave);
+  if (!parsed) parsed = parsetranspose(&s, word, &vparams.gottranspose, &vparams.transpose);
+  if (!parsed) parsed = parseoctave(&s, word, &vparams.gotoctave, &vparams.octave);
+  if (!parsed) parsed = parsename(&s, word, &vparams.gotname, vparams.namestring, V_STRLEN);
+  if (!parsed) parsed = parsesname(&s, word, &vparams.gotsname, vparams.snamestring, V_STRLEN);
+  if (!parsed) parsed = parsemiddle(&s, word, &vparams.gotmiddle, vparams.middlestring, V_STRLEN);
   }
-if (cgotoctave) {gotoctave=1; octave=coctave;}
-event_voice(num, s,gotclef,gotoctave,gottranspose,gotname,gotsname,clefstr,octave,transpose,namestring,snamestring);
+if (cgotoctave) {vparams.gotoctave=1; vparams.octave=coctave;}
+event_voice(num, s, &vparams);
+
 /*
-if (gottranspose) printf("transpose = %d\n",transpose);
- if (gotoctave) printf("octave= %d\n",octave);
- if (gotclef) printf("clef= %s\n",clefstr);
-if (gotname) printf("parsevoice: name= %s\n",namestring);
+if (gottranspose) printf("transpose = %d\n", vparams.transpose);
+ if (gotoctave) printf("octave= %d\n", vparams.octave);
+ if (gotclef) printf("clef= %s\n", vparams.clefstr);
+if (gotname) printf("parsevoice: name= %s\n", vparams.namestring);
+if(gotmiddle) printf("parsevoice: middle= %s\n", vparams.middlestring);
 */
 }
 
@@ -1011,7 +1013,7 @@ char **s;
 	  decorators_passback[i] = 0;
           }
   while (strchr(decorations, **s) != NULL) {
-    t = (int) strchr(decorations, **s) -  (int) decorations;
+    t = strchr(decorations, **s) - decorations;
     decorators[t] = 1;
     *s = *s + 1;
   };
@@ -1102,9 +1104,9 @@ char **s;
       };
     };
   } else {
+    octave = 0;
     if ((**s >= 'A') && (**s <= 'G')) {
       note = **s + 'a' - 'A';
-      octave = 0;
       *s = *s + 1;
       while ((**s == '\'') || (**s == ',')) {
         if (**s == ',') {
@@ -1281,6 +1283,7 @@ char* place;
   event_tempo(n, a, b, relative, pre_string, post_string);
 }
 
+static void
 preparse_words(s)
 char *s;
 /* takes a line of lyrics (w: field) and strips off */
@@ -1582,14 +1585,6 @@ char* field;
       parsenote(&p);
     } else {
       switch(*p) {
-      case '+':
-        event_chord();
-        parserinchord = 1 - parserinchord;
-        if (parserinchord == 0) {
-          for (i = 0; i<DECSIZE; i++) chorddecorators[i] = 0;
-        };
-        p = p + 1;
-        break;
       case '"':
         {
           struct vstring gchord;
@@ -1671,11 +1666,7 @@ char* field;
             };
           };
           if (t == 0) {
-            if (slur > 0) {
-              event_warning("Slur within slur");
-            };
-            slur = slur + 1;
-            event_sluron(slur);
+            event_sluron(1);
           } else {
             event_tuple(t, q, r);
           };
@@ -1683,12 +1674,7 @@ char* field;
         break;
       case ')':
         p = p + 1;
-        if (slur == 0) {
-          event_error("No slur to close");
-        } else {
-          slur = slur - 1;
-        };
-        event_sluroff(slur);
+        event_sluroff(0);
         break;
       case '{':
         p = p + 1;
@@ -1774,9 +1760,20 @@ char* field;
           event_rest(decorators,n, m, 0);
           break;
         };
-      case 'y': /* used by Barfly to put space */
-        p = p + 1;
-        break;
+      case 'y': /* used by Barfly and abcm2ps to put space */
+/* I'm sure I've seen somewhere that /something/ allows a length
+ * specifier with y to enlarge the space length. Allow it anyway; it's
+ * harmless.
+ */
+	{
+	   int n, m;
+
+           p = p + 1;
+	   readlen(&n, &m, &p);
+	   event_spacing(n, m);
+           break;
+	};
+/* full bar rest */
       case 'Z':
         {
           int n, m;
@@ -1843,32 +1840,45 @@ char* field;
           event_error("'\\' in middle of line ignored");
         };
         break;
+      case '+':
+        if (oldchordconvention) {
+          event_chord();
+          parserinchord = 1 - parserinchord;
+          if (parserinchord == 0) {
+          for (i = 0; i<DECSIZE; i++) chorddecorators[i] = 0;
+          };
+        p = p + 1;
+        break;
+        }
+      /* otherwise we fall through into the next case statement */
       case '!':
-        {
+          {
           struct vstring instruction;
           char *s;
+          char endcode;
    
+          endcode = *p;
           p = p + 1;
           s = p;
           initvstring(&instruction);
-          while ((*p != '!') && (*p != '\0')) {
+          while ((*p != endcode) && (*p != '\0')) {
             addch(*p, &instruction);
             p = p + 1;
           };
-          if (*p != '!') {
+          if (*p != endcode) {
             p = s;
             if (checkend(s)) {
               event_lineend('!', 1);
               endchar = '!';
             } else {
-              event_error("'!' in middle of line ignored");
+              event_error("'!' or '+' in middle of line ignored");
             };
           } else {
             event_instruction(instruction.st);
             p = p + 1;
           };
           freevstring(&instruction);
-        };
+        }
         break;
       case '*':
         p = p + 1;
@@ -2044,26 +2054,22 @@ char* name;
 int parsetune(FILE *fp)
 /* top-level routine for parsing file */
 {
-  int reading;
   struct vstring line;
   /* char line[MAXLINE]; */
   int t;
   int lastch, done_eol;
 
-
   inhead = 0;
   inbody = 0;
   parseroff();
   intune  = 1;
-  reading = 1;
   line.limit = 4;
   initvstring(&line);
   done_eol = 0;
   lastch = '\0';
-  while (reading && intune) {
+  do {
     t = getc(fp);
     if (t == EOF) {
-      reading = 0;
       if (line.len>0) {
         printf("%s\n",line.st);
         parseline(line.st);
@@ -2071,6 +2077,7 @@ int parsetune(FILE *fp)
         lineno = fileline_number;
         event_linebreak();
       };
+      break;
     } else {
       /* recognize  \n  or  \r  or  \r\n  or  \n\r  as end of line */
       /* should work for DOS, unix and Mac files */
@@ -2094,10 +2101,10 @@ int parsetune(FILE *fp)
       };
       lastch = t;
     };
-  };
+  } while (intune);
   freevstring(&line);
 return t;  
-}    
+}
 
 /*
 int getline ()

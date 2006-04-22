@@ -1,5 +1,5 @@
 /*
- * midifile 1.11
+ * midifile 1.13
  * 
  * Read and write a MIDI file.  Externally-assigned function pointers are 
  * called upon recognizing things in the file.
@@ -52,6 +52,10 @@
  * mfread now keeps track of number of tracks read and stops when
  * it reads ntrks. (To solve expecting MTrk error for some midi files).
  *
+ * 29 Jan 2006 
+ * introduced some support for some universal system exclusive
+ * messages (in particular single note tuning change).
+ * reference http://www.midi.org/about-midi/tuning.shtml
  */
 #include "midifile.h"
 #define NULLFUNC 0
@@ -881,17 +885,6 @@ long tempo;
     eputc((char)(0xff & tempo));
 }
 
-/* Original code is incorrect
- *
- * long 
- *mf_sec2ticks(secs,division,tempo)
- *int division;
- *long tempo;
- *float secs;
- *{    
- *     return (long)(((secs * 1000.0) / 4.0 * division) / tempo);
- *}
- */
 
 
 /* 
@@ -946,6 +939,37 @@ long value;
   }
 }/* end of WriteVarLen */
 
+
+void single_note_tuning_change(int key, float midipitch)
+{
+unsigned char kk,xx,yy,zz;
+int number,intfraction;
+float fraction;
+eputc(0); /* varinum delta_t (time to next event) */
+eputc(0xf0); /* sysex initiation */
+ eputc(11);  /* 11 bytes included in sysex */
+eputc(127); /* universal sysex command (0x7f) */
+eputc(0);    /* device id */
+eputc(8);    /* midi tuning */
+eputc(2);    /* note change */
+eputc(0);    /* program number 0 - 127 */
+eputc(1);    /* only one change */
+kk = (unsigned char) 127 & key;
+eputc(kk);  /* MIDI key  0 - 127 */
+number = (int) midipitch;
+fraction = midipitch - (float) number;
+if (fraction < 0.0) fraction = -fraction;
+intfraction = fraction*16384;
+xx = 0x7f & number;
+yy = intfraction/128;
+zz = intfraction % 128;
+yy = 0x7f & yy;
+zz = 0x7f & zz;
+eputc(xx);
+eputc(yy);
+eputc(zz);
+eputc(247); /* 0xf7 terminates sysex command */
+}
 
 /* 
  * This routine converts delta times in ticks into seconds. The

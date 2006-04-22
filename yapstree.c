@@ -22,7 +22,7 @@
 /* yapstree.c - back-end for abc parser. */
 /* generates a data structure suitable for typeset music */
 
-#define VERSION "1.38 May 14 2005"
+#define VERSION "1.44 April 22 2006"
 #include <stdio.h>
 #ifdef USE_INDEX
 #define strchr index
@@ -53,6 +53,7 @@ extern void printtune(struct tune *t);
 extern void set_keysig(struct key *k, struct key *newval);
 
 programname fileprogram = YAPS;
+extern int oldchordconvention; /* for handling +..+ chords */
 
 struct voice* cv;
 struct tune thetune;
@@ -1102,6 +1103,7 @@ char** filename;
   } else {
     eps_out = 0;
   };
+  if (getarg("-OCC",argc,argv) != -1) oldchordconvention=1;
   if (getarg("-V", argc, argv) != -1) {
     separate_voices = 1;
   } else {
@@ -1177,6 +1179,7 @@ char** filename;
     printf("  -s XX         : scaling factor (default is 0.7)\n");
     printf("  -V            : separate voices in multi-voice tune\n");
     printf("  -x            : print tune number in X: field\n");
+    printf("  -OCC          : old chord convention (eg. +CE+)\n");
     printf("Takes an abc music file and converts it to PostScript.\n");
     printf("If no output filename is given, then by default it is\n");
     printf("the input filename but with extension .ps .\n");
@@ -1318,6 +1321,7 @@ return;
 
 void event_split_voice()
 {
+addfeature(SPLITVOICE, (void*) lineno);
 event_error("voice split not implemented in yaps");
 }
 
@@ -1743,15 +1747,10 @@ char* s;
   };
 }
 
-void event_voice(n, s, gotclef, gotoctave,gottranspose,gotname,
-	       	gotsname, clefname, octave, transpose, namestring,
-                snamestring)
+void event_voice(n, s, vp)
 int n;
 char *s;
-int gotclef,gotoctave,gottranspose,gotname,gotsname;
-char *clefname;
-char *namestring,*snamestring;
-int transpose,octave;
+struct voice_params *vp;
 /* A voice field (V: ) has been encountered */
 {
   if (xinbody) {
@@ -2339,7 +2338,10 @@ char* s;
   char* inst;
   static char segno[3] = ":s";
   static char coda[3] = ":c";
+  struct dynamic *psaction;
+  int done;
  
+  done = 0;
   inst = s;
   if (strcmp(s, "fermata") == 0)
      {
@@ -2357,14 +2359,32 @@ char* s;
 
   if (strcmp(s, "segno") == 0) {
     inst = segno;
+    done = 1;
   };
   if (strcmp(s, "coda") == 0) {
     inst = coda;
+    done = 1;
   };
-  if (cv->instructions_pending == NULL) {
-    cv->instructions_pending = newlist();
-  };
-  addtolist(cv->instructions_pending, addstring(inst));
+
+  if (done == 1) {
+    if (cv->instructions_pending == NULL) {
+      cv->instructions_pending = newlist();
+     };
+    addtolist(cv->instructions_pending, addstring(inst));
+    return;
+    }
+  if (strcmp(s,"red") == 0)
+   {     
+   psaction = (struct dynamic*) checkmalloc(sizeof(struct note));
+   psaction->color = 'r';
+   addfeature(DYNAMIC,psaction);
+   }
+  if (strcmp(s,"black") == 0)
+   {     
+   psaction = (struct dynamic*) checkmalloc(sizeof(struct note));
+   psaction->color = 'b';
+   addfeature(DYNAMIC,psaction);
+   }
 }
 
 struct slurtie* resolve_slur(struct feature* lastnote)
@@ -2777,6 +2797,12 @@ void event_chordoff(int chord_n, int chord_m)
   addfeature(CHORDOFF, NULL);
 }
 
+/* just a stub to ignore 'y' */
+void event_spacing(n, m)
+int n,m;
+{
+}
+
 void xevent_rest(n, m, multi)
 int n, m, multi;
 /* A rest has been encountered in the abc */
@@ -2934,6 +2960,7 @@ char *argv[];
   char *filename;
   int i;
 
+  oldchordconvention = 0;
   for (i=0;i<DECSIZE;i++) decorators_passback[i]=0;
 
   event_init(argc, argv, &filename);

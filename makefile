@@ -1,8 +1,8 @@
-# DJGPP (DOS port of gcc) Makefile for abcMIDI package 
+# Generic unix/gcc Makefile for abcMIDI package 
 # 
 #
-# compilation #ifdefs - you may need to change these defined to get
-#                       the code to compile with a different C compiler.
+# compilation #ifdefs - you need to compile with these defined to get
+#                       the code to compile with PCC.
 #
 # NOFTELL in midifile.c and genmidi.c selects a version of the file-writing
 #         code which doesn't use file seeking.
@@ -10,128 +10,120 @@
 # PCCFIX in mftext.c midifile.c midi2abc.c
 #        comments out various things that aren't available in PCC
 #
+# ANSILIBS includes some ANSI header files (which gcc can live without,
+#          but other compilers may want).
+#
 # USE_INDEX causes index() to be used instead of strchr(). This is needed
 #           by some pre-ANSI C compilers.
 #
 # ASCTIME causes asctime() to be used instead of strftime() in pslib.c.
 #         If ANSILIBS is not set, neither routine is used.
 #
-# ANSILIBS causes code to include some ANSI standard headers
-#
 # KANDR selects functions prototypes without argument prototypes.
+#       currently yaps will only compile in ANSI mode.
 #
+#
+# On running make, you may get the mysterious message :
+#
+# ', needed by `parseabc.o'. Stop `abc.h
+#
+# This means you are using GNU make and this file is in DOS text format. To
+# cure the problem, change this file from using PC-style end-of-line (carriage 
+# return and line feed) to unix style end-of-line (line feed).
+
 CC=gcc
-CFLAGS=-c -g -ansi -DANSILIBS -Wformat
-# -ansi forces ANSI compliance
+CFLAGS=-DANSILIBS -O2 
 LNK=gcc
+INSTALL=install
 
-all : abc2midi.exe midi2abc.exe abc2abc.exe mftext.exe yaps.exe\
-     midicopy.exe abcmatch.exe
+prefix=/usr/local
+binaries=abc2midi midi2abc abc2abc mftext yaps midicopy abcmatch
 
-abc2midi.exe : parseabc.o store.o genmidi.o queues.o midifile.o parser2.o
-	$(LNK) -o abc2midi.exe parseabc.o genmidi.o store.o \
-	queues.o midifile.o parser2.o
+docdir=share/doc/abcmidi
+bindir=bin
+mandir=share/man/man1
 
-abc2abc.exe : parseabc.o toabc.o
-	$(LNK) -o abc2abc.exe parseabc.o toabc.o
+all : abc2midi midi2abc abc2abc mftext yaps midicopy abcmatch
 
-midi2abc.exe : midifile.o midi2abc.o 
-	$(LNK) midifile.o midi2abc.o -o midi2abc.exe
+abc2midi : parseabc.o store.o genmidi.o midifile.o queues.o parser2.o
+	$(LNK) -o abc2midi parseabc.o store.o genmidi.o queues.o \
+	parser2.o midifile.o
 
-mftext.exe : midifile.o mftext.o crack.o
-	$(LNK) midifile.o mftext.o crack.o -o mftext.exe
+abc2abc : parseabc.o toabc.o
+	$(LNK) -o abc2abc parseabc.o toabc.o
 
-midicopy.exe : midicopy.o
-	$(LNK) midicopy.o -o midicopy.exe
+midi2abc : midifile.o midi2abc.o 
+	$(LNK) midifile.o midi2abc.o -o midi2abc
 
-abcmatch.exe : abcmatch.o matchsup.o parseabc.o
-	$(LNK) abcmatch.o matchsup.o parseabc.o -o abcmatch.exe
+mftext : midifile.o mftext.o crack.o
+	$(LNK) midifile.o mftext.o crack.o -o mftext
 
+yaps : parseabc.o yapstree.o drawtune.o debug.o pslib.o position.o parser2.o
+	$(LNK) -o yaps parseabc.o yapstree.o drawtune.o debug.o \
+	position.o pslib.o parser2.o -o yaps
 
-yaps.exe : parseabc.o yapstree.o drawtune.o debug.o pslib.o position.o parser2.o
-	$(LNK) -o yaps.exe parseabc.o yapstree.o drawtune.o debug.o \
-	position.o pslib.o parser2.o
+midicopy : midicopy.o
+	$(LNK) -o midicopy midicopy.o
 
-# common parser object code
-#
+abcmatch : abcmatch.o matchsup.o parseabc.o
+	$(LNK) abcmatch.o matchsup.o parseabc.o -o abcmatch
+
 parseabc.o : parseabc.c abc.h parseabc.h
-	$(CC) $(CFLAGS) parseabc.c 
 
-parser2.o : parser2.c parseabc.h parser2.h
-	$(CC) $(CFLAGS) parser2.c
+parser2.o : parser2.c abc.h parseabc.h parser2.h
 
-# objects needed by abc2abc
-#
 toabc.o : toabc.c abc.h parseabc.h
-	$(CC) $(CFLAGS) toabc.c 
-
-# objects needed by abc2midi
-#
-store.o : store.c abc.h parseabc.h parser2.h genmidi.h 
-	$(CC) $(CFLAGS) store.c 
-
-genmidi.o : genmidi.c abc.h midifile.h genmidi.h
-	$(CC) $(CFLAGS) genmidi.c 
 
 # could use -DNOFTELL here
-tomidi.o : tomidi.c abc.h midifile.h
-	$(CC) $(CFLAGS) tomidi.c
+genmidi.o : genmidi.c abc.h midifile.h genmidi.h
 
-queues.o: queues.c genmidi.h
-	$(CC) $(CFLAGS) queues.c
+store.o : store.c abc.h parseabc.h midifile.h genmidi.h
 
-midicopy.o: midicopy.c midicopy.h
-	$(CC) $(CFLAGS) midicopy.c
+queues.o : queues.c genmidi.h
 
-abcmatch.o: abcmatch.c abc.h
-	$(CC) $(CFLAGS) abcmatch.c
-
-# common midifile library
-#
 # could use -DNOFTELL here
 midifile.o : midifile.c midifile.h
-	$(CC) $(CFLAGS) midifile.c
+
+midi2abc.o : midi2abc.c midifile.h
+
+midicopy.o : midicopy.c midicopy.h
+
+abcmatch.o: abcmatch.c abc.h
+
+crack.o : crack.c
+
+mftext.o : mftext.c midifile.h
 
 # objects needed by yaps
 #
-yapstree.o: yapstree.c abc.h parseabc.h structs.h drawtune.h parser2.h
-	$(CC) $(CFLAGS) yapstree.c
+yapstree.o: yapstree.c abc.h parseabc.h structs.h drawtune.h
 
 drawtune.o: drawtune.c structs.h sizes.h abc.h drawtune.h
-	$(CC) $(CFLAGS) drawtune.c
 
 pslib.o: pslib.c drawtune.h
-	$(CC) $(CFLAGS) pslib.c
 
 position.o: position.c abc.h structs.h sizes.h
-	$(CC) $(CFLAGS) position.c
 
 debug.o: debug.c structs.h abc.h
-	$(CC) $(CFLAGS) debug.c
 
-# objects needed by midi2abc
-#
-midi2abc.o : midi2abc.c midifile.h
-	$(CC) $(CFLAGS) midi2abc.c
-
-# objects for mftext
-#
-crack.o : crack.c
-	$(CC) $(CFLAGS) crack.c 
-
-mftext.o : mftext.c midifile.h
-	$(CC) $(CFLAGS) mftext.c
-
-# objects for abcmatch
+#objects for abcmatch
 #
 matchsup.o : matchsup.c abc.h parseabc.h parser2.h
-	$(CC) $(CFLAGS) matchsup.c
 
+clean :
+	rm *.o ${binaries}
 
-clean:
-	rm *.o
-	rm *.exe
+install: abc2midi midi2abc abc2abc mftext midicopy yaps abcmatch
+	$(INSTALL) -m 755 ${binaries} ${prefix}/${bindir}
 
-zipfile: midi2abc.exe abc2midi.exe mftext.exe yaps.exe\
-          abc2abc.exe midicopy.exe abcmatch.exe
-	zip pcexe2.zip *.exe readme.txt abcguide.txt demo.abc yaps.txt
+	# install documentation
+	test -d ${PREFIX}/share/doc/abcmidi || mkdir -p ${prefix}/${docdir}
+	$(INSTALL) -m 644 doc/*.txt ${prefix}/${docdir}
+	$(INSTALL) -m 644 doc/AUTHORS ${prefix}/${docdir}
+	$(INSTALL) -m 644 doc/CHANGES ${prefix}/${docdir}
+	$(INSTALL) -m 644 VERSION ${prefix}/${docdir}
+
+	# install manpages
+	test -d ${prefix}/${mandir} || mkdir -p ${prefix}/${mandir};
+	$(INSTALL) -m 644 doc/*.1 ${prefix}/${mandir}
+

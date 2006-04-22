@@ -19,7 +19,7 @@ tied notes longer than 8 quarter notes are ignored.
 
 
 
-#define VERSION "1.27 July 02 2005"
+#define VERSION "1.37 April 22 2006"
 #include <stdio.h>
 #include <stdlib.h>
 #include "abc.h"
@@ -73,7 +73,9 @@ int imaxnotes = 2000; /* maximum limits of this program */
 int imaxbars  = 200;
 int resolution = 12; /* default to 1/8 note resolution */
 int anymode = 0; /* default to matching all bars */
-int con = 0; /* default to no contour matching */
+int ignore_simple = 0; /* ignore simple bars */
+int con = 0; /* default for no contour matching */
+int qnt = 0; /* pitch difference quantization flag */
 int brief = 0;  /* set brief to 1 if brief mode */
 int cthresh =3; /* minimum number of common bars to report */ 
 int fileindex = -1;
@@ -119,7 +121,7 @@ int mpitch_samples[4000],msamples[160]; /* maximum number of bars 160 */
 
 
 
-make_note_representation (int *nnotes, int *nbars, int maxnotes, int maxbars,
+void make_note_representation (int *nnotes, int *nbars, int maxnotes, int maxbars,
  int *timesig_num, int *timesig_denom, int *barlineptr, int *notelength,
  int *midipitch)
 /* converts between the feature,pitch,num,denom representation to the
@@ -220,28 +222,34 @@ if (pitch > 1) return 1;
 return 0;
 }
 
-compute_pitch_contour(int nnotes, int * midipitch)
+void compute_pitch_contour(int nnotes, int * midipitch , int qntflag)
 {
-/* computes the pitch difference relative to the first musical note in 
+/* computes the pitch difference between adjacent musical note in 
    midipitch array. To avoid confusion between the rest indication = 0
    we add an offset of 256 to the difference if the note is not a rest.
-   This allows performing a match when the key signature of the
-   input is unknown.
 */
-int pitchref;
+int lastpitch,newpitch;
 int i;
-pitchref = 0;
+lastpitch = -1;
 for (i=0;i<nnotes;i++)
   {
   if (midipitch[i] == -1000 || midipitch[i] == 0) continue; /* ignore all bar line  and rest indications */
-  if (pitchref == 0) pitchref = midipitch[i] - 256;
-  midipitch[i] = midipitch[i] - pitchref;
-  /*midipitch[i] = quantize5(midipitch[i]);*/
+  if (lastpitch <0) {
+      lastpitch = midipitch[i];
+      midipitch[i] = -1;
+      continue;} /* -1 means unknown and matches anything */
+
+  else {newpitch = midipitch[i];
+        midipitch[i] = midipitch[i] - lastpitch;
+        lastpitch = newpitch;
+        if (qntflag > 0) midipitch[i] = quantize5(midipitch[i]);
+        midipitch[i] += 256;
+        } 
   }
 }
 
 
-init_histograms()
+void init_histograms()
 {
 int i;
 for (i=0;i<128;i++) pitch_histogram[i] =0;
@@ -249,7 +257,7 @@ for (i=0;i<144;i++) length_histogram[i] =0;
 }
  
 
-compute_note_histograms()
+void compute_note_histograms()
 {
 int i,index;
 for (i=0;i<innotes;i++)
@@ -263,7 +271,7 @@ for (i=0;i<innotes;i++)
 }
 
 
-print_length_histogram()
+void print_length_histogram()
 {
 int i;
 printf("\n\nlength histogram\n");
@@ -273,7 +281,7 @@ for (i=0;i<144;i++)
 }
 
 
-print_pitch_histogram()
+void print_pitch_histogram()
 {
 int i;
 printf("\n\npitch_histogram\n");
@@ -331,6 +339,7 @@ while  (t < lastpulse) {
   while  (t >= integrated_length[i]) i++;
   while  (t <  integrated_length[i]) {
   if (midipitch[i+offset] == 0) pitch_samples[j] = 0;  /* REST don't transpose */
+  if (midipitch[i+offset] == -1) pitch_samples[j] = -1; /*also doesn't tranpose*/
   else pitch_samples[j] = midipitch[i+offset]+delta_pitch;
   j++;
   t += resolution;
@@ -351,21 +360,27 @@ return lastsample;
 
 int match_notes (int mbar_number, int ibar_number, int delta_pitch)
 {
-int i;
+int i,notes;
 int ioffset,moffset;
 ioffset = ibarlineptr[ibar_number];
 moffset = mbarlineptr[mbar_number];
 i = 0;
+notes = 0;
 if (mmidipitch[moffset] == -1000) return -1; /* in case nothing in bar */
 while (mmidipitch[i+moffset] !=  -1000)
   {
   if (imidipitch[i+ioffset] == 0 && mmidipitch[i + moffset] == 0)
     {i++;  continue;} /* REST -- don't transpose */
+  if (imidipitch[i+ioffset] == -1 || mmidipitch[i+moffset] == -1)
+    {i++; continue;} /* unknown contour note */
   if (imidipitch[i+ioffset] != (mmidipitch[i + moffset] - delta_pitch) ) return -1;
   if (inotelength[i+ioffset] != mnotelength[i + moffset]) return -1;
   i++;
+  notes++;
   }
 if (imidipitch[i+ioffset] != -1000) return -1; /* in case template has fewer notes*/
+if (notes > 2) return 0;
+if (ignore_simple) return -1;
 return 0;
 }
 
@@ -374,29 +389,26 @@ return 0;
 int match_samples (int mmsamples, int * mmpitch_samples)
 {
 int i,dif;
+int changes;
+int last_sample;
 if (mmsamples != isamples) return -1;
 dif = 0;
-for (i=0;i<mmsamples;i++)
- if (ipitch_samples[i] != mmpitch_samples[i]) dif++;
-return dif;
-}
-
-
-int contour_match_samples (int mmsamples, int * mmpitch_samples, int * firstnote)
-/* This function is needed to convert the pitch relative to the first note */
-{
-int i,dif,shifted_pitch;
-if (mmsamples != isamples) return -1;
-dif = 0;
+changes = 0;
+last_sample = ipitch_samples[i];
 for (i=0;i<mmsamples;i++) {
- if (*firstnote == 0 && ipitch_samples[i] != -1000 && ipitch_samples[i] != 0)
-    *firstnote = ipitch_samples[i] - 256;
-/* if (ipitch_samples[i] == 0)  continue;   ignore rests */
- shifted_pitch = ipitch_samples[i] - (*firstnote);
- if (shifted_pitch != mmpitch_samples[i]) dif++;
+ if (ipitch_samples[i] == -1 || mmpitch_samples[i] == -1) 
+      continue; /* unknown contour note (ie. 1st note) */
+ if (ipitch_samples[i] != mmpitch_samples[i]) {dif++; break;}
+ if (last_sample != ipitch_samples[i]) {
+    last_sample = ipitch_samples[i];
+    changes++;
+    }
  }
+if (ignore_simple && changes < 3) return -1;
 return dif;
 }
+
+
 
 
 int match_any_bars (int mnbars,int barnum,int delta_key, int nmatches)
@@ -487,83 +499,6 @@ return kmatches+nmatches;
 
 
 
-/*  contour match  - matches notes relative to first note in first bar  */
-/*--------------------------------------------------------------------- */
-
-
-int contour_match_notes (int mbar_number, int ibar_number, int *firstnote)
-{
-int i;
-int ioffset,moffset;
-int shifted_pitch;
-ioffset = ibarlineptr[ibar_number];
-moffset = mbarlineptr[mbar_number];
-i = 0;
-if (mmidipitch[moffset] == -1000) return -1; /* in case nothing in bar */
-while (mmidipitch[i+moffset] !=  -1000)
-  {
-  if (imidipitch[i+ioffset] == 0 && mmidipitch[i + moffset] == 0)
-    {i++;  continue;} /* REST -- don't transpose */
-  if (*firstnote == 0 && imidipitch[i+ioffset] != -1000 && imidipitch[i+ioffset] != 0)
-     *firstnote = imidipitch[i+ioffset] - 256;
-  shifted_pitch = imidipitch[i+ioffset] - (*firstnote);
-  if (shifted_pitch != mmidipitch[i + moffset] ) return -1;
-  if (inotelength[i+ioffset] != mnotelength[i + moffset]) return -1;
-  i++;
-  }
-return 0;
-}
-
-
-
-
-
-
-int contour_match_all_bars (int mnbars,int barnum, int nmatches)
-{
-/* This function tries to match all the bars in the match template
-   with  the bars in the bars in the tune. All the template bars
-   must match in the same sequence in order to be reported.
-   The function runs in one of two modes depending on whether
-   an exact match is performed or a sample (image) match is performed.
-   This depends on whether resolution is 0 or larger.
-*/
-int kmatches;
-int moffset,j,dif;
-int matched_bars[20];
-int firstnote;
-/* for every bar in match sample */
-kmatches = 0;
-moffset  = 0;
-firstnote = 0;
-if (resolution > 0) 
-      for(j=0;j<mnbars;j++) {
-        isamples = make_bar_image(barnum+j,resolution,ipitch_samples,
-         ibarlineptr, inotelength, innotes, 0, imidipitch);
-         dif = contour_match_samples(msamples[j],mpitch_samples + moffset, &firstnote);
-         moffset += msamples[j];
-         if (dif != 0) return nmatches;
-         matched_bars[kmatches] = barnum+j-1;
-         kmatches++;
-         if(j>15) break;
-         }
-else
-      for(j=0;j<mnbars;j++) {
-         dif = contour_match_notes(j,barnum+j,&firstnote);
-         if (dif != 0) return nmatches;
-         matched_bars[kmatches] = barnum+j-1;
-         kmatches++;
-         if(j>15) break;
-         }
-      
-if (nmatches == 0) printf("%d %d ",fileindex,xrefno); 
-for (j=0;j<kmatches;j++)
-  printf("%d ",matched_bars[j]);
-return kmatches+nmatches;
-}
-
-
-
 void find_and_report_matching_bars 
 /* top level matching function. Distinguishes between,
    any, all and contour modes and calls the right functions
@@ -571,8 +506,13 @@ void find_and_report_matching_bars
   (int mnbars, int inbars, int transpose, int anymode, int con)
   {
   int i, nmatches;
+  if (con == 1) {
+       compute_pitch_contour(innotes, imidipitch, qnt);
+       transpose = 0; /* not applicable here */
+       }
     nmatches = 0;
     if (anymode == 1)  /* match any bars in template */
+      
       for (i=1;i<inbars;i++) {
            nmatches = match_any_bars(mnbars,i,transpose,nmatches); 
         }
@@ -580,14 +520,11 @@ void find_and_report_matching_bars
     else   /* match all bars in template in sequence */
 
       for (i=1;i<=inbars-mnbars;i++) {
-        if(con ==1)  
-           nmatches = contour_match_all_bars(mnbars,i,nmatches); 
-        else
            nmatches = match_all_bars(mnbars,i,transpose,nmatches); 
-        }
+           }
 
     if (nmatches > 0) printf("\n");
-}  
+  }  
 
 
 int find_first_matching_tune_bar (int mbarnumber, int inbars, int transpose)
@@ -686,7 +623,9 @@ char **filename;
   j = getarg("-r",argc,argv);
   if (j != -1) sscanf(argv[j],"%d",&resolution);
   if (getarg("-a",argc,argv) != -1) anymode = 1;
+  if (getarg("-ign",argc,argv) != -1) ignore_simple = 1;
   if (getarg("-con",argc,argv) != -1) con = 1;
+  if (getarg("-qnt",argc,argv) != -1) {qnt = 1; con =1;}
   j =getarg("-br",argc,argv);
   if (j != -1) {
     sscanf(argv[j],"%d",&cthresh); 
@@ -718,6 +657,8 @@ char **filename;
     printf("        -v selects verbose option\n");
     printf("        -r resolution for matching\n");
     printf("        -con  pitch contour match\n");
+    printf("        -qnt contour quantization\n");
+    printf("        -ign  ignore simple bars\n");
     printf("        -a report any matching bars (default all bars)\n");
     printf("        -br %%d only report number of matched bars when\n\
 	    above given threshold\n");
@@ -785,10 +726,10 @@ if (!(phist | lhist)) {  /* if not computing histograms */
     mbarlineptr[i-j] = mbarlineptr[i];
   mnbars -= j; 
 
-/* if con == 1 compute the pitch relative to the first note 
+/* if con == 1 compute the pitch differences
    int the template.
 */
-  if (con == 1) compute_pitch_contour(mnnotes, mmidipitch);
+ if (con == 1) compute_pitch_contour(mnnotes,mmidipitch,qnt);
   moffset=0;
 /* if not exact match, i.e. resolution > 0 compute to an
    sample representation of the template.
