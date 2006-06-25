@@ -989,6 +989,8 @@ notated. This can be achieved with
 %%MIDI ratio 3 1
 
 
+Arpegiation:
+
 With version 1.54 Dec 4 2004 of abc2midi, notes in chords
 (eg. [FAc]) are not played in the same instant but offsetted
 and shortened by 10 MIDI time units. Thus the first note
@@ -1013,6 +1015,30 @@ chords.
 where n is a small number. This is similar to above, except the
 delay of each note in the chord varies randomly between 0 and n-1.
 Therefore each chord is played differently.
+
+
+Articulation:
+
+%%MIDI trim x/y
+
+where x and y are two numbers. This command controls the articulation
+of notes and chords by placing silent gaps between the notes.  The length
+of these gaps is determined by x/y and the unit length specified by the L:
+command. These gaps are produced by shortening the notes by the same amount.
+If the note is already shorter than the specified gap, then the gap
+is set to half the length of the note.  The fraction x/y indicates 
+a note duration in the same manner as specified in the abc file.
+The actual duration is based on the unit length specified by the
+L: field command. It is recommended that x/y be a fraction close
+to zero. The denominator, y does not need to be a power of 2.
+Trimming is disabled inside slurs as indicated by parentheses.
+
+You can turn off all note trimming by setting x to 0,
+eg 0/1. By default, note trimming is turned off at the beginning
+of a tune or voice command.
+
+
+
 
 To avoid the problem of breaking up a music line
 in order to place a %%MIDI command, for example, 

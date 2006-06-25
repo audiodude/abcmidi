@@ -4717,3 +4717,37 @@ support for this (including a length specifier - is this
 used by anything?) to parseabc.c and abc2abc.c; stubs in
 the other modules including yaps mean they behave as before.
 
+
+June 7 2006
+
+Midicopy: new runtime parameters -frombeat and -tobeat were
+introduced to copy a selection of a midi file.
+
+Midifile: new code was introduced to process an individual
+track in a multitrack MIDI file.
+
+
+June 25 2006
+
+Abc2midi: added new feature to provide control over the 
+articulation of the notes. The feature %%MIDI trim x/y
+introduces a gap between notes of duration x/y where x/y
+is the fraction of the unit note length defined by the
+L: field command. This gap is made by shortening every
+note by this amount whenever it is possible. If the note
+is too short, the gap is reduced. Slurs indicated by
+parentheses in the music body temporarily disable this feature.
+
+Implementation: added a new feature SETTRIM in abc.h.
+Added new globals variables trim,trim_num,trim_denom in
+genmidi.c. Added additional code in writetrack to initialize
+trim_num,trim_denom and to modify notes for switch conditions
+NOTE:, CHORDOFF:, and CHORDOFFEX. Added new switch state
+in writetrack to interpret feature SETTRIM.  In store.c, added more
+code in event_specific to interpret the %%MIDI trim command.
+
+Abcguide.txt, abc2midi.1 and demo.abc were all updated.
+
+Thanks to Jacques Le Normand for the suggestion.
+
+

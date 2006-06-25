@@ -1,5 +1,5 @@
 /*
- * midifile 1.13
+ * midifile 1.15
  * 
  * Read and write a MIDI file.  Externally-assigned function pointers are 
  * called upon recognizing things in the file.
@@ -140,6 +140,26 @@ void mfread()     /* The only non-static function in this file. */
     }
 }
 
+
+void mfreadtrk(itrack)     /* The only non-static function in this file. */
+{
+  int track,ok;
+  if ( Mf_getc == NULLFUNC )
+    mferror("mfprocess() called without setting Mf_getc");
+
+  readheader();
+  track =1;
+  ok = 1;
+  for (track==1;track<=ntrks && ok == 1;track++)
+   {if (track == itrack)
+     ok = readtrack();
+    else
+     ok = skiptrack();
+   }
+}
+
+
+
 /* for backward compatibility with the original lib */
 void midifile()
 {
@@ -199,7 +219,20 @@ readheader()    /* read a header chunk */
     (void) egetc();
 }
 
-static int
+int skiptrack ()
+{
+int byte;
+if ( readmt("MTrk") == EOF )
+    return(0);
+Mf_toberead = read32bit();
+byte = 0;
+while (Mf_toberead && byte != EOF) byte = egetc();
+if (byte == EOF) {mferror("premature EOF\n"); return(0);}
+return(1);
+}
+
+
+int
 readtrack()     /* read a track chunk */
 {
   /* This array is indexed by the high half of a status byte.  It's */

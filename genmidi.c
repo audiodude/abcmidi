@@ -50,6 +50,8 @@
 #include <stdlib.h>
 
 void   single_note_tuning_change(int midikey, float midipitch);
+void addfract(int *xnum, int *xdenom, int a, int b);
+
 
 float ranfrac ()
 {
@@ -188,6 +190,9 @@ int staticnotedelay=10;  /* introduced to handle !arpeggio! */
 int staticchordattack=0;
 int totalnotedelay=0; /* total time delay introduced */
 
+int trim=1; /* to add a silent gap to note */
+int trim_num = 1;
+int trim_denom = 5;
 
 /* channel 10 drum handling */
 int drum_map[256];
@@ -221,6 +226,19 @@ int *a, *b;
   *a = (*a/n)*sign;
   *b = *b/n;
 }
+
+int gtfract(anum,adenom, bnum,bdenom)
+/* compare two fractions  anum/adenom > bnum/bdenom */
+/* returns   (a > b)                       */
+{
+  if ((anum*bdenom) > (bnum*adenom)) {
+    return(1);
+  } else {
+    return(0);
+  };
+}
+
+
 
 void addunits(a, b)
 /* add a/b to the count of units in the bar */
@@ -1949,6 +1967,7 @@ int xtrack;
   int state[5];
   int texton;
   int timekey;
+  int note_num,note_denom;
 
 /*  printf("writing track %d\n",xtrack); */
 
@@ -1969,6 +1988,8 @@ int xtrack;
   maxpass = 2;
   notedelay = staticnotedelay;
   chordattack = staticchordattack;
+  trim_num = 0;
+  trim_denom = 1;
   if (karaoke) {
     if (xtrack < 3)                  
        karaokestarttrack(xtrack);
@@ -2075,8 +2096,19 @@ int xtrack;
         /* set up note off */
        if (channel == 9) 
         addtoQ(num[j], denom[j], drum_map[pitch[j]], channel, -totalnotedelay -1);
-        else addtoQ(num[j], denom[j], pitch[j] + transpose +global_transpose, channel, -totalnotedelay -1);
-      };
+        else {
+            note_num = num[j];
+            note_denom = denom[j];
+            if (trim && !slurring) {
+              if (gtfract(note_num,note_denom,trim_num,trim_denom))
+                addfract(&note_num,&note_denom,-trim_num,trim_denom);
+             else
+                addfract(&note_num,&note_denom,-note_num,trim_denom*2);
+               }
+            addtoQ(note_num, note_denom, pitch[j] + transpose +global_transpose,
+               channel, -totalnotedelay -1);
+             }
+};
       if (!inchord) {
         delay(num[j], denom[j], 0);
         addunits(num[j], denom[j]);
@@ -2128,7 +2160,13 @@ int xtrack;
       notecount=0;
       notedelay = staticnotedelay;
       chordattack = staticchordattack;
-      addunits(num[j], denom[j]);
+      note_num = num[j];
+      note_denom = denom[j];
+      if (trim) {
+          if (gtfract(note_num,note_denom,trim_num,trim_denom))
+              addfract(&note_num,&note_denom,-trim_num,trim_denom);
+      }
+      addunits(note_num, note_denom);
       break;
     case LINENUM:
       /* get correct line number for diagnostics */
@@ -2428,6 +2466,12 @@ int xtrack;
           mf_write_meta_event(delta_time, copyright_notice, atext[pitch[j]], strlen (atext[pitch[j]]));
        }
       break;
+    case SETTRIM:
+       trim_num = num[j];
+       trim_denom = denom[j];
+       if (trim_num > 0) trim = 1;
+       else trim = 0;
+       break;
     default:
       break;
     };
@@ -2462,7 +2506,7 @@ char *featname[] = {
 "OLDTIE", "TEXT", "SLUR_ON", "SLUR_OFF",
 "TIE", "CLOSE_TIE", "TITLE", "CHANNEL",
 "TRANSPOSE", "RTRANSPOSE", "GTRANSPOSE", "GRACEON",
-"GRACEOFF", "SETGRACE", "SETC", "GCHORD",
+"GRACEOFF", "SETGRACE", "SETC", "SETTRIM", "GCHORD",
 "GCHORDON", "GCHORDOFF", "VOICE", "CHORDON",
 "CHORDOFF", "CHORDOFFEX", "DRUMON", "DRUMOFF",
 "DRONEON", "DRONEOFF", "SLUR_TIE", "TNOTE",

@@ -31,7 +31,7 @@
  * Wil Macaulay (wil@syndesis.com)
  */
 
-#define VERSION "1.84 April 22 2006"
+#define VERSION "1.85 June 25 2006"
 /* enables reading V: indication in header */
 #define XTEN1 1
 /*#define INFO_OCTAVE_DISABLED 1*/
@@ -225,7 +225,7 @@ int header_time_num,header_time_denom;
 int dummydecorator[DECSIZE]; /* used in event_chord */
 extern char* featname[];
 
-static void addfract(int *xnum, int *xdenom, int a, int b);
+void addfract(int *xnum, int *xdenom, int a, int b);
 static void zerobar();
 static void addfeature(int f,int p,int n,int d);
 static void replacefeature(int f, int p, int n, int d, int loc);
@@ -1194,6 +1194,7 @@ char *package, *s;
       };
       done = 1;
     };
+
     if (strcmp(command, "grace") == 0) {
       int a, b;
       char msg[40];
@@ -1236,6 +1237,22 @@ char *package, *s;
       else {gfact_denom = b; gfact_method = 0;}
       done = 1;
     }
+
+
+    if (strcmp(command, "trim") == 0) {
+      int a, b;
+      char msg[40];
+      skipspace(&p);
+      a = readnump(&p);
+      if (*p != '/') {
+        event_error("Need / in MIDI trim command (eg trim 1/4)");
+      } else {
+        p = p + 1;
+        b = readnump(&p);
+        addfeature(SETTRIM, 1, a, b);
+      };
+      done = 1;
+    };
 
     if (strcmp(command, "gchordon") == 0) {
       addfeature(GCHORDON, 0, 0, 0);
@@ -3162,7 +3179,7 @@ char c;
   return (putc(c,fp));
 }
 
-static void addfract(int *xnum, int *xdenom, int a, int b)
+void addfract(int *xnum, int *xdenom, int a, int b)
 /* add a/b to the count of units in the bar */
 {
   *xnum = (*xnum)*b + a*(*xdenom);

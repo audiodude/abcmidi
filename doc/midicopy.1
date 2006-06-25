@@ -5,6 +5,7 @@ midicopy \- Copy selected track, channel, time interval of a MIDI file to anothe
 \fBmidicopy\fP [\fB-ver\fP] [\fB-trks\fP \fIn1,n2,..\fP] [\fB-chans\fP \fIn1,n2,...\fP]\
     [\fB-from\fP \fIn (in midi ticks)\fP] [\fB-to\fP \fIn (in midi ticks)\fP]\
     [\fB-fromsec %f\fP \fIn (in seconds)\fP] [\fB-tosec\fP \fIn (in seconds)\fP]\
+    [\fB-frombeat %f\fP \fIn (in beats)\fP] [\fB-tosec\fP \fIn (in beats)\fP]\
     [\fB-replace\fP \fItrk,loc,val\fP] \fIinput.mid output.mid\fP
 .SH "DESCRIPTION"
 .PP
@@ -40,6 +41,15 @@ of the MIDI file.
 .TP
 .B -to n
 Stops copying all events after midi pulse number n. By default
+the file is copied to the end.
+.TP
+.B -frombeat n
+The program will copy all MIDI commands starting from quarter beat
+number n. By default it will start from time zero or the beginning
+of the MIDI file.
+.TP
+.B -tobeat n
+Stops copying all events after quarter beat number n. By default
 the file is copied to the end.
 .TP
 .B -fromsec n

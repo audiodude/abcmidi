@@ -39,7 +39,7 @@
 
 
 
-#define VERSION "1.04 September 13 2005"
+#define VERSION "1.05 June 07 2006"
 #include "midicopy.h"
 #define NULLFUNC 0
 #define NULL 0
@@ -1334,7 +1334,8 @@ int main(int argc, char *argv[])
     int byteloc, trknum;
     int repflag;
     char val;
-
+    float start_beat,end_beat;
+    int use_beats;
 
     for (i = 0; i < 32; i++)
 	tocopy[i] = 1;
@@ -1347,6 +1348,7 @@ int main(int argc, char *argv[])
     start_seconds = -1.0;
     end_seconds = -1.0;
     use_seconds = 0;
+    use_beats = 0;
 
     if (getarg("-ver", argc, argv) >= 0) {
 	printf("%s\n",VERSION);
@@ -1367,6 +1369,8 @@ int main(int argc, char *argv[])
 	printf("-to n   (in midi ticks)\n");
         printf("-fromsec %%f (in seconds)\n");
         printf("-tosec %%f (in seconds)\n");
+        printf("-frombeat %%f\n");
+        printf("-tobeat %%f\n");
         printf("-replace trk,loc,val\n");
 	exit(1);
     }
@@ -1424,6 +1428,18 @@ int main(int argc, char *argv[])
          use_seconds = 1;
         }
 
+    arg = getarg("-frombeat",argc, argv);
+    if (arg >= 0)
+       {sscanf(argv[arg], "%f", &start_beat);
+        use_beats = 1;
+       }
+
+    arg = getarg("-tobeat",argc, argv);
+    if (arg >= 0)
+       {sscanf(argv[arg], "%f", &end_beat);
+        use_beats = 1;
+       }
+
     repflag = getarg("-replace", argc, argv);
     if (repflag >= 0)
 	sscanf(argv[repflag], "%d,%d,%c", &trknum, &byteloc, &val);
@@ -1439,6 +1455,12 @@ int main(int argc, char *argv[])
 	exit(2);
     }
     readheader();
+    if (use_beats) {
+      if (start_beat < 0.0) start_tick = -1;
+      else start_tick = division*start_beat;
+      if (end_beat < 0.0) end_tick = -1;
+      else end_tick = division*end_beat;
+      }
     if (mtrks == 0)
 	mtrks = ntrks;
     mf_write_header_chunk(format, mtrks, division);

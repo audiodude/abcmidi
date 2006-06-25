@@ -1,4 +1,4 @@
-.TH ABC2MIDI 1 "6 November 2005"
+.TH ABC2MIDI 1 "25 June 2006"
 .SH NAME
 \fBabc2midi\fP \- converts abc file to MIDI file(s)
 .SH SYNOPSIS
@@ -390,6 +390,24 @@ Like above except that the delay is a random variable uniformly
 distributed between 0 and n-1.
 
 .PP
+%%MIDI trim x/y
+.PP
+where x and y are two numbers. This command controls the articulation
+of notes and chords by placing silent gaps between the notes.  The length
+of these gaps is determined by x/y and the unit length specified by the L:
+command. These gaps are produced by shortening the notes by the same amount.
+If the note is already shorter than the specified gap, then the gap
+is set to half the length of the note.  The fraction x/y indicates
+a note duration in the same manner as specified in the abc file.
+The actual duration is based on the unit length specified by the
+L: field command. It is recommended that x/y be a fraction close
+to zero. Note trimming is disabled inside slurs as specified by
+parentheses. You can turn off all note trimming by setting x to 0,
+eg 0/1. By default, note trimming is turned off at the beginning
+of a tune or voice command.
+
+
+.PP
 %%MIDI drummap note midipitch
 .PP
 Please see abcguide.txt.
@@ -421,7 +439,7 @@ James Allwright <J.R.Allwright@westminster.ac.uk>
 .SH SUPPORTED
  by Seymour Shlien <seymour.shlien@crc.ca>
 .SH VERSION
-This man page describes abc2midi version 1.73  August 13 2005.
+This man page describes abc2midi version 1.85  June 25 2006.
 .SH COPYRIGHT
 Copyright 1999 James Allwright
 .PP
