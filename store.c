@@ -106,8 +106,8 @@ int active_pitchbend;
 int microtone=0;
 int temperament = 0;
 #define SEMISIZE 4096
-double octave_size = 12*SEMISIZE;
-double fifth_size = 7*SEMISIZE; /* default to 12-edo */
+int octave_size = 12*SEMISIZE;
+int fifth_size = 7*SEMISIZE; /* default to 12-edo */
 
 
 
@@ -1267,7 +1267,6 @@ char *package, *s;
 
     if (strcmp(command, "trim") == 0) {
       int a, b;
-      char msg[40];
       skipspace(&p);
       a = readnump(&p);
       if (*p != '/') {
@@ -2922,8 +2921,7 @@ int xoctave, n, m;
   int octave;
   int pitch;
   int pitch_noacc;
-  int lsb,msb,dummy;
-  char buff[MAXLINE];
+  int dummy;
 
   if (v == NULL) {
     event_fatal_error("Internal error - no voice allocated");
@@ -2961,16 +2959,6 @@ int xoctave, n, m;
 /* linear temperament support */
   pitch = pitchof_b(note, accidental, mult, octave, 1,&active_pitchbend);
   pitch_noacc = pitchof_b(note, 0, 0, octave, 0,&dummy);
-  /* [SS] 2006-09-30
-  if (temperament) {
-      lsb = active_pitchbend&127;
-      lsb = lsb<0?0:(lsb>127?127:lsb); 
-      msb = active_pitchbend>>7;
-      msb = msb<0?0:(msb>127?127:msb);
-      sprintf(buff,"pitchbend %d %d",lsb,msb);
-      event_specific("MIDI", buff);
-     } 
-  */
 
   if (decorators[FERMATA]) {
     if(fermata_fixed) addfract(&num,&denom,1,1);
@@ -3027,22 +3015,13 @@ int xoctave, n, m;
 
 void event_microtone(int dir, int a, int b)
 {
-int bend, lsb, msb;
-char buff[MAXLINE];
+int bend;
 /* pitchwheel range +/- 2 semitones according to General MIDI
 specification*/
 /* resolution of 14bit -- order of bytes is inverted for pitchbend */
 bend = dir*((int)(4096.0*a/b))+8192; /* sorry for the float! */
 bend = bend<0?0:(bend>16383?16383:bend);
 active_pitchbend = bend;
-/* [SS] 2006-09-30
-lsb = bend&127;
-lsb = lsb<0?0:(lsb>127?127:lsb); 
-msb = bend>>7;
-msb = msb<0?0:(msb>127?127:msb);
-sprintf(buff,"pitchbend %d %d",lsb,msb);
-event_specific("MIDI", buff);
-*/
 microtone=1;
 }
 
