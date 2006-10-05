@@ -1,11 +1,11 @@
 abcMIDI :   abc <-> MIDI conversion utilities
 
 midi2abc version 2.88 July  23 2005
-abc2midi version 1.85 June  25 2006
-abc2abc  version 1.48 Apr   21 2006
-yaps     version 1.44 Apr   22 2006
-abcmatch version 1.37 Apr   22 2006
-midicopy version 1.05 Jun   07 2006
+abc2midi version 1.93 Oct   05 2006
+abc2abc  version 1.53 Sep   23 2006
+yaps     version 1.47 Sep   10 2006
+abcmatch version 1.40 Sep   10 2006
+midicopy version 1.10 Sep   22 2006
 
 24th January 2002
 
@@ -14,7 +14,7 @@ J.R.Allwright@westminster.ac.uk
 University of Westminster,
 London, UK
 
-June 2006
+October 2006
 
 Seymour Shlien
 seymour.shlien@crc.ca
@@ -239,7 +239,7 @@ Usage : abc2midi <abc file> [reference number] [-c] [-v] [-o filename]
         -t selects filenames derived from tune titles
         -n <limit> set limit for length of filename stem
         -RS use 3:1 instead of 2:1 for broken rhythms
-        -NAR suppress assuming repeat warning
+        -quiet suppress some common warnings
         -Q <tempo> in quarter notes/minute
         -NFNP ignore all dynamic indications (!f! !ff! !p! etc.)
         -ver prints version number and exits

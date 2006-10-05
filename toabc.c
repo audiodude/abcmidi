@@ -21,7 +21,7 @@
 
 /* back-end for outputting (possibly modified) abc */
 
-#define VERSION "1.48 April 21 2006"
+#define VERSION "1.53 September 23 2006"
 
 /* for Microsoft Visual C++ 6.0 or higher */
 #ifdef _MSC_VER
@@ -130,6 +130,8 @@ struct abctext{ /* linked list used to store output before re-formatting */
 struct abctext* head;
 struct abctext* tail;
 
+extern char *mode[];
+extern int modekeyshift[];
 int basemap[7], workmap[7]; /* for -nokey and pitchof() */
 int  workmul[7];
 void copymap();
@@ -702,7 +704,7 @@ void event_blankline()
 {
   output_on = 1;
   close_newabc();
-  if (newbreaks) printf("\n");
+/*  if (newbreaks) [SS] 2006-09-23 */  printf("\n");
   xinbody = 0;
   xinhead = 0;
   parseroff();
@@ -1326,12 +1328,34 @@ static void start_tune()
   next_voice = this_voice;
 }
 
+void compute_keysignature (int sf,int modeindex, char * keysignature)
+{
+char  *notes[7] = {"A","B","C","D","E","F","G"};
+int sf2note[12] = {3,0,4,1,5,2,6,3,0,4,1,5};
+char *flatsharp[2] = {"b","#"};
+int index0,index1,index;
+int map[7];
 
-void event_key(sharps, s, minor, modmap, modmul, gotkey, gotclef, clefname,
+index0 = sf+5; /* -5 <sf < 4 */
+index1 = sf2note[index0]; /* major key */
+index =index1 + modekeyshift[modeindex]; /* key for mode */
+setmap(sf,map); /* determine the flats and sharps for major key */
+if (index > 6) index -=7;
+strcpy(keysignature,notes[index]);
+/* propogate sharp or flat to key signature of mode */
+if (map[index] == -1) strcat(keysignature,flatsharp[0]);
+if (map[index] == 1) strcat(keysignature,flatsharp[1]);
+/* add mode name */
+strcat(keysignature,mode[modeindex]);
+}
+
+
+
+void event_key(sharps, s, modeindex, modmap, modmul, gotkey, gotclef, clefname,
           octave, xtranspose, gotoctave, gottranspose)
 int sharps;
 char *s;
-int minor;
+int modeindex;
 char modmap[7];
 int modmul[7];
 int gotkey, gotclef;
@@ -1340,7 +1364,8 @@ int octave, xtranspose, gotoctave, gottranspose;
 {
   static char* keys[12] = {"Db", "Ab", "Eb", "Bb", "F", "C", 
                            "G", "D", "A", "E", "B", "F#"};
-
+  char signature[10];
+ 
   if (gotkey) {
     setmap(sharps, basemap); /* required by copymap and pitchof */
     setmap(sharps, oldtable);
@@ -1363,10 +1388,15 @@ int octave, xtranspose, gotoctave, gottranspose;
   };
   emit_string("K:");
   if (transpose == 0 && !nokey) {
-    emit_string(s);
+    emit_string(s); 
   } else {
     if (gotkey) {
-      if (!nokey) emit_string(keys[newkey+5]);
+      if (!nokey) {
+        /*  emit_string(keys[newkey+5]); */
+        compute_keysignature(newkey,modeindex,signature); /* [SS] 2006-07-30*/
+        emit_string(signature); /* [SS] 2006-07-30 */
+        }
+
       else if (usekey == 0) emit_string("none"); 
       else emit_string(keys[usekey+5]);
       if (gotclef) {
@@ -1426,10 +1456,11 @@ int decorators[DECSIZE];
     chordcount = chordcount + 1;
   };
   if ((!ingrace) && (!inchord || (chordcount == 1))) {
-    addunits(n, m);
-  };
-  if (tuplenotes != 0) {
-    event_error("Rest not allowed in tuple");
+    if (!tuplenotes) addunits(n, m);
+    else {
+      addunits(n*tuplefactor.num, m*tuplefactor.denom);
+      tuplenotes = tuplenotes - 1;
+      }
   };
 }
 

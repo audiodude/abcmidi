@@ -22,7 +22,7 @@
 /* yapstree.c - back-end for abc parser. */
 /* generates a data structure suitable for typeset music */
 
-#define VERSION "1.44 April 22 2006"
+#define VERSION "1.47 September 10 2006"
 #include <stdio.h>
 #ifdef USE_INDEX
 #define strchr index
@@ -2032,10 +2032,10 @@ static void start_body()
   };
 }
 
-void event_true_key(sharps, s, minor, modmap, modmul)
+void event_true_key(sharps, s, modeindex, modmap, modmul)
 int sharps;
 char *s;
-int minor;
+int modeindex; /* 0 major, 1,2,3 minor, 4 locrian, etc.  */
 char modmap[7];
 int modmul[7];
 /* key detected in K: field */
@@ -2043,6 +2043,9 @@ int modmul[7];
   char basemap[7];
   int basemul[7];
   struct key* akey;
+  int minor;
+  minor =0;
+  if (modeindex >0 && modeindex <4) minor = 1;
 
   setmap(sharps, basemap, basemul);
   altermap(basemap, basemul, modmap, modmul);

@@ -93,7 +93,7 @@ extern void event_timesig(int n, int m, int dochecking);
 extern void event_octave(int num, int local);
 extern void event_info_key(char *key, char *value);
 extern void event_info(char *s);
-extern void event_key(int sharps, char *s, int minor, 
+extern void event_key(int sharps, char *s, int modeindex, 
                char modmap[7], int modmul[7],
                int gotkey, int gotclef, char *clefname,
                int octave, int transpose, int gotoctave, int gottranspose);

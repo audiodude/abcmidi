@@ -72,12 +72,14 @@ extern int chordnotes[MAXCHORDNAMES][6];
 extern int chordlen[MAXCHORDNAMES];
 
 /* general purpose storage structure */
-/* these 4 arrays are used to hold the tune data */
+/* these 5 arrays are used to hold the tune data */
 extern int *pitch, *num, *denom;
+extern int *bentpitch;
 extern featuretype *feature;
 extern int notes;
 
 extern int verbose;
+extern int quiet;
 extern int sf, mi;
 extern int gchordvoice, wordvoice, drumvoice, dronevoice;
 extern int gchordtrack, drumtrack, dronetrack;
@@ -127,9 +129,13 @@ char beatstring[100];
 int nbeats;
 int channel, program;
 #define MAXCHANS 16
-int channels[MAXCHANS + 3];
+int channels[MAXCHANS+3];
+int current_pitchbend[MAXCHANS];
+int current_program[MAXCHANS];
 int  transpose;
 int  global_transpose=0;
+int chordchannels[10]; /* for handling in voice chords and microtones */
+int nchordchannels = 0;
 
 /* karaoke handling */
 extern int karaoke, wcount;
@@ -431,7 +437,7 @@ int pass;
         if (pass == 2) {
           strcat(msg, " in repeat");
         };
-        event_warning(msg);
+        if (quiet == -1) event_warning(msg);
       };
     };
   };
@@ -492,15 +498,20 @@ static int findchannel()
   int j;
 
   j = 0;
-  while ((j<MAXCHANS+3) && (channels[j] != 0)) {
+  while ((j<MAXCHANS) && (channels[j] != 0)) {
     j = j + 1;
   };
-  if (j >= MAXCHANS + 3) {
+  if (j >= MAXCHANS) {
     event_error("Too many channels required");
     j = 0;
   };
+  channels[j] = 1;
   return (j);
 }
+
+
+
+
 
 static void fillvoice(partno, xtrack, voice)
 /* check length of this voice at the end of a part */
@@ -713,7 +724,7 @@ int startline;
   int inwline, extending;
   int versecount, target;
 
-  /* printf("findwline called with %d\n", startline); */
+/*   printf("findwline called with %d\n", startline); */
   done = 0;
   inwline = 0;
   nowordline = 0;
@@ -1176,29 +1187,36 @@ int sf, mi;
   mf_write_meta_event(0L, key_signature, data, 2);
 }
 
-static void midi_noteon(delta_time, pitch, chan, vel)
+static void midi_noteon(delta_time, pitch, pitchbend, chan, vel)
 /* write note on event to MIDI file */
 long delta_time;
-int pitch, chan, vel;
+int pitch, chan, vel, pitchbend;
 {
   char data[2];
 #ifdef NOFTELL
   extern int nullpass;
 #endif
-  if (chan == 9) data[0] = (char) drum_map[pitch];
-  else           data[0] = (char) pitch;
-  data[1] = (char) vel;
   if (channel >= MAXCHANS) {
     event_error("Channel limit exceeded\n");
   } else {
+  if(pitchbend < 0 || pitchbend > 16383) {
+      event_error("Internal error concerning pitch bend on note on.");
+    }
+
+   if(pitchbend != current_pitchbend[channel] && chan != 9) {
+      data[0] = (char) (pitchbend&0x7f);
+      data[1] = (char) ((pitchbend>>7)&0x7f);
+      mf_write_midi_event(delta_time,pitch_wheel,chan,data,2);
+      delta_time=0;
+      current_pitchbend[channel] = pitchbend;
+    }
+
+
+    if (chan == 9) data[0] = (char) drum_map[pitch];
+    else           data[0] = (char) pitch;
+    data[1] = (char) vel;
+
     mf_write_midi_event(delta_time, note_on, chan, data, 2);
-#ifdef NOFTELL
-    if (nullpass != 1) {
-      channels[chan] = 1;
-    };
-#else
-    channels[chan] = 1;
-#endif
   };
 }
 
@@ -1219,11 +1237,11 @@ int pitch, chan;
   };
 }
 
-static void noteon_data(pitch, channel, vel)
+static void noteon_data(pitch, pitchbend, channel, vel)
 /* write note to MIDI file and adjust delta_time */
-int pitch, channel, vel;
+int pitch, pitchbend, channel, vel;
 {
-  midi_noteon(delta_time, pitch, channel, vel);
+  midi_noteon(delta_time, pitch, pitchbend, channel, vel);
   tracklen = tracklen + delta_time;
   delta_time = 0L;
 }
@@ -1273,7 +1291,7 @@ int n;
       };
     }
   if (channel == 9) noteon_data(pitch[n],channel,vel);
-  else noteon_data(pitch[n] + transpose + global_transpose, channel, vel);
+  else noteon_data(pitch[n] + transpose + global_transpose, bentpitch[n], channel, vel);
 }
 
 static void write_program(p, channel)
@@ -1330,6 +1348,28 @@ int *chan;
   return(p);
 }
 
+static int makechordchannels (n)
+int n;
+{
+/* Allocate channels for in voice chords containing microtones. */
+int i,chan;
+int prog;
+if (n < 1) return -1;
+if (n > 9) n = 9;
+prog = current_program[channel];
+chordchannels[0] = channel; /* save active channel number */
+for (i=1; i<=n; i++) {
+  chan = findchannel();
+  chordchannels[i] = chan;
+  write_program(prog, chan);
+  if (verbose) {printf("assigning channel %d to chordchannel\n",chan);
+               }
+  }
+nchordchannels = n;
+return n;
+}
+
+
 static void dodeferred(s,noteson)
 /* handle package-specific command which has been held over to be */
 /* interpreted as MIDI is being generated */
@@ -1346,6 +1386,14 @@ int noteson;
   readstr(command, &p, 40);
   skipspace(&p);
   done = 0;
+
+  if (strcmp(command,"makechordchannels") == 0) {
+    skipspace(&p);
+    val = readnump(&p);
+    makechordchannels(val);
+    done = 1;
+    } 
+
   if (strcmp(command, "program") == 0) {
     int chan, prog;
 
@@ -1358,6 +1406,7 @@ int noteson;
       prog = readnump(&p);
     };
     if (noteson) {
+      current_program[chan] = prog;
       write_program(prog, chan);
     };
     done = 1;
@@ -1601,15 +1650,15 @@ int a, b, c;
   timestep(dt, 0);
 }
 
-static void save_note(num, denom, pitch, chan, vel)
+static void save_note(num, denom, pitch, pitchbend, chan, vel)
 /* output 'note on' queue up 'note off' for later */
 int num, denom;
-int pitch, chan, vel;
+int pitch, pitchbend, chan, vel;
 {
 /* don't transpose drum channel */
-  if(chan == 9) {noteon_data(pitch, chan, vel);
+  if(chan == 9) {noteon_data(pitch, pitchbend, chan, vel);
                 addtoQ(num, denom, pitch, chan, -1);}
-  else  {noteon_data(pitch + transpose + global_transpose, chan, vel);
+  else  {noteon_data(pitch + transpose + global_transpose, pitchbend, chan, vel);
         addtoQ(num, denom, pitch + transpose + global_transpose, chan, -1);}
 }
 
@@ -1618,6 +1667,7 @@ int pitch, chan, vel;
 
 void dogchords(i)
 /* generate accompaniment notes */
+/* note no microtone or linear temperament support ! */
 int i;
 {
 int j;
@@ -1638,14 +1688,14 @@ int j;
     case 'f':
       if (g_started && gchords) {
         /* do fundamental */
-        save_note(g_num*len, g_denom, basepitch+fun.base, fun.chan, fun.vel);
+        save_note(g_num*len, g_denom, basepitch+fun.base, 8192, fun.chan, fun.vel);
       };
       break;
 
     case 'b':
       if (g_started && gchords) {
         /* do fundamental */
-        save_note(g_num*len, g_denom, basepitch+fun.base, fun.chan, fun.vel);
+        save_note(g_num*len, g_denom, basepitch+fun.base, 8192, fun.chan, fun.vel);
       };
 /* There is no break here so the switch statement continues into the next case 'c' */ 
 
@@ -1653,49 +1703,49 @@ int j;
       /* do chord with handling of any 'inversion' note */
       if (g_started && gchords) {
           for(j=0;j<gchordnotes_size;j++)
-          save_note(g_num*len, g_denom, gchordnotes[j], 
+          save_note(g_num*len, g_denom, gchordnotes[j], 8192,
 		    gchord.chan, gchord.vel);
         };
       break;
 
     case 'g':
       if(gchordnotes_size>0 && g_started && gchords)
-        save_note(g_num*len, g_denom, gchordnotes[0],gchord.chan, gchord.vel); 
+        save_note(g_num*len, g_denom, gchordnotes[0], 8192, gchord.chan, gchord.vel); 
       break;
 
     case 'h':
       if(gchordnotes_size >1 && g_started && gchords)
-        save_note(g_num*len, g_denom, gchordnotes[1],gchord.chan, gchord.vel); 
+        save_note(g_num*len, g_denom, gchordnotes[1], 8192, gchord.chan, gchord.vel); 
       break;
 
     case 'i':
       if(gchordnotes_size >2 && g_started && gchords)
-        save_note(g_num*len, g_denom, gchordnotes[2],gchord.chan, gchord.vel); 
+        save_note(g_num*len, g_denom, gchordnotes[2], 8192, gchord.chan, gchord.vel); 
       break;
 
     case 'j':
       if(gchordnotes_size >3 && g_started && gchords)
-        save_note(g_num*len, g_denom, gchordnotes[3],gchord.chan, gchord.vel); 
+        save_note(g_num*len, g_denom, gchordnotes[3], 8192, gchord.chan, gchord.vel); 
       break;
 
     case 'G':
       if(gchordnotes_size>0 && g_started && gchords)
-        save_note(g_num*len, g_denom, gchordnotes[0]-12,gchord.chan, gchord.vel); 
+        save_note(g_num*len, g_denom, gchordnotes[0]-12, 8192, gchord.chan, gchord.vel); 
       break;
 
     case 'H':
       if(gchordnotes_size >1 && g_started && gchords)
-        save_note(g_num*len, g_denom, gchordnotes[1]-12,gchord.chan, gchord.vel); 
+        save_note(g_num*len, g_denom, gchordnotes[1]-12, 8192, gchord.chan, gchord.vel); 
       break;
 
     case 'I':
       if(gchordnotes_size >2 && g_started && gchords)
-        save_note(g_num*len, g_denom, gchordnotes[2]-12,gchord.chan, gchord.vel); 
+        save_note(g_num*len, g_denom, gchordnotes[2]-12, 8192, gchord.chan, gchord.vel); 
       break;
 
     case 'J':
       if(gchordnotes_size >3 && g_started && gchords)
-        save_note(g_num*len, g_denom, gchordnotes[3]-12,gchord.chan, gchord.vel); 
+        save_note(g_num*len, g_denom, gchordnotes[3]-12, 8192, gchord.chan, gchord.vel); 
       break;
 
 
@@ -1883,6 +1933,7 @@ static void parse_drummap(char **s)
   drum_map[midipitch] = mapto;
 }
 
+ 
 static void starttrack()
 /* called at the start of each MIDI track. Sets up all necessary default */
 /* and initial values */
@@ -1909,6 +1960,7 @@ static void starttrack()
   Qinit();
   if (noteson) {
     channel = findchannel();
+    if(verbose) printf("assigning channel %d to voice\n",channel);
   } else {
     /* set to valid value just in case - should never be used */
     channel = 0;
@@ -1919,20 +1971,15 @@ static void starttrack()
     fun.vel = 80;
     gchord.base = 48;
     gchord.vel = 75;
-    if (noteson) {
-      channels[channel] = 1;
-    };
     fun.chan = findchannel();
-    channels[fun.chan] = 1;
+    if(verbose) printf("assigning channel %d to bass voice\n",fun.chan);
     gchord.chan = findchannel();
-    channels[fun.chan] = 0;
-    if (noteson) {
-      channels[channel] = 0;
-    };
+    if(verbose) printf("assigning channel %d to chordal accompaniment\n",gchord.chan);
   };
   if (droneon) {
     drone.event =0;
     drone.chan = findchannel();
+    if(verbose) printf("assigning channel %d to drone\n",drone.chan);
     drone.prog  = 70; /* bassoon */
     drone.vel1 =  80;
     drone.pitch1 = 45;
@@ -1942,7 +1989,14 @@ static void starttrack()
 
   g_next = 0;
   partrepno = 0;
-  thismline = -1;
+/*  thismline = -1; [SS] july 28 2006 */
+/* This disables the message 
+ First lyrics line must come after first music line 
+When a new voice is started with an inline voice command
+eg [V:1] abcd| etc. Unfortunately this  is part of the 
+abc2-draft.html standard. See canzonetta.abc in
+abc.sourceforge.net/standard/abc2-draft.html 
+*/
   thiswline = -1;
   nowordline = 0;
   waitforbar = 0;
@@ -1951,6 +2005,10 @@ static void starttrack()
   for (i=0; i<26; i++) {
     part_count[i] = 0;
   };
+  for (i=0;i<MAXCHANS;i++) {
+    current_pitchbend[i] = 8192; /* neutral */
+    current_program[i] = 0; /* acoustic piano */
+    }
 }
 
 long writetrack(xtrack)
@@ -1968,6 +2026,7 @@ int xtrack;
   int texton;
   int timekey;
   int note_num,note_denom;
+  int graceflag;
 
 /*  printf("writing track %d\n",xtrack); */
 
@@ -1990,6 +2049,7 @@ int xtrack;
   chordattack = staticchordattack;
   trim_num = 0;
   trim_denom = 1;
+  graceflag = 0;
   if (karaoke) {
     if (xtrack < 3)                  
        karaokestarttrack(xtrack);
@@ -2041,6 +2101,7 @@ int xtrack;
     temposon = 0;
     trackvoice = drumvoice;
    };
+  nchordchannels = 0;
   if (verbose) {
     printf("track %d, voice %d\n", xtrack, trackvoice);
   };
@@ -2083,6 +2144,7 @@ int xtrack;
       if (wordson) {
         write_syllable(j);
       };
+      if (nchordchannels >0) channel = chordchannels[0];
       if (noteson) {
         if (inchord) {
            notecount++;
@@ -2090,6 +2152,8 @@ int xtrack;
                 if(chordattack > 0) notedelay = (int) (chordattack*ranfrac());
                 delta_time += notedelay;
                 totalnotedelay += notedelay;
+                if (notecount <= nchordchannels+1)
+                     channel = chordchannels[notecount-1];
                 }
            }
         noteon(j);
@@ -2099,11 +2163,15 @@ int xtrack;
         else {
             note_num = num[j];
             note_denom = denom[j];
-            if (trim && !slurring) {
+/* turn off slurring prematurely two separate two slurs in a row */
+            if (slurring && feature[j+1] == SLUR_OFF) slurring = 0;
+            if (trim && !slurring && !graceflag) {
               if (gtfract(note_num,note_denom,trim_num,trim_denom))
                 addfract(&note_num,&note_denom,-trim_num,trim_denom);
-             else
-                addfract(&note_num,&note_denom,-note_num,trim_denom*2);
+        /*     else
+                addfract(&note_num,&note_denom,-note_num,trim_denom*2); */
+                /* no note trimming for short notes 2006-08-05 at
+                   Hudson Lacerda's request.                             */
                }
             addtoQ(note_num, note_denom, pitch[j] + transpose +global_transpose,
                channel, -totalnotedelay -1);
@@ -2402,6 +2470,12 @@ int xtrack;
        notedelay = 3*staticnotedelay;
        chordattack=3*staticchordattack;
        break;
+    case GRACEON:
+       graceflag = 1;
+       break;
+    case GRACEOFF:
+       graceflag = 0;
+       break;
     case DYNAMIC:
       dodeferred(atext[pitch[j]],noteson);
       break;
@@ -2524,7 +2598,7 @@ int i,j;
 for (i=from;i<=to;i++)
   {
   j = feature[i]; 
-  printf("%d %s   %d %d/%d \n",i,featname[j],pitch[i],num[i],denom[i]);
+  printf("%d %s   %d %d %d %d \n",i,featname[j],pitch[i],bentpitch[i],num[i],denom[i]);
   }
 }
 

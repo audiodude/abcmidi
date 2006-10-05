@@ -211,11 +211,22 @@ by a fraction using the same convention as note length (described
 below). Abcmidi uses the same microtone syntax as abcm2ps.
 (See features.txt in the abcm2ps distribution.)
 
-Note that unlike accidentals, microtones do not propogate across a measure.
+Note that unlike accidentals, microtones do not propagate across a measure.
 Microtones are implemented using the MIDI pitchwheel command. Since the
 pitchwheel affects all notes played on a specific channel, a microtone
 applied to any note in a chord specified by rectangular brackets,
-(eg. [ACE]) will apply to all the notes in the chord.
+(eg. [ACE]) will apply to all the notes in the chord. Microtone
+accidentals override any sharpening or flattening induced by 
+key signatures. To illustrate
+
+K: G
+^/F F ^^/2F F|
+
+does the following. Even though the key of G major causes F to be
+sharp,  the first note is F natural raised by half a semitone.
+This effects the next note in making it F natural instead of F#.
+The third note is F# raised by a half a semitone. The F#  propagates
+to the last note making it also F#.
 
 In accordance to the General MIDI recommendations the pitch range
 of the pitchwheel is set to plus or minus two semitones. Therefore
@@ -1057,6 +1068,57 @@ block, for example
 (Spaces are optional.)
 Other examples can be seen in the file CHANGES in the
 following the March 25 2005 entry.
+
+
+
+%%MIDI temperamentlinear octave_cents fifth_cents
+
+This command allows you to change the temperament of the 
+scale. Octave_cents specifies the size of an octave
+in cents of a semitone or 1/1200 of an octave. Fifth_cents
+specifies in the size of a fifth (normally 700 cents).
+For example:
+%%MIDI temperament 1200.5 698.0
+will produce a slightly stretched scale with narrowed fifths.
+
+More details on linear tempered scales can be found 
+on the site
+http://www.xs4all.nl/~huygensf/scala/
+The pitch of each note is modified using a MIDI pitchbend
+command to comply with the scale. In order to handle chords,
+each note of the chord must be played on a different MIDI
+channel.
+
+The normal musical scale has a temperament of
+%%MIDI temperamentlinear 1200 700
+
+but to avoid unnecessary pitchbends you should restore
+to the normal temperament using the  command
+%%MIDI termperamentnormal
+
+
+
+%%MIDI makechordchannels n
+
+If you are not modifying the temperament or inserting
+microtones you can ignore this command.  Normally
+in voice chords containing microtones e.g. [_/CE_/G] 
+will not be handled correctly because all the notes in the
+chord are played on the same MIDI channel. If you include
+the above command where n here is 2, then two separate channels
+will be allocated for playing the other two notes in this chord.
+These separate channels will be used whether the pitches
+of the notes are bent or not. Once you allocate those channels
+with this command, they are no longer available and since
+there are only 16 MIDI channels you can easily run out.
+Furthermore, you need to allocate chordchannels for any
+other voices which may have in voice chords. The channel
+allocation process will automatically propogate the program
+assignment (musical instrument) to the other chordchannels,
+so be sure you set the program before using this command.
+If you need to change the program assignments, you can
+find out the channel numbers that were assigned by running
+abc2midi in verbose mode using the -v command. 
 
 
 

@@ -4751,3 +4751,552 @@ Abcguide.txt, abc2midi.1 and demo.abc were all updated.
 Thanks to Jacques Le Normand for the suggestion.
 
 
+July 28 2006
+
+Midicopy still does not extract correctly a segment from
+some MIDI files when it is specified using the -fromsec and
+-tosec parameters. This occurs in multitrack MIDI files 
+containing numerous tempo changes. Time units measured in seconds
+do not correspond between tracks.
+
+It was decided to completely change the method of handling 
+segment extraction when time is specified in seconds. It is
+assumed that all tempo indications are placed in track 1 of 
+the MIDI file. Tempo changes in other tracks are ignored.
+An initial pass is made through track 1 to extract all the 
+tempo changes and store them in an array.  This is used to
+map time in seconds to MIDI pulses or ticks.  The -fromsec
+and -tosec parameters are converted to pulse units using 
+this mapping. The program then extracts the MIDI information
+falling in this time interval.
+
+
+July 28 2006
+
+Abc2midi returns the error message
+"First lyrics line must come after first music line"
+when processin abc files with lyrics and inline voice commands.
+For example
+
+X:1
+T: inline voice
+M:5/8
+L: 1/8
+K:G
+[V:1] cdefg
+w: c d e f g
+[V:2] cdefg
+w: c d e f g
+
+I have little experience with lyrics in abc files.
+
+The problem is caused by the fact that the inline voice command
+starts up a new track which resets the variable thismline = -1.
+This indicates that a new music line was not yet encountered
+for this voice.  If the notes cdefg were placed in a separate
+line, then the variable thismline was be set to the current
+line number and everything would be all right. Unfortunately,
+this is not the case and the abc2 draft standard excepts this
+syntax. See abc.sourceforge.net/standard/abc2-draft.html and
+in particular the canzonetta.abc file on that page.
+There is no easy way of detecting music information at this
+point other than updating the variable thismline every
+time a note is processed. Instead, I disabled the error
+message by commenting the line 
+thismline = -1;   
+in genmidi.c. Hopefully, this does not cause more damage.
+
+
+July 29 2006
+
+Abc2midi: microtones (pitchbend) does not work correctly for tied
+notes enclosed in a slur. For example:
+
+X:1
+T:bad pitchbend when tie + slur
+M:4/4
+L:1/8
+K:C
+"^Bad pitch bend when tie+slur"
+(^1/2C- ^1/2C =C) a- a4 |
+  ^1/2C- ^1/2C =C  a- a4
+
+In the first bar, the tie does not work correctly and 3 notes are
+heard instead of two. Furthermore the first note does not have
+a pitchbend applied. In the second bar, the notes are played
+correctly.
+
+Analysis: running midi2abc with the -mftext option provides
+some indication of the problem.
+
+  0.00   Pitchbnd  1 msb=0 lsb=80
+  0.00   Note on   1   c4 105
+  0.00   Pitchbnd  1 msb=0 lsb=64
+  0.50   Pitchbnd  1 msb=0 lsb=80
+  1.00   Note off  1   c4   0
+  1.00   Pitchbnd  1 msb=0 lsb=64
+  1.00   Note on   1   c4  80
+  1.50   Note off  1   c4   0
+
+The pitchbend is set prior to the note but is restored to
+normal immediately after the note is started (time 0.00).
+This is similar to the problem fixed on January 14 2006
+(see this file). This suggests a problem with the function
+dotie(). Further analysis, revealed that the parser
+places a SLUR_TIE after every NOTE feature when the notes
+are enclosed inside a slur. The SLUR_TIE is not needed
+by abcmidi but it is used by yaps. Unfortunately, the
+function dotie() does not expect a SLUR_TIE to appear between
+the TNOTE and DYNAMIC so it fails to remove the DYNAMIC
+feature.
+
+Fix: A similar patch described in Janurary 14 2006 was
+added to dotie().
+
+
+July 29 2006
+
+Abc2midi: It is not commonly known that accidentals are  not
+supposed to propogate across octaves. In the follow example,
+
+X:1
+T: accidentals and octaves
+M: 2/4
+L: 1/8
+K: G
+C_EDe|C_EDe-|e2^f2|-f2g2|
+
+Abc2midi normally also flattens the e; however, technically
+it should not be doing this. Accidentals only apply to a
+specific note and should not affect the same pitch class 
+in other octaves.
+
+Fix: in store.c workmap and workmul are now doubly indexed
+arrays. The second index keeps track of the octave. 
+
+
+July 30 2006
+
+Abc2abc transposition always reverts to the major key signature
+when it does a transposition.
+
+Analysis: the code in toabc.c represents the key signature
+in terms of the number of sharps and flats and ignores the
+mode of the original key signature when it is doing a transposition.
+
+Fix: (1) In parseabc.c the index to the array mode[] is
+saved in the variable modeindex when a mode string is matched.
+(2) in order to pass modeindex to event_key, the function
+parameter minor was replaced with modeindex and the
+variable minor was turned into a local variable which is
+computed from modeindex. This was done in all files where
+event_key is defined -- store.c, yapstree.c, matchsup.c,
+and toabc.c. (In actual fact, the variable minor was only
+used in store.c to set the minor flag in the MIDI file.)
+(3) A new function called compute_keysignature() from
+the sharps/flat representation and modeindex was added to
+toabc.c. (4) event_key in toabc uses this function to
+compute the correct key signature.
+
+
+August 04 2006
+
+abc2midi: The treatment of microtones and microtones with
+accidentals for key signatures other than C major (or A minor)
+has been changed. Prior to version 1.87, if the music
+was in the key of G major, ^1/2F would be interpreted
+as raising F# by a half a microtone. Now the underlying
+key signature is ignored and the microtone is treated as
+a pure accidental. Thus ^1/2F raised F and not F#.
+Hopefully this is more intuitive.
+
+Thus accidentals and microtones are assumed to be
+applied to the natural form of the note irrespective
+of the key signature or the status of previous
+notes in the measure. However, accidentals other
+than microtones can still propagate to notes which
+do not have accidentals. To illustrate consider
+the following in the key of C major.
+
+    _E _1/2E E __1/2E E|
+
+The second E is treated as E natural flattend by 1/2
+microtone because E is always assumed to be in its natural
+form when preceded by any accidentals. Since the assumed
+natural of the second E propagates,  the third E is also
+E natural and not Eb. The last note is Eb reduced by half
+a semitone.  The last E would be played as Eb.  See 
+abcguide.txt for another example.
+
+
+Implementation turned out to be easier than expected. A 
+new global (int microtone) was added to store.c. It is
+set to 1 by event_microtone and reset to 0 by event_normal_tone.
+The function pitchof(), now does not apply the active
+flats or sharps (of the key signature) or accidentals when
+the microtone global is set.
+
+
+August 4 2006
+
+Abcm2ps has introduced an extension of the w: field
+referenced by the s: field which accepts ~ as a decoration.
+Unfortunately, the parser in the abcmidi package does not
+recognize this field command and attempts to treat the
+line as a music line. As a result a file such as
+ 
+
+X:1
+T: s
+K:C
+    cd ef  g4       | ag      ab   c'4 |]
+s: "C"~~~ "C/E"    | "Dm/F"* "G7" "C"
+s: .. ..  +tenuto+ | ..      ..   !fermata!
+s: "_5"***"_6"     | "_6"*   "_7"*"_5"
+s: "_3"***"_3"     | "_3"*   "_5;3"*"_3"
+
+produces many error messages
+Error in line 6 : Single colon in bar
+Error in line 6 : Malformed note : expecting a-g or A-G
+Error in line 6 : *'s in middle of line ignored
+Error in line 7 : Single colon in bar
+Error in line 7 : Malformed note : expecting a-g or A-G
+Error in line 7 : Malformed note : expecting a-g or A-G
+Warning in line 7 : instruction !tenuto! ignored
+Error in line 7 : Malformed note : expecting a-g or A-G
+Error in line 7 : Malformed note : expecting a-g or A-G
+Error in line 8 : Single colon in bar
+Error in line 8 : *'s in middle of line ignored
+Error in line 8 : *'s in middle of line ignored
+Error in line 8 : *'s in middle of line ignored
+Error in line 9 : Single colon in bar
+Error in line 9 : *'s in middle of line ignored
+Error in line 9 : *'s in middle of line ignored
+Error in line 9 : *'s in middle of line ignored
+
+Similar error messages occur for other abcmidi programs,
+for example yaps, abc2abc etc.
+
+Fix: in parseabc.c: for function
+parsefield add s to the strchr string
+  if ((inbody) && (strchr("EIKLMPQTVdwW", key) == NULL)) {
+    event_error("Field not allowed in tune body");
+and also added the case in the switch statement
+  case 's':
+    break;
+finally in parseline() added s to the strchr string in
+  if (strchr("ABCDEFGHIKLMNOPQRSTUVdwWXZ", *p) != NULL) {
+    q = p + 1;
+
+
+August 05 2006
+
+Note trimming introduced in June 25 2006 causes loss of
+synchronization between two voices when notes are contained
+in a grace sequence. 
+Fix: introduced a variable graceflag into writetrack() in
+genmidi.c. The flag is set when GRACE feature is encountered
+and restored to zero when GRACEOFF feature is encountered.
+Note trimming is disabled inside a grace sequence. Also
+note trimming is shutoff for short notes.
+In order to separate two slurs in a row, trimming is
+restored for the last note in a slur.
+
+August 08 2006
+
+Abc2midi: split voices. In the file
+
+X:1
+T: also D sharp continues in next bar
+K:C
+M:4/4
+L:1/4
+C^DEF & C4 | CDEF |
+
+The D in the second bar is sharpened.
+Fix: added call to function copymap() in the function
+recurse_back_to_original_voice().
+
+August 29 2006
+
+Abc2abc: handling of rests in tuples causes an error
+message. The problem does not occur in abc2midi
+or yaps. For example
+
+X:1
+T: tuple rests
+M: 2/4
+L: 1/8
+K: C
+G4|(3z2A2B2|F4|
+
+abc2abc tuplerest.abc -t 3
+X: 1
+T:tuple rests
+M:2/4
+L:1/8
+K:C
+G4|
+%Error : Rest not allowed in tuple
+ (3z2A2B2
+%Error : Bar 1 is 7/12 not 2/4
+|F4
+%Error : Bar 2 is 1/3 not 2/4
+|
+
+
+Fix: in the function event_rest in toabc.c, the
+error message was removed and the beat counter
+code was modified to consider tuples.  
+
+
+September 09 2006
+
+abc2abc: voice numbers not processed correctly. In the
+following example:
+
+X:1
+T:voices
+M: 2/4
+L:1/8
+K:G
+V:1
+ABCD|abcd|
+V:1I
+ABCD|abcd|
+
+V:1I was changed to V:1 producing an incorrect abc file.
+Analysis: the parsevoice() in parseabc decides whether the
+voice number is a number or a label based on the first character.
+Since the first character of 1I is a number it treats it as
+a number and ignores the I. This problem also persists for
+abc2midi and yaps.
+Fix: created a new function isnumberp(s) which determines
+whether the string s is a positive integer number and
+returns 0 for no and 1 for yes; replaced the original test
+with this function. 
+
+September 11 2006
+
+Abc2midi: handling of trilled notes for broken rhythms is not
+correct. In the following example,
+
+X:1
+T: trill
+M: 2/4
+L: 1/8
+K:C
+%%MIDI ratio 3 1
+TE>G TF3/A/|
+
+the length of notes E and G are not adjusted for broken rhythm
+and remain as equal values.
+Analysis:  the handling of broken rhythms is fairly complicated
+in the file store.c.  The location of E and G are maintained by 
+variables v->thisstart, v->thisend and v->laststart, v->lastend
+by the functions marknotestart, marknoteend and marknote. (This
+also allows the handling of chords too.) When a > or < is encountered
+a number of flags (brokenpending, brokentype, brokenmult) are set
+by the function event_broken.  The function marknotend checks
+these flags and calls brokenadjust to adjust the lengths of E and
+G using the stored variables v->thisstart, v->thisend etc.  Trilling
+is handled by the function dotrill() which expands note E
+into a sequence of notes whose length depends upon the length
+of E and the tempo. In this example, the expansion is done
+prior to encountering the broken rhythm indicator >. After
+G is encountered, the lengths of the notes are adjusted for
+broken rhythm. Unfortunately, there is a bug in dotrill, and
+marknotestart was called for the last note in the trill sequence
+rather than the first note.  The problem was fixed by changing
+this code. Note that in the above example, the number of notes
+in the trilled E and the trilled F are different. This is
+because E is not effectively expanded until after it was
+trilled. There is no easy fix to this problem other than 
+avoiding mixing notations for broken rhythms.
+
+trilled F are different.
+than the first note
+
+
+September 22 2006
+
+Midicopy.c: to avoid problems with some systems, the byte val
+for the runtime string 
+-replace trk,loc,val
+is read as an integer (%d) instead of a char (%c).
+
+ 
+September 22 2006
+
+Abc2abc, abc2midi etc. does not recognize "clef=G".
+In the following example,
+
+
+X:1
+T: clef problem
+M: 2/4
+L: 1/8
+K: Am clef=G
+"Am"ABCD|ABCD|
+
+The following message appears:
+%Warning : cannot recognize clef indication
+K:Am clef=G
+
+Fix: added checks for clef=g or clef=G in the function
+isclef() in parseabc.c
+
+
+September 23 2006
+
+Abc2abc removes blank lines from abc files. (These
+blank lines are usually to encircle comments between
+tunes in a multitune file.
+
+Analysis: whenever parseline() (in parseabc.c) detects
+a blank line, it calls event_blankline(). In abc2abc,
+event_blankline() only emits a blank line if the flag
+newbreaks is set. Unfortunately, this parameter is used
+for another purpose (i.e. reformating an abc file with
+new linebreaks every X bars using the -n X runtime parameter).
+This has nothing to do with handling already existing
+blank lines. Since event_blankline is called only when
+there is a blank line, it appears that the condition on
+the flag newbreaks should not be present.
+
+Fix: the condition statement was removed. A blank line will
+always be issued. Note that event_blankline also closes
+the tune and parser for that tune as usual.
+
+
+
+September 25 2006
+
+Abc2midi: some users have complained about the unnecessary
+warnings and error messages issued by abc2midi. For example
+standard music practice does not require a leading repeat
+mark |: to be placed at the beginning of the sheet music and
+it is commonly left out in many abc transcriptions. Abc2midi
+typically warns the user that it has been left out but does
+the correct thing. Furthermore, the placement of a fermata sign
+will likely cause a message that a bar has too many beats.
+Too placate the users,
+
+I have introduced a new runtime parameter -quiet which will 
+suppress all these messages. 
+
+Note abc2midi parses the abc file in two passes and may not
+always handle assumed repeats correctly. For example if the
+tune begins with an anacrusis, abc2midi does not attempt
+to figure out whether the |: should be placed before or
+after the anacrusis. (This depends upon the placement of the
+end repeat.) In multipart files, abc2midi fails to place
+a starting repeat sign.
+
+In the case of multivoiced files, loss of synchronization between
+voices can occur because of user mistakes or because abc2midi made 
+the wrong assumption.  (For example, search for the word fermata 
+in this file.)
+
+Though attempts have been made to standardize the abc music notation
+language, it is a living language and various variants are introduced
+now and then. Abc files that have been notated many years ago are
+not updated to correct for the various problems that are introduced by
+these new features. There is a variety of software to process abc files,
+but many of the developers have moved to other things and fail to
+maintain their software.  Though these messages are an inconvenience
+to users they are useful in diagnosing problems when the MIDI file
+does not sound correctly.
+
+
+September 26 2006
+
+Abc2midi: now supports linear temperament scale using code contributed
+by Magnus Jonsson.  New %%MIDI commands are introduced to change the
+temperament.
+
+%%MIDI temperamentlinear octave_cents fifth_cents
+
+where the variables specify the size of an octave and size
+of a perfect fifth in cents where one cent is 1/100 of
+a semitone or 1/1200 of an octave.
+
+%%MIDI temperamentlinear 1200.0 700.0
+
+produces the equal tempered scale.
+
+%%MIDI temperamentlinear 1200.5 698
+
+produces a slightly stretched octaves and narrowed fifths.
+Quoting the Help for the program Scala 
+http://www.xs4all.nl/~huygensf/scala/
+
+A linear temperament is a cycle or chain of one particular interval,
+called the generator or formal fifth. Whenever by doing so a pitch
+originates that is outside the range of one formal octave (interval of
+equivalence), it is "wrapped" back inside by subtracting the formal
+octave value. Examples of this kind of scale are the Pythagorean scale
+generated by a pure fifth, and regular meantone scales.
+
+Implementation:
+store.c :
+  added new globals temperament, octave_size, fifth_size
+  which are set by %%MIDI temperamentlinear. Created a new function
+  pitchof_b() which is similar to function pitchof() but also returns
+  a pointer pitchbend. Pitchof_b() would eventually replace all calls
+  to pitchof(). The function pitchof_b() applies the linear temperament
+  scale if the global variable temperament is set. It updates the
+  pointer pitchbend unless it was already set by a microtone.
+
+  To store the pitchbend value of every note a new array bentpitch
+  was added to the other arrays (pitch, num, denom, feature).
+  The function event_note transfers the pitchbend value to bentpitch,
+  so it can be used by writetrack() in the second pass (in genmidi).
+
+  Other functions that had to be updated were doroll, dotrill, 
+  makecut, and doornament.
+
+genmidi.c :
+  Added global array current_pitchbend[], which maintains the
+  current pitchbend for each channel. It is initialized to 8192
+  (neutral value) by starttrack. The pitchbend value is now
+  transferred to the function midi_noteon(). It will issue
+  a pitchwheel command anytime a new pitchbend value occurs
+  for the specific channel. Other functions like noteon_data()
+  and save_note() also carry the parameter pitchbend.
+
+
+Limitations: linear temperament is not applied to guitar gchords.
+
+
+October 3 2006
+
+Abc2midi: in order that microtones are applied correctly to
+in voice chords such as [CEG], it is necessary that each note
+in the chord be played on a separate MIDI channel.  A new MIDI
+command "makechordchannels n" has been introduced for allocating
+MIDI channels specifically for the handling of chords. The
+value of n specifies the number of channels to be allocated.
+It should be one less the maximum number of notes in the chord.
+Note that since you have only 16 channels in a MIDI file and
+once the channel has been allocated it is unavailable for
+any other use. You need to do a separate allocation for each
+voice containing such chords.
+
+Implementation:
+In genmidi.c, introduced a global array chordchannels[] which
+is used to store the channel numbers for handling chords.
+chordchannel[0] is the channel number normally used for
+handling notes for that voice. Introduced a global integer
+nchordchannels storing the number of channels in chordchannels[].
+Created a new function makechordchannels() for assigning
+these channels to chordchannels[]. Makechordchannels also
+sets the channels program (musical instrument) to the current program
+for the voice. (If you need to know the channel numbers that
+have been assigned, run abc2midi with the -v option (verbosity)).
+Created another branch in the function dodeferred() for handling
+the MIDI command makechordchannels(). 
+
+
+
+

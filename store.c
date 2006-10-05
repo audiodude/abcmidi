@@ -31,7 +31,7 @@
  * Wil Macaulay (wil@syndesis.com)
  */
 
-#define VERSION "1.85 June 25 2006"
+#define VERSION "1.93 October 05 2006"
 /* enables reading V: indication in header */
 #define XTEN1 1
 /*#define INFO_OCTAVE_DISABLED 1*/
@@ -101,10 +101,20 @@ int ratio_a, ratio_b;
 int velocitychange = 15;
 int chordstart=0;
 
+/* microtonal support and scale temperament */
+int active_pitchbend;
+int microtone=0;
+int temperament = 0;
+#define SEMISIZE 4096
+double octave_size = 12*SEMISIZE;
+double fifth_size = 7*SEMISIZE; /* default to 12-edo */
+
+
+
 struct voicecontext {
   /* maps of accidentals for each stave line */
-  char basemap[7], workmap[7];
-  int  basemul[7], workmul[7];
+  char basemap[7], workmap[7][10];
+  int  basemul[7], workmul[7][10];
   int  keyset; /* flag to indicate whether key signature set */
   int default_length;
   int voiceno; /* voice number referenced by V: command. To avoid
@@ -157,6 +167,7 @@ int chordsnamed = 0;
 /* general purpose storage structure */
 int maxnotes;
 int *pitch, *num, *denom;
+int *bentpitch; /* needed for handling microtones */
 featuretype *feature;
 int *pitchline; /* introduced for handling ties */
 int notes;
@@ -171,8 +182,8 @@ int gchordvoice, wordvoice, drumvoice, dronevoice;
 int gchordtrack, drumtrack, dronetrack;
 int ratio_standard = -1; /* flag corresponding to -RS parameter */
 /* when ratio_standard != -1 the ratio for a>b is 3:1 instead of 2:1 */
-int assume_repeat_warning = -1; /* if not -1 Assuming rest warning is */
-                              /* suppressed.                        */
+int quiet = -1; /* if not -1 many common warnings and error messages */
+                /* are suppressed.                                   */
 int fermata_fixed = 0; /* flag on how to process fermata */
 
 /* Part handling */
@@ -235,13 +246,15 @@ extern long writetrack();
 void init_drum_map();
 static void fix_enclosed_note_lengths(int from, int end);
 static int patchup_chordtie(int chordstart,int chordend);
+static void copymap(struct voicecontext* v);
+
 
 static struct voicecontext* newvoice(n)
 /* allocate and initialize the data for a new voice */
 int n;
 {
   struct voicecontext *s;
-  int i;
+  int i,j;
 
   s = (struct voicecontext*) checkmalloc(sizeof(struct voicecontext));
   voicecount = voicecount + 1;
@@ -266,12 +279,14 @@ int n;
   s->fromsplitno = -1;  
   s->last_resync_point=0;
   s->next = NULL;
-  for (i=0; i<7; i++) {
-    s->basemap[i] = global.basemap[i];
-    s->basemul[i] = global.basemul[i];
-    s->workmap[i] = global.workmap[i];
-    s->workmul[i] = global.workmul[i];
-    };
+    for (i=0; i<7; i++) {
+      s->basemap[i] = global.basemap[i];
+      s->basemul[i] = global.basemul[i];
+      for (j=0;j<10;j++) {
+        s->workmap[i][j] = global.workmap[i][j];
+        s->workmul[i][j] = global.workmul[i][j];
+        };
+    }
   s->keyset = global.keyset;
   s->octaveshift = global.octaveshift;
   vaddr[voicecount] = s;
@@ -284,7 +299,7 @@ int n;
 {
   struct voicecontext *p;
   struct voicecontext *q;
-  int i;
+  int i,j;
 
   p = head;
   q = NULL;
@@ -309,8 +324,10 @@ int n;
     for (i=0; i<7; i++) {
       p->basemap[i] = global.basemap[i];
       p->basemul[i] = global.basemul[i];
-      p->workmap[i] = global.workmap[i];
-      p->workmul[i] = global.workmul[i];
+      for (j=0;j<10;j++) {
+        p->workmap[i][j] = global.workmap[i][j];
+        p->workmul[i][j] = global.workmul[i][j];
+        }
       };
     }
   return(p);
@@ -493,6 +510,7 @@ char **filename;
   pitch = checkmalloc(maxnotes*sizeof(int));
   num = checkmalloc(maxnotes*sizeof(int));
   denom = checkmalloc(maxnotes*sizeof(int));
+  bentpitch = checkmalloc(maxnotes*sizeof(int));
   feature = (featuretype*) checkmalloc(maxnotes*sizeof(featuretype));
   pitchline = checkmalloc(maxnotes*sizeof(int));
   for (j=0;j<DECSIZE;j++)  dummydecorator[j] = 0;
@@ -513,7 +531,7 @@ char **filename;
     printf("        -t selects filenames derived from tune titles\n");
     printf("        -n <limit> set limit for length of filename stem\n");
     printf("        -RS use 3:1 instead of 2:1 for broken rhythms\n");
-    printf("        -NAR suppress assuming repeat warning\n");
+    printf("        -quiet suppress some common warnings\n");
     printf("        -Q default tempo (quarter notes/minute)\n");
     printf("        -NFNP don't process !p! or !f!-like fields\n");
     printf("        -OCC old chord convention (eg. +CE+)\n");
@@ -579,7 +597,7 @@ char **filename;
     };
   };
   ratio_standard = getarg("-RS", argc, argv);
-  assume_repeat_warning  = getarg("-NAR", argc, argv);
+  quiet  = getarg("-quiet", argc, argv);
   dotune = 0;
   parseroff();
   setup_chordnames();
@@ -839,6 +857,7 @@ while (previous_voice >-1 && splitdepth > 0) {
   splitdepth--;
   }
 addfeature(VOICE, v->indexno, 0, 0);
+copymap(v);
 }
 
 
@@ -931,7 +950,7 @@ static int autoextend(maxnotes)
 int maxnotes;
 {
   int newlimit;
-  int *ptr,*ptr2;
+  int *ptr,*ptr2,*ptr3;
   featuretype *fptr;
   int i;
 
@@ -947,14 +966,18 @@ int maxnotes;
   feature = fptr;
   ptr = checkmalloc(newlimit*sizeof(int));
   ptr2 = checkmalloc(newlimit*sizeof(int));
+  ptr3 = checkmalloc(newlimit*sizeof(int));
   for(i=0;i<maxnotes;i++){
     ptr[i] = pitch[i];
     ptr2[i] = pitchline[i];
+    ptr3[i] = bentpitch[i];
   };
   free(pitch);
   free(pitchline);
+  free(bentpitch);
   pitch = ptr;
   pitchline = ptr2;
+  bentpitch = ptr3;
   ptr = checkmalloc(newlimit*sizeof(int));
   for(i=0;i<maxnotes;i++){
     ptr[i] = num[i];
@@ -1031,6 +1054,7 @@ int f,p,n,d,loc;
     feature[i] = feature[i-1];
     pitch[i] = pitch[i-1];
     pitchline[i] = pitchline[i-1];
+    bentpitch[i] = bentpitch[i-1];
     num[i] = num[i-1];
     denom[i] = denom[i-1];
     };
@@ -1039,6 +1063,7 @@ int f,p,n,d,loc;
   num[i]       = n;
   denom[i]     = d;
   pitchline[i] = 0;
+  bentpitch[i] = 0;
 }
 
 static void removefeature(loc)
@@ -1052,6 +1077,7 @@ int loc;
     num[i]     = num[i+1];
     denom[i]   = denom[i+1];
     pitchline[i] = pitchline[i+1];
+    bentpitch[i] = bentpitch[i+1];
     }
   notes--;
 }
@@ -1287,6 +1313,31 @@ char *package, *s;
       };
       done = 1;
     };
+
+
+  if (strcmp(command, "temperamentlinear") == 0) {
+      double octave_cents=0.0;
+      double fifth_cents=0.0;
+      temperament = 1;
+      middle_c = 60*SEMISIZE;
+
+      if (sscanf(p," %lf %lf ",&octave_cents,&fifth_cents) == 2) {
+        octave_size = (int)(octave_cents*SEMISIZE/100+0.5);
+        fifth_size = (int)(fifth_cents*SEMISIZE/100+0.5);
+      }
+      else {
+        event_error("Bad format for lineartemperament command");
+      }
+      done = 1;
+    }
+
+  if (strcmp(command, "temperamentnormal") == 0) {
+      temperament = 0;
+      event_normal_tone();
+      done = 1;
+      middle_c = 60;
+      }
+
 
     if (strcmp(command,"drumon") == 0) {
       addfeature(DRUMON, 0, 0, 0);
@@ -2599,6 +2650,7 @@ char *p;
 }
 
 static int pitchof(note, accidental, mult, octave, propogate_accs)
+/* This code is used for handling gchords */
 /* finds MIDI pitch value for note */
 /* if propogate_accs is 1, apply any accidental to all instances of  */
 /* that note in the bar. If propogate_accs is 0, accidental does not */
@@ -2618,19 +2670,92 @@ int propogate_accs;
   acc = accidental;
   mul = mult;
   noteno = (int)note - 'a';
-  if (acc == ' ') {
-    acc = v->workmap[noteno];
-    mul = v->workmul[noteno];
+  if (acc == ' ' && !microtone ) { 
+/* if microtone do not propogate accidentals to this
+   note.
+*/
+    acc = v->workmap[noteno][octave+4];
+    mul = v->workmul[noteno][octave+4];
   } else {
     if ((retain_accidentals) && (propogate_accs)) {
-      v->workmap[noteno] = acc;
-      v->workmul[noteno] = mul;
+      v->workmap[noteno][octave+4] = acc;
+      v->workmul[noteno][octave+4] = mul;
     };
   };
   if (acc == '^') p = p + mul;
   if (acc == '_') p = p - mul;
   return p + 12*octave + middle_c;
 }
+
+
+
+static int pitchof_b(note, accidental, mult, octave, propogate_accs,pitchbend)
+/* computes MIDI pitch for note. If global temperament is set,
+   it will apply a linear temperament and return a
+   pitchbend. If propogate_accs is 1, apply any accidental to all
+   instances of  that note in the bar. If propogate_accs is 0, 
+   accidental does not apply to other notes */
+char note, accidental;
+int mult, octave;
+int propogate_accs;
+int *pitchbend;
+{
+  int p;
+  char acc;
+  int mul, noteno;
+  int pitch4096,pitch,bend;
+
+  static int scale[7] = {0, 2, 4, 5, 7, 9, 11};
+  const int accidental_size = 7*fifth_size - 4*octave_size;
+  const int tscale[7] = {
+    0,
+    2*fifth_size-octave_size,
+    4*fifth_size-2*octave_size,
+    -1*fifth_size+octave_size,
+    fifth_size,
+    3*fifth_size-octave_size,
+    5*fifth_size-2*octave_size
+  };
+
+  static const char *anoctave = "cdefgab";
+
+  acc = accidental;
+  mul = mult;
+  noteno = (int)note - 'a';
+  if (acc == ' ' && !microtone) {
+/* if microtone do not propogate accidentals to this
+   note.
+*/
+    acc = v->workmap[noteno][octave+4];
+    mul = v->workmul[noteno][octave+4];
+  } else {
+    if ((retain_accidentals) && (propogate_accs)) {
+      v->workmap[noteno][octave+4] = acc;
+      v->workmul[noteno][octave+4] = mul;
+    };
+  };
+
+  p = (int) ((long) strchr(anoctave, note) - (long) anoctave);
+  if (temperament) {
+    p = tscale[p];
+    if (acc == '^') p = p + mul*accidental_size;
+    if (acc == '_') p = p - mul*accidental_size;
+    pitch4096 =  p + octave*octave_size + middle_c;
+    pitch =  (SEMISIZE*128+pitch4096+SEMISIZE/2)/SEMISIZE-128;
+    bend =  8192+4096*(pitch4096 - pitch*SEMISIZE)/SEMISIZE;
+    bend = bend<0?0:(bend>16383?16383:bend);
+   } else {
+    p = scale[p];
+    if (acc == '^') p = p + mul;
+    if (acc == '_') p = p - mul;
+    pitch = p + 12*octave + middle_c;
+    bend = 8192; /* corresponds to zero bend */
+    }
+if (!microtone) *pitchbend = bend; /* don't override microtone */
+return pitch; 
+}
+
+
 
 static void doroll(note, octave, n, m, pitch)
 /* applies a roll to a note */
@@ -2641,6 +2766,7 @@ int pitch;
   char up, down;
   int t;
   int upoct, downoct, pitchup, pitchdown;
+  int bend_up,bend_down;
   char *anoctave = "cdefgab";
 
   upoct = octave;
@@ -2650,13 +2776,18 @@ int pitch;
   down = *(anoctave + ((t+6) % 7));
   if (up == 'c') upoct = upoct + 1;
   if (down == 'b') downoct = downoct - 1;
-  pitchup = pitchof(up, v->basemap[(int)up - 'a'], 1, upoct, 0);
-  pitchdown = pitchof(down, v->basemap[(int)down - 'a'], 1, downoct, 0);
+  pitchup = pitchof_b(up, v->basemap[(int)up - 'a'], 1, upoct, 0,&bend_up);
+  pitchdown = pitchof_b(down, v->basemap[(int)down - 'a'], 1, downoct, 0,&bend_down);
+  bentpitch[notes] = active_pitchbend;
   addfeature(NOTE, pitch, n*4, m*(v->default_length)*5);
   marknotestart();
+  bentpitch[notes] = bend_up;
   addfeature(NOTE, pitchup, n*4, m*(v->default_length)*5);
+  bentpitch[notes] = active_pitchbend;
   addfeature(NOTE, pitch, n*4, m*(v->default_length)*5);
+  bentpitch[notes] = bend_down;
   addfeature(NOTE, pitchdown, n*4, m*(v->default_length)*5);
+  bentpitch[notes] = active_pitchbend;
   addfeature(NOTE, pitch, n*4, m*(v->default_length)*5);
   marknoteend();
 }
@@ -2672,12 +2803,13 @@ int pitch;
   int upoct, pitchup;
   char *anoctave = "cdefgab";
   int a, b, count;
+  int bend;
 
   upoct = octave;
   t = (int) ((long) strchr(anoctave, note)  - (long) anoctave);
   up = *(anoctave + ((t+1) % 7));
   if (up == 'c') upoct = upoct + 1;
-  pitchup = pitchof(up, v->basemap[(int)up - 'a'], 1, upoct, 0);
+  pitchup = pitchof_b(up, v->basemap[(int)up - 'a'], 1, upoct, 0,&bend);
   a = 4;
   b = m*(v->default_length);
   count = n;
@@ -2687,12 +2819,15 @@ int pitch;
   };
   i = 0;
   while (i < count) {
-    if (i == count - 1) {
+    /*if (i == count - 1) {  **bug** [SS] 2006-09-10 */
+     if (i == 0) {
       marknotestart();
     };
     if (i%2 == 0) {
+      bentpitch[notes] = bend;
       addfeature(NOTE, pitchup, a, b);
     } else {
+      bentpitch[notes] = active_pitchbend;
       addfeature(NOTE, pitch, a, b);
     };
     i = i + 1;
@@ -2702,12 +2837,14 @@ int pitch;
 
 
 
-void makecut (mainpitch, shortpitch, n,m)
-int mainpitch,shortpitch,n,m;
+void makecut (mainpitch, shortpitch,mainbend,shortbend, n,m)
+int mainpitch,shortpitch,mainbend,shortbend,n,m;
 {
 addfeature(GRACEON, 0, 0, 0);
+bentpitch[notes] = shortbend;
 addfeature(NOTE, shortpitch, 4,v->default_length);
 addfeature(GRACEOFF, 0, 0, 0);
+bentpitch[notes] = mainbend;
 addfeature(NOTE, mainpitch, 4*n,m*v->default_length);
 }
 
@@ -2723,6 +2860,7 @@ int pitch;
   int upoct, downoct, pitchup, pitchdown;
   char *anoctave = "cdefgab";
   int nnorm,mnorm,nn;
+  int bend_up,bend_down;
 
   upoct = octave;
   downoct = octave;
@@ -2731,8 +2869,8 @@ int pitch;
   down = *(anoctave + ((t+6) % 7));
   if (up == 'c') upoct = upoct + 1;
   if (down == 'b') downoct = downoct - 1;
-  pitchup = pitchof(up, v->basemap[(int)up - 'a'], 1, upoct, 0);
-  pitchdown = pitchof(down, v->basemap[(int)down - 'a'], 1, downoct, 0);
+  pitchup = pitchof_b(up, v->basemap[(int)up - 'a'], 1, upoct, 0,&bend_up);
+  pitchdown = pitchof_b(down, v->basemap[(int)down - 'a'], 1, downoct, 0,&bend_down);
   marknotestart();
   /* normalize notelength to L:1/8 */
   nnorm =n*8;
@@ -2743,10 +2881,10 @@ int pitch;
      nn = n/3; /* in case L:1/16 or smaller */
      if(nn < 1) nn=1;
      addfeature(NOTE, pitch, 4*nn,v->default_length);
-     makecut(pitch,pitchup,nn,m);
-     makecut(pitch,pitchdown,nn,m);
+     makecut(pitch,pitchup,active_pitchbend,bend_up,nn,m);
+     makecut(pitch,pitchdown,active_pitchbend,bend_down,nn,m);
      }
-  else makecut(pitch,pitchup,n,m);
+  else makecut(pitch,pitchup,active_pitchbend,bend_up,n,m);
   marknoteend();
 }
 
@@ -2780,10 +2918,12 @@ int mult;
 char accidental, note;
 int xoctave, n, m;
 {
-  int pitch;
-  int pitch_noacc;
   int num, denom;
   int octave;
+  int pitch;
+  int pitch_noacc;
+  int lsb,msb,dummy;
+  char buff[MAXLINE];
 
   if (v == NULL) {
     event_fatal_error("Internal error - no voice allocated");
@@ -2817,8 +2957,21 @@ int xoctave, n, m;
   if ((!v->ingrace) && ((!v->inchord)||(v->chordcount==1))) {
     addunits(num, denom*(v->default_length));
   };
-  pitch = pitchof(note, accidental, mult, octave, 1);
-  pitch_noacc = pitchof(note, 0, 0, octave, 0);
+
+/* linear temperament support */
+  pitch = pitchof_b(note, accidental, mult, octave, 1,&active_pitchbend);
+  pitch_noacc = pitchof_b(note, 0, 0, octave, 0,&dummy);
+  /* [SS] 2006-09-30
+  if (temperament) {
+      lsb = active_pitchbend&127;
+      lsb = lsb<0?0:(lsb>127?127:lsb); 
+      msb = active_pitchbend>>7;
+      msb = msb<0?0:(msb>127?127:msb);
+      sprintf(buff,"pitchbend %d %d",lsb,msb);
+      event_specific("MIDI", buff);
+     } 
+  */
+
   if (decorators[FERMATA]) {
     if(fermata_fixed) addfract(&num,&denom,1,1);
     else num = num*2;
@@ -2859,6 +3012,7 @@ int xoctave, n, m;
       };
     } else {
       pitchline[notes] = pitch_noacc;
+      bentpitch[notes] = active_pitchbend;
       addfeature(NOTE, pitch, num*4, denom*(v->default_length));
       if (!v->inchord) {
         marknote();
@@ -2880,18 +3034,23 @@ specification*/
 /* resolution of 14bit -- order of bytes is inverted for pitchbend */
 bend = dir*((int)(4096.0*a/b))+8192; /* sorry for the float! */
 bend = bend<0?0:(bend>16383?16383:bend);
+active_pitchbend = bend;
+/* [SS] 2006-09-30
 lsb = bend&127;
-lsb = lsb<0?0:(lsb>127?127:lsb); /* need? */
+lsb = lsb<0?0:(lsb>127?127:lsb); 
 msb = bend>>7;
 msb = msb<0?0:(msb>127?127:msb);
 sprintf(buff,"pitchbend %d %d",lsb,msb);
 event_specific("MIDI", buff);
+*/
+microtone=1;
 }
 
 
 void event_normal_tone()
 { 
-event_specific("MIDI", "pitchbend 0 64");
+/* event_specific("MIDI", "pitchbend 0 64"); [SS] 2006-09-30 */
+microtone = 0;
 }
 
 char *get_accidental(place, accidental)
@@ -3162,12 +3321,14 @@ static void copymap(v)
 /* sets up working map at the start of each bar */
 struct voicecontext* v;
 {
-  int j;
+  int i,j;
 
-  for (j=0; j<7; j++) {
-    v->workmap[j] = v->basemap[j];
-    v->workmul[j] = v->basemul[j];
-  };
+  for (i=0; i<7; i++) {
+    for (j=0;j<10;j++) {
+      v->workmap[i][j] = v->basemap[i];
+      v->workmul[i][j] = v->basemul[i];
+      }
+   };
 }
 
 /* workaround for problems with PCC compiler */
@@ -3239,11 +3400,21 @@ int j, xinchord,voiceno;
     feature[j] = REST;
 
 /* fix for tied microtone note */
-    if (feature[tienote+1] == DYNAMIC) {
+    if (feature[tienote+1] == DYNAMIC) { 
       nondestructive_readstr(command, &atext[pitch[tienote+1]], 40);
       if (strcmp(command, "pitchbend") == 0) {
         /*printf("need to remove pitchbend following TNOTE\n"); */
         removefeature(tienote+1);
+        j = j-1;
+        }
+    }
+
+/* fix for tied microtone note inside a slur */
+    if (feature[tienote+1] == SLUR_TIE && feature[tienote+2] == DYNAMIC) {
+      nondestructive_readstr(command, &atext[pitch[tienote+2]], 40);
+      if (strcmp(command, "pitchbend") == 0) {
+        /*printf("need to remove pitchbend following TNOTE in slur\n"); */
+        removefeature(tienote+2);
         j = j-1;
         }
     }
@@ -3801,7 +3972,7 @@ static void placeendrep(j)
 /* patch up missing repeat */
 int j;
 {
-  if (assume_repeat_warning == -1) event_warning("Assuming repeat");
+  if (quiet == -1) event_warning("Assuming repeat");
   switch(feature[j]) {
   case DOUBLE_BAR:
     feature[j] = REP_BAR;
@@ -3823,7 +3994,7 @@ static void placestartrep(j)
 /* patch up missing repeat */
 int j;
 {
-  if (assume_repeat_warning == -1) event_warning("Assuming repeat");
+  if (quiet == -1) event_warning("Assuming repeat");
   switch(feature[j]) {
   case DOUBLE_BAR:
     feature[j] = BAR_REP;
@@ -3832,14 +4003,14 @@ int j;
     feature[j] = BAR_REP;
     break;
   case REP_BAR:
-    event_warning("replacing |: with double repeat (::)");
+    if (quiet == -1) event_warning("replacing |: with double repeat (::)");
     feature[j] = DOUBLE_REP;
     break;
   case BAR_REP:
-    event_error("Too many end repeats");
+    if (quiet == -1) event_error("Too many end repeats");
     break;
   case DOUBLE_REP:
-    event_error("Too many end repeats");
+    if (quiet == -1) event_error("Too many end repeats");
     break;
   default:
     event_error("Internal error - please report");
@@ -3877,7 +4048,7 @@ static void fixreps()
     case BAR_REP:              /* |:  */
 /* if |:  .. |: encountered. Report error and change second |: to :: */
       if (expect_repeat) {
-          event_error(" found another |: after a |:");
+          if (quiet == -1) event_error(" found another |: after a |:");
           placeendrep(j);
       };
       expect_repeat = 1;
@@ -3895,7 +4066,7 @@ static void fixreps()
 
     case PLAY_ON_REP:         /*  [1 or [2 or [1,3 etc  */
        if(nplays == 0 && !expect_repeat) {
-           event_error(" found [1 or like before |:");
+           if (quiet == -1) event_error(" found [1 or like before |:");
            placestartrep(rep_point);
            }
        nplays++;
@@ -3903,7 +4074,7 @@ static void fixreps()
 
     case DOUBLE_REP:           /*  ::  */
       if (!expect_repeat) {
-          event_error(" found :: before |:");
+          if (quiet == -1) event_error(" found :: before |:");
           placestartrep(rep_point);
        };
       expect_repeat = 1;
@@ -4053,11 +4224,11 @@ static void headerprocess()
   voicesused = 0;
 }
 
-void event_key(sharps, s, minor, modmap, modmul, gotkey, gotclef, clefname,
+void event_key(sharps, s, modeindex, modmap, modmul, gotkey, gotclef, clefname,
           octave, transpose, gotoctave, gottranspose)
 /* handles a K: field */
 int sharps; /* sharps is number of sharps in key signature */
-int minor; /* a boolean 0 or 1 */
+int modeindex; /* 0 major, 1,2,3 minor, 4 locrian, etc.  */
 char *s; /* original string following K: */
 char modmap[7]; /* array of accidentals to be applied */
 int  modmul[7]; /* array giving multiplicity of each accent (1 or 2) */
@@ -4065,6 +4236,9 @@ int gotkey, gotclef;
 int octave, transpose, gotoctave, gottranspose;
 char* clefname;
 {
+  int minor;
+  minor =0;
+  if (modeindex >0 && modeindex <4) minor = 1;
   if ((dotune) && gotkey) {
     if (pastheader) {
       setmap(sharps, v->basemap, v->basemul);
@@ -4257,6 +4431,7 @@ void event_eof()
   };
   free(pitch);
   free(pitchline);
+  free(bentpitch);
   free(num);
   free(denom);
   free(feature);

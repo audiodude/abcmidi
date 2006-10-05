@@ -19,7 +19,7 @@ tied notes longer than 8 quarter notes are ignored.
 
 
 
-#define VERSION "1.37 April 22 2006"
+#define VERSION "1.40 September 10 2006"
 #include <stdio.h>
 #include <stdlib.h>
 #include "abc.h"

@@ -218,7 +218,7 @@ char *featname[] = {
 "OLDTIE", "TEXT", "SLUR_ON", "SLUR_OFF",
 "TIE", "CLOSE_TIE", "TITLE", "CHANNEL",
 "TRANSPOSE", "RTRANSPOSE", "GTRANSPOSE", "GRACEON",
-"GRACEOFF", "SETGRACE", "SETC", "GCHORD",
+"GRACEOFF", "SETGRACE", "SETC", "SETTRIM", "GCHORD",
 "GCHORDON", "GCHORDOFF", "VOICE", "CHORDON",
 "CHORDOFF", "CHORDOFFEX", "DRUMON", "DRUMOFF",
 "DRONEON", "DRONEOFF", "SLUR_TIE", "TNOTE",
@@ -1809,11 +1809,11 @@ static void headerprocess()
   voicesused = 0;
 }
 
-void event_key(sharps, s, minor, modmap, modmul, gotkey, gotclef, clefname,
+void event_key(sharps, s, modeindex, modmap, modmul, gotkey, gotclef, clefname,
           octave, transpose, gotoctave, gottranspose)
 /* handles a K: field */
 int sharps; /* sharps is number of sharps in key signature */
-int minor; /* a boolean 0 or 1 */
+int modeindex; /* 0 major, 1,2,3 minor, 4 locrian, etc.  */
 char *s; /* original string following K: */
 char modmap[7]; /* array of accidentals to be applied */
 int  modmul[7]; /* array giving multiplicity of each accent (1 or 2) */
@@ -1821,6 +1821,8 @@ int gotkey, gotclef;
 int octave, transpose, gotoctave, gottranspose;
 char* clefname;
 {
+  int minor;
+  if (modeindex >0 && modeindex <4) minor = 1;
   if ((dotune) && gotkey) {
     if (pastheader) {
       setmap(sharps, v->basemap, v->basemul);
@@ -1850,19 +1852,6 @@ char* clefname;
 }
 
 
-char *featurename[] = {"SINGLE_BAR", "DOUBLE_BAR", "BAR_REP", "REP_BAR", "PLAY_ON_REP",
-"REP1", "REP2", "BAR1", "REP_BAR2", "DOUBLE_REP",
-"THICK_THIN", "THIN_THICK", "PART", "TEMPO", "TIME",
-"KEY", "REST", "TUPLE", "NOTE", "NONOTE",
-"OLDTIE", "TEXT", "SLUR_ON", "SLUR_OFF", "TIE",
-"CLOSE_TIE", "TITLE", "CHANNEL", "TRANSPOSE", "RTRANSPOSE",
-"GRACEON", "GRACEOFF", "SETGRACE", "SETC", "GCHORD",
-"GCHORDON", "GCHORDOFF", "VOICE", "CHORDON", "CHORDOFF",
-"DRUMON", "DRUMOFF", "SLUR_TIE", "TNOTE", "LT",
-"GT", "DYNAMIC", "LINENUM", "MUSICLINE", "MUSICSTOP",
-"WORDLINE", "WORDSTOP", "INSTRUCTION", "NOBEAM", "CHORDNOTE",
-"CLEF", "PRINTLINE", "NEWPAGE", "LEFT_TEXT", "CENTRE_TEXT", "VSKIP"
-};
 
 void print_feature_list ()
 {
@@ -1870,7 +1859,7 @@ int i,length;
 float fract;
 printf("feature list \n");
 for (i=0;i<notes;i++) {
-  printf("%d %d %s %d %d %d",i,feature[i],featurename[feature[i]],pitch[i],num[i],denom[i]);
+  printf("%d %d %s %d %d %d",i,feature[i],featname[feature[i]],pitch[i],num[i],denom[i]);
   if (feature[i] == NOTE || feature[i] == TNOTE || feature[i] == REST) {
     fract = (float) num[i]/ (float) denom[i];
     length = (int) (fract * 12.0 +0.1);

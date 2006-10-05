@@ -150,7 +150,7 @@ void mfreadtrk(itrack)     /* The only non-static function in this file. */
   readheader();
   track =1;
   ok = 1;
-  for (track==1;track<=ntrks && ok == 1;track++)
+  for (track=1;track<=ntrks && ok == 1;track++)
    {if (track == itrack)
      ok = readtrack();
     else

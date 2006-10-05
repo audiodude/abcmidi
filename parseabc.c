@@ -96,6 +96,13 @@ int intune = 1;
 extern programname fileprogram;
 int oldchordconvention = 0;
 
+char *mode[10] = {"maj", "min", "m", 
+                       "aeo", "loc", "ion", "dor", "phr", "lyd", "mix"};
+int modeshift[10] = {0, -3, -3,
+                         -3, -5, 0, -2, -4, 1, -1 };
+int modeminor[10] = {0, 1, 1,
+                          1, 0, 0, 0, 0, 0, 0};
+int modekeyshift[10] = {0,5,5,5,6,0,1,2,3,4};
 
 int* checkmalloc(bytes)
 /* malloc with error checking */
@@ -240,6 +247,26 @@ char **p;
 {
  while(((int)**p != ' ') && ((int)**p != TAB) && (int)**p != '\0') *p = *p +1;
 }
+
+
+int isnumberp(p)
+char **p;
+/* returns 1 if positive number, returns 0 if not a positive number */
+/* ie -4 or 1A both return 0. This function is needed to get the    */
+/* voice number.                                                    */
+{
+char **c;
+c = p;
+ while(((int)**c != ' ') && ((int)**c != TAB) && (int)**c != '\0') {
+   if (((int)*c >= '0') && ((int)*c <= '9')) 
+     *c = *c +1;
+   else 
+     return 0;
+   }
+return 1;
+}
+
+
 
 int readnumf(num)
 char *num;
@@ -479,6 +506,12 @@ int strict;
     gotclef = 1;
   }
   if (strncmp(s, "F",1) == 0 && strict==0) {
+    gotclef = 1;
+  }
+  if (strncmp(s, "g",1) == 0 && strict==0) {
+    gotclef = 1;
+  }
+  if (strncmp(s, "G",1) == 0 && strict==0) {
     gotclef = 1;
   }
 
@@ -811,12 +844,7 @@ char* str;
   int i, j;
   int cgotoctave,coctave;
   static char *key = "FCGDAEB";
-  static char *mode[10] = {"maj", "min", "m", 
-                       "aeo", "loc", "ion", "dor", "phr", "lyd", "mix"};
-  static int modeshift[10] = {0, -3, -3,
-                         -3, -5, 0, -2, -4, 1, -1 };
-  static int modeminor[10] = {0, 1, 1,
-                          1, 0, 0, 0, 0, 0, 0};
+  int modeindex;
 
   s = str;
   transpose = 0;
@@ -827,6 +855,7 @@ char* str;
   gotclef=0;
   cgotoctave=0;
   coctave=0;
+  modeindex = 0;
   for (i=0; i<7; i++) {
     modmap[i] = ' ';
     modmul[i] = 1;
@@ -881,6 +910,7 @@ char* str;
             foundmode = 1;
             sf = sf + modeshift[i];
             minor = modeminor[i];
+            modeindex = i;
           };
         };
         if (foundmode) {
@@ -894,11 +924,13 @@ char* str;
             foundmode = 1;
             sf = sf + modeshift[i];
             minor = modeminor[i];
+            modeindex = i;
           };
         };
         if (!foundmode) {
           sprintf(msg, "Unknown mode '%s'", &word[j]);
           event_error(msg);
+          modeindex = 0;
         };
       };
     };
@@ -934,7 +966,7 @@ char* str;
     };
   };
   if (cgotoctave) {gotoctave=1; octave=coctave;}
-  event_key(sf, str, minor, modmap, modmul, gotkey, gotclef, clefstr,
+  event_key(sf, str, modeindex, modmap, modmul, gotkey, gotclef, clefstr,
             octave, transpose, gotoctave, gottranspose);
   return(gotkey);
 }
@@ -961,7 +993,7 @@ vparams.gotsname = 0;
 vparams.gotmiddle = 0;
 
 skipspace(&s);
-if ((*s >= '0') && (*s <= '9')) {
+if (isnumberp(&s)) {
   num = readnump(&s);
   } else {
   num = interpret_voicestring(s);
@@ -1391,7 +1423,7 @@ char* field;
 
   if (parsing == 0) return;
 
-  if ((inbody) && (strchr("EIKLMPQTVdwW", key) == NULL)) {
+  if ((inbody) && (strchr("EIKLMPQTVdswW", key) == NULL)) {
     event_error("Field not allowed in tune body");
   };
   comment = field;
@@ -1519,6 +1551,8 @@ char* field;
     break;
   case 'd':
     /* decoration line in abcm2ps */
+    break;
+  case 's':
     break;
   default:
     event_field(key, place);
@@ -1951,7 +1985,7 @@ char* line;
     if (!parsing) event_linebreak();
     return;
   };
-  if (strchr("ABCDEFGHIKLMNOPQRSTUVdwWXZ", *p) != NULL) {
+  if (strchr("ABCDEFGHIKLMNOPQRSTUVdwsWXZ", *p) != NULL) {
     q = p + 1;
     skipspace(&q);
     if ((int)*q == ':') {

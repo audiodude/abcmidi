@@ -20,8 +20,10 @@
 #
 # KANDR selects functions prototypes without argument prototypes.
 #
+# NO_SNPRINTF causes code to use printf instead of snprintf which
+# is less secure.
 CC=gcc
-CFLAGS=-c -ansi -DANSILIBS -Wformat -Wtraditional
+CFLAGS=-c -ansi -DANSILIBS -DNO_SNPRINTF -Wformat -Wtraditional
 # -ansi forces ANSI compliance
 LNK=gcc
 

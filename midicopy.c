@@ -39,7 +39,7 @@
 
 
 
-#define VERSION "1.05 June 07 2006"
+#define VERSION "1.10 September 22 2006"
 #include "midicopy.h"
 #define NULLFUNC 0
 #define NULL 0
@@ -62,12 +62,15 @@ int (*Mf_writetempotrack) () = NULLFUNC;
 
 void mf_write_header_chunk(int, int, int);
 void mf_write_tempo(long);
+void mf_get_tempo_event(long tempo);
 int mf_write_midi_event(int type, int chan, char *data, int size);
 int mf_write_meta_event(int type, char *data, int size);
 void mf_write_track_chunk(int which_track, FILE * fp);
 void mferror(char *s);
 int eputc(char c);
 void append_to_string();
+void winamp_compatibility_measure();
+void writechanmsg_at_0 ();
 void copy_noteoff(int chan, int c1, int c2);
 
 int Mf_nomerge = 0;		/* 1 => continue'ed system exclusives are */
@@ -76,10 +79,13 @@ long Mf_currtime = 0L;		/* current time in delta-time units */
 long Mf_toberead = 0L;
 long delta_time;
 float currentseconds =0.0;
+long max_currtime = 0;
 
 long Mf_currcopytime = 0L;	/* time of last copied event */
 char *trackdata = NULL;
 long trackdata_length, trackdata_size;
+int activetrack;
+int nochanmsg=1;
 
 
 long Mf_numbyteswritten = 0L;
@@ -89,6 +95,8 @@ long to32bit();
 int read16bit();
 int to16bit();
 char *msg();
+int seconds_to_tick (float seconds);
+float tick_to_seconds(int tick);
 
 /* following declaration added 27/8/96 JRA (James Allwright)*/
 void badbyte(int);
@@ -99,6 +107,7 @@ void msginit();
 int msgleng();
 void msgadd();
 void biggermsg();
+void WriteVarLen(long);
 
 
 int notechan[2048];		/* keeps track of running voices */
@@ -115,7 +124,7 @@ int current_tempo = 500000;
 float seconds_output;
 
 struct tempostruc {
-   int tick; int value;} tempo_array[1000];
+   int tick; int tempo; float seconds;} tempo_array[2000];
 int temposize,tempo_index;
 
 /*          Support stuff                         */
@@ -199,12 +208,6 @@ void error(char *s)
 
 int cut_beginning()
 {
-if (use_seconds)
-  {
-  if (currentseconds < start_seconds) 
-        return 1;
-  return 0;
-  }
 if (Mf_currtime < start_tick)
 	return 1;
 return 0;
@@ -212,12 +215,6 @@ return 0;
 
 int cut_ending()
 {
-if (use_seconds)
-  {
-  if (end_seconds > 0.0 && currentseconds > end_seconds)
-      return 1;
-  return 0;
-  }
 if (end_tick > 0 && Mf_currtime > end_tick) return 1;
 return 0;
 }
@@ -363,7 +360,6 @@ void copy_metaeot()
 
 void copy_sysex(int length, char *s)
 {
-    void WriteVarLen();
     int i;
 /* readtrack in midifile3 copies the starting 0xf0 sys command
    followed by the message. In order to copy the input, we
@@ -491,20 +487,8 @@ void copytrack_verbatim()
 }
 
 
-int update_current_tempo ()
-{
-    if(Mf_currtime < tempo_array[tempo_index+1].tick) 
-            return tempo_array[tempo_index].value;
-    while (tempo_index < temposize)
-       {
-       tempo_index++;
-       if (Mf_currtime < tempo_array[tempo_index].tick) break;
-       }
-  tempo_index--;
-   return tempo_array[tempo_index].value;
-}
 
-float readtrack()
+int readtrack()
 {				/* read a track chunk */
     /* This array is indexed by the high half of a status byte.  It's */
     /* value is either the number of bytes needed (1 or 2) for a channel */
@@ -520,12 +504,7 @@ float readtrack()
     int status = 0;		/* status value (e.g. 0x90==note-on) */
     int needed;
     long varinum;
-    float delta_seconds; 
-    float accumulated_seconds;
-    int accumulating;
 
-    accumulated_seconds = 0.0;
-    accumulating = 0;
     tempo_index = 0;
 
     if (readmt("MTrk") == EOF)
@@ -545,12 +524,8 @@ float readtrack()
 
     while (Mf_toberead > 0) {
 
-        current_tempo = update_current_tempo(); 
 	delta_time = readvarinum();
 	Mf_currtime += delta_time;
-        delta_seconds = (float) delta_time*current_tempo/
-                            ((float) division*1000000.0);
-        currentseconds += delta_seconds;
         if (cut_ending()) {
 	    flag_metaeot = 1;
 	    /*   delta_time += end_tick - Mf_currtime; */
@@ -576,13 +551,7 @@ float readtrack()
 
 	if (needed) {		/* ie. is it a channel message? */
 
-        if (accumulating) {
-          delta_seconds = (float) delta_time*current_tempo/
-                            ((float) division*1000000.0);
-          accumulated_seconds += delta_seconds;
-          }
           /*if (Mf_currtime > Mf_currcopytime) accumulating = 1;*/
-            if (!cut_beginning()) accumulating = 1;
 
 	    if (running)
 		c1 = c;
@@ -647,10 +616,142 @@ float readtrack()
 	    break;
 	}
     }
-    return accumulated_seconds;
+    if (max_currtime < Mf_currtime) max_currtime = Mf_currtime;
+return max_currtime;
 }
 
 
+int get_tempo_info_from_track_1 ()
+{
+/* most of this code has been grabbed from readtrack().
+   The function is called to extract all the meta tempo
+   commands from track-1 and to store this in an array.
+*/
+
+    /* This array is indexed by the high half of a status byte.  It's */
+    /* value is either the number of bytes needed (1 or 2) for a channel */
+    /* message, or 0 (meaning it's not  a channel message). */
+    static int chantype[] = {
+	0, 0, 0, 0, 0, 0, 0, 0,	/* 0x00 through 0x70 */
+	2, 2, 2, 2, 1, 1, 2, 0	/* 0x80 through 0xf0 */
+    };
+    long lookfor;
+    int c, c1, type;
+    int sysexcontinue = 0;	/* 1 if last message was an unfinished sysex */
+    int running = 0;		/* 1 when running status used */
+    int status = 0;		/* status value (e.g. 0x90==note-on) */
+    int needed;
+    long varinum;
+    int position;
+    char *m;
+
+    position = ftell(F_in);
+    /*printf("position = %d\n",position);*/
+
+    if (readmt("MTrk") == EOF)
+	return (0);
+
+    Mf_toberead = read32bit();
+    Mf_currtime = 0;
+
+    /*alloc_trackdata(); */
+
+
+    while (Mf_toberead > 0) {
+
+	delta_time = readvarinum();
+	Mf_currtime += delta_time;
+
+	c = egetc();
+
+	if (sysexcontinue && c != 0xf7)
+	    mferror("didn't find expected continuation of a sysex");
+
+	if ((c & 0x80) == 0) {	/* running status? */
+	    if (status == 0)
+		mferror("unexpected running status");
+	    running = 1;
+	} else {
+	    status = c;
+	    running = 0;
+	}
+
+	needed = chantype[(status >> 4) & 0xf];
+
+	if (needed) {		/* ie. is it a channel message? */
+
+
+	    if (running)
+		c1 = c;
+	    else
+		c1 = egetc();
+	    /*chanmessage(status, c1, (needed > 1) ? egetc() : 0);*/
+	    continue;;
+	}
+
+	switch (c) {
+
+	case 0xff:		/* meta event */
+
+	    type = egetc();
+	    varinum = readvarinum();
+	    lookfor = Mf_toberead - varinum;
+	    msginit();
+
+	    while (Mf_toberead > lookfor)
+		msgadd(egetc());
+
+/*	    metaevent(type); */
+            if (type == 0x51) {
+             m = msg();
+             mf_get_tempo_event(to32bit(0,m[0],m[1],m[2]));
+             }
+	    break;
+
+	case 0xf0:		/* start of system exclusive */
+
+	    varinum = readvarinum();
+	    lookfor = Mf_toberead - varinum;
+	    msginit();
+	    msgadd(0xf0);
+
+	    while (Mf_toberead > lookfor)
+		msgadd(c = egetc());
+
+	    if (c == 0xf7 || Mf_nomerge == 0)
+		/*sysex();[SS] 2006-08-08 */
+                break; /* [SS] 2006-08-08 */
+	    else
+		sysexcontinue = 1;	/* merge into next msg */
+	    break;
+
+	case 0xf7:		/* sysex continuation or arbitrary stuff */
+
+	    varinum = readvarinum();
+	    lookfor = Mf_toberead - varinum;
+
+	    if (!sysexcontinue)
+		msginit();
+
+	    while (Mf_toberead > lookfor)
+		msgadd(c = egetc());
+
+	    if (!sysexcontinue) {
+		if (Mf_arbitrary)
+		    (*Mf_arbitrary) (msgleng(), msg());
+	    } else if (c == 0xf7) {
+/*		sysex(); */
+		sysexcontinue = 0;
+	    }
+	    break;
+	default:
+	    badbyte(c);
+	    break;
+	}
+    }
+fseek(F_in,position,SEEK_SET);
+return(0);
+}
 
 
 
@@ -733,6 +834,8 @@ void sysex()
 void chanmessage(int status, int c1, int c2)
 {
     int chan = status & 0xf;
+
+    if (!cut_beginning()) nochanmsg = 0;
 
     if (ctocopy[chan])
 	switch (status & 0xf0) {
@@ -945,22 +1048,30 @@ FILE *fp;
 
     seconds_output = 0.0;    
     temposize = 0;
+    tempo_array[temposize].tempo = current_tempo;
+    tempo_array[temposize].tick  = 0;
+    tempo_array[temposize].seconds = 0.0;
+    temposize++; 
 
-    /* In format 1 files, the first track is a tempo map */
-    if (format == 1 && (Mf_writetempotrack)) {
-	(*Mf_writetempotrack) ();
-    }
+    get_tempo_info_from_track_1();
+    if (start_seconds >= 0.0)
+        start_tick = seconds_to_tick(start_seconds);
+    if (end_seconds >= 0.0)
+         end_tick = seconds_to_tick(end_seconds);
 
     /* The rest of the file is a series of tracks */
     for (i = 0; i < ntracks; i++) {
+        activetrack = i;
+        nochanmsg = 1;
 	if (start_tick + end_tick < 0 && chnflag == 0 && !use_seconds)
 	    copytrack_verbatim();	/*not necessary to read in detail*/
 	else {
 	    flag_metaeot = 0;
 	    init_notechan();
-	    track_time = readtrack();
+	    track_time = (float) readtrack();
             if (track_time > seconds_output) seconds_output = track_time;
 	    turn_off_all_playing_notes();
+            if (i > 1 && nochanmsg) winamp_compatibility_measure();
 	    if (flag_metaeot)
 		copy_metaeot();	/*need end of track message*/
 	    ignore_rest_of_track();
@@ -969,6 +1080,44 @@ FILE *fp;
 	    mf_write_track_chunk(i, fp);
     }
 }
+
+void winamp_compatibility_measure()
+{
+/* for some reason Winamp on Windows refuses to play short
+ * MIDI files where one of the tracks is very
+ * short in time. The problem files were found
+ * on the site http://www.jsbchorales.net/
+ * An example of such a file is 000603b.
+ * This command expands this track by putting
+ * a channel noteon/noteoff command. We use channel 15,
+ * MIDI pitch 0 and  midi volume 0 so that it has least effect.
+ * We only check for tracks with no channel messages.
+ *
+ */
+writechanmsg_at_0 ();
+}
+
+void writechanmsg_at_0 ()
+{
+char c,data[2];
+int delta;
+delta = end_tick - start_tick;
+if (delta < 0) delta = 1000;
+data[0] = (char) 0; /* pitch zero */
+data[1] = (char) 0; /* volume zero */
+c = 0x9f; /* MIDI ON channel 15 */
+WriteVarLen(0);
+eputc(c);
+eputc(data[0]);
+eputc(data[1]);
+c = 0x8f; /* MIDI off channel 15 */
+data[1] = (char) 0;
+WriteVarLen(delta);
+eputc(c);
+eputc(data[0]);
+eputc(data[1]);
+}
+
 
 
 void
@@ -1118,6 +1267,19 @@ int mf_write_meta_event(int type, char *data, int size)
 
 
 
+void mf_get_tempo_event(tempo) 
+long tempo;
+{
+ tempo_array[temposize].seconds
+     = (float) (Mf_currtime - tempo_array[temposize-1].tick) *
+       (float)  current_tempo \
+     /(division * 1000000.0f) + tempo_array[temposize-1].seconds; 
+ tempo_array[temposize].tick = Mf_currtime;
+ tempo_array[temposize].tempo = tempo;
+ current_tempo = tempo;
+ if (temposize < 1999) temposize++;
+}
+
 
 void mf_write_tempo(tempo)
 long tempo;
@@ -1127,10 +1289,6 @@ long tempo;
     /* expressed in microseconds/quarter note     */
 
     void WriteVarLen();
-    current_tempo = tempo;
-    tempo_array[temposize].tick = Mf_currtime;
-    tempo_array[temposize].value = current_tempo;
-    if (temposize < 999) temposize++;
 
     if (Mf_currtime - Mf_currcopytime < 0) eputc(0); 
     else { WriteVarLen(Mf_currtime - Mf_currcopytime);
@@ -1147,7 +1305,7 @@ long tempo;
 /* fudge to avoid large time gap at beginning */
 /* It assumes a constant tempo. */
     if (use_seconds && start_tick == -1 && start_seconds >0) {
-      start_tick = start_seconds * 1000000.0*division/tempo;
+      start_tick = (int) (start_seconds * 1000000.0*division/tempo);
       Mf_currcopytime = start_tick;
       }
 }
@@ -1155,32 +1313,6 @@ long tempo;
 
 
 
-/* 
- * This routine converts delta times in seconds into ticks. The
- * else statement is needed because the formula is different for tracks
- * based on notes and tracks based on SMPTE times.
- *
- */
-long mf_sec2ticks(secs, division, tempo)
-float secs;
-int division;
-long tempo;
-{
-    long ticks;
-    float smpte_format, smpte_resolution;
-
-    if (division > 0) {
-	ticks = (long) ((secs * ((float) (division)) * 1000000.0) /
-			((float) (tempo)) + 0.5);
-    } else {
-	smpte_format = upperbyte(division);
-	smpte_resolution = lowerbyte(division);
-	ticks =
-	    (long) (secs * smpte_format * smpte_resolution * 1000000.0 +
-		    0.5);
-    };
-    return (ticks);
-}				/* end of sec2ticks() */
 
 
 
@@ -1213,35 +1345,6 @@ long value;
 
 
 
-
-/* 
- * This routine converts delta times in ticks into seconds. The
- * else statement is needed because the formula is different for tracks
- * based on notes and tracks based on SMPTE times.
- *
- */
-float mf_ticks2sec(ticks, division, tempo)
-int division;
-long tempo;
-long ticks;
-{
-    float ret;
-    float smpte_format, smpte_resolution;
-
-    if (division > 0) {
-	ret =
-	    ((float)
-	     (((float) (ticks) * (float) (tempo)) /
-	      ((float) (division) * 1000000.0)));
-    } else {
-	smpte_format = upperbyte(division);
-	smpte_resolution = lowerbyte(division);
-	ret =
-	    (float) ((float) ticks /
-		     (smpte_format * smpte_resolution * 1000000.0));
-    }
-    return (ret);
-}				/* end of ticks2sec() */
 
 
 
@@ -1288,8 +1391,53 @@ int eputc(char c)
 }
 
 
+int seconds_to_tick (float seconds)
+{
+int i, ind;
+float tick,fraction;
+for (i = 0;i<temposize;i++) 
+   {
+   ind = i;
+   if (seconds < tempo_array[ind].seconds) break;
+   }
 
+if (seconds < tempo_array[ind].seconds) {
+  fraction = (seconds - tempo_array[ind-1].seconds)
+            / (tempo_array[ind].seconds - tempo_array[ind-1].seconds);
+  tick = tempo_array[ind-1].tick + fraction * (tempo_array[ind].tick -
+              tempo_array[ind-1].tick);
+  return (int) tick;
+  }
 
+tick = tempo_array[ind].tick +
+            (seconds - tempo_array[ind].seconds)*division*1000000.0f /
+               tempo_array[ind].tempo;
+return (int) tick;
+}
+ 
+
+float tick_to_seconds (int tick)
+{
+int i,ind;
+float seconds;
+float delta;
+for (i = 0; i < temposize; i++) {
+    ind = i;
+    if (tick < tempo_array[ind].tick) break;
+    }
+if (tick < tempo_array[ind].tick) {
+   delta =  (float) (tick -tempo_array[ind-1].tick) *
+            (float)  tempo_array[ind-1].tempo /
+             ((float) (division * 1000000.0));
+   seconds = tempo_array[ind-1].seconds + delta;
+   return seconds;
+   }
+   delta =   (float) (tick -tempo_array[ind].tick) *
+             (float)  tempo_array[ind].tempo /
+             ((float) (division * 1000000.0));
+   seconds = tempo_array[ind].seconds + delta;
+   return seconds;
+}
 
 
 
@@ -1442,7 +1590,7 @@ int main(int argc, char *argv[])
 
     repflag = getarg("-replace", argc, argv);
     if (repflag >= 0)
-	sscanf(argv[repflag], "%d,%d,%c", &trknum, &byteloc, &val);
+	sscanf(argv[repflag], "%d,%d,%d", &trknum, &byteloc, &val);
 
     F_in = fopen(argv[argc - 2], "rb");
     if (F_in == NULL) {
@@ -1457,9 +1605,9 @@ int main(int argc, char *argv[])
     readheader();
     if (use_beats) {
       if (start_beat < 0.0) start_tick = -1;
-      else start_tick = division*start_beat;
+      else start_tick = (int) (division*start_beat);
       if (end_beat < 0.0) end_tick = -1;
-      else end_tick = division*end_beat;
+      else end_tick = (int) (division*end_beat);
       }
     if (mtrks == 0)
 	mtrks = ntrks;
@@ -1473,6 +1621,10 @@ int main(int argc, char *argv[])
     free(trackdata);
     fclose(F_in);
     fclose(fp);
+    if (end_tick < 0) end_tick = max_currtime;
+    start_seconds = tick_to_seconds(start_tick);
+    end_seconds = tick_to_seconds(end_tick);
+    seconds_output = end_seconds - start_seconds;
     printf("%f\n",seconds_output);
     return(0);
 }
