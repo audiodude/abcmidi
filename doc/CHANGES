@@ -5299,4 +5299,28 @@ the MIDI command makechordchannels().
 
 
 
+October 15 2006
+
+The following file was not parsed correctly.
+
+X:1
+T: 2 or 3 tracks
+M: 3/4
+L: 1/8
+K:G
+g2| g2 fe b2|
+V:2
+A2 |[B4E4] G2|
+
+Analysis: a bug I introduced recently resulted in the voice number (2)
+not being read correctly.
+
+Fix: in the function parsevoice() in parseabc.c, I changed the
+statement
+if (isnumberp(&s)) {
+to 
+if (isnumberp(&s) == 0) {
+
+apparently, this function returns 0 if the string contains a
+positive number and 1 otherwise.
 
