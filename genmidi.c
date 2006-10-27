@@ -1774,7 +1774,7 @@ int i;
       break;
     case 'd':
       if (drum_on) {
-        save_note(drum_num*len, drum_denom, drum_program[drum_ptr], 9, 
+        save_note(drum_num*len, drum_denom, drum_program[drum_ptr],8192,9, 
                   drum_velocity[drum_ptr]);
       };
     };

@@ -5324,3 +5324,45 @@ if (isnumberp(&s) == 0) {
 apparently, this function returns 0 if the string contains a
 positive number and 1 otherwise.
 
+
+October 27 2006
+
+Abc2midi: using the command %%MIDI drumon causes the error
+MIDI read/write error : error: MIDI channel greater than 16
+and abc2midi fails.
+
+This is another bug I had introduced. Adding the pitchbend
+parameter 8192 to save_note in function dodrus() in genmidi
+fixes this problem.
+
+
+October 27 2006
+
+Abc2abc transpose places spurious spaces between notes
+breaking up the beaming pattern. For example for,
+X: 1
+T: beaming error
+L: 1/8
+M: 4/4
+K: Eb
+^C,,2 z2 z^C,/D,/ =E,/^F,/G,/=A,/ | B,/=A,/G,/^F,/ G,/=E,/^C,/D,/
+E,/F,/G,/A,/ B,/A,/G,/A,/ |
+
+abc2abc beaming.abc -t 1 produces
+
+X: 1
+T:beaming error
+L:1/8
+M:4/4
+K:Emaj
+^^C,,2 z2 z^^C,/2 D,/2 ^E,/2^^F,/2 G,/2^A,/2 | B,/2^A,/2G,/2^^F,/2  G,/2^E,/2^^C ,/2 D,/2
+ E,/2 F,/2 G,/2 A,/2  B,/2 A,/2 G,/2 A,/2 |
+
+(note all the spaces between the notes in the second line of the body).
+
+Analysis: the local variable mult in event_note1() in toabc.c is
+used before it is defined.
+
+Fix: event_note1() now sets it to zero in case it is not set elsewhere.
+
+

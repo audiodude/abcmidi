@@ -21,7 +21,7 @@
 
 /* back-end for outputting (possibly modified) abc */
 
-#define VERSION "1.54 October 15 2006"
+#define VERSION "1.55 October 28 2006"
 
 /* for Microsoft Visual C++ 6.0 or higher */
 #ifdef _MSC_VER
@@ -1972,6 +1972,7 @@ int xoctave, n, m;
   char accidental, note;
   int octave;
 
+  mult = 0;  /* [SS] 2006-10-27 */
   if (transpose == 0 || drumchan) {
     accidental = xaccidental;
     mult = xmult;

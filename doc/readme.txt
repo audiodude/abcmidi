@@ -1,8 +1,8 @@
 abcMIDI :   abc <-> MIDI conversion utilities
 
 midi2abc version 2.88 July  23 2005
-abc2midi version 1.94 Oct   15 2006
-abc2abc  version 1.54 Oct   15 2006
+abc2midi version 1.95 Oct   27 2006
+abc2abc  version 1.55 Oct   27 2006
 yaps     version 1.48 Oct   15 2006
 abcmatch version 1.41 Oct   15 2006
 midicopy version 1.10 Sep   22 2006
