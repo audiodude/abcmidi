@@ -1290,7 +1290,7 @@ int n;
         };
       };
     }
-  if (channel == 9) noteon_data(pitch[n],channel,vel);
+  if (channel == 9) noteon_data(pitch[n],bentpitch[n],channel,vel);
   else noteon_data(pitch[n] + transpose + global_transpose, bentpitch[n], channel, vel);
 }
 
@@ -1351,7 +1351,10 @@ int *chan;
 static int makechordchannels (n)
 int n;
 {
-/* Allocate channels for in voice chords containing microtones. */
+/* Allocate channels for in voice chords containing microtones.
+   n is the number of channels to allocate which should be
+   less than 10.
+ */
 int i,chan;
 int prog;
 if (n < 1) return -1;
@@ -2050,6 +2053,8 @@ int xtrack;
   trim_num = 0;
   trim_denom = 1;
   graceflag = 0;
+ /* ensure that the percussion channel is not selected by findchannel() */
+  channels[9] = 1; 
   if (karaoke) {
     if (xtrack < 3)                  
        karaokestarttrack(xtrack);

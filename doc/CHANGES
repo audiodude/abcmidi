@@ -5366,3 +5366,74 @@ used before it is defined.
 Fix: event_note1() now sets it to zero in case it is not set elsewhere.
 
 
+
+
+November 3 2006
+
+Abc2midi bug: pitches are incorrect for staccato notes. eg
+
+X:1
+T: staccato bug
+M:3/2
+L:1/2
+Q:1/4=70
+%%MIDI program 16
+%%MIDI nobeataccents
+K:C
+=B=c=d | .=B.=c.=d |
+
+The pitches of the last three notes have been affected by
+a pitchbend.
+
+Analysis: This is a bug I recently introduced. The bentpitch[] feature
+was not set to 8192 for staccato notes.
+
+Fix:  added the following line
+  bentpitch[notes] = active_pitchbend;
+before
+  addfeature(NOTE, ...);
+
+in event_note() in store.c. Also added it in doornament().
+
+
+
+November 3 2006
+
+Abc2midi bug: the following file causes the error message
+MIDI read/write error : error: MIDI channel greater than 16
+to appear.
+
+X:1
+T: makechord
+M:3/2
+L:1/2
+Q:1/4=70
+V:1
+%%MIDI nobeataccents
+%%MIDI program 16
+%%MIDI makechordchannels 2
+V:2
+%%MIDI program 16
+%%MIDI makechordchannels 2
+V:3
+%%MIDI program 16
+%%MIDI makechordchannels 2
+K:C
+%
+V:1
+[c'_/e'g']
+V:2
+[c_/eg]
+V:3
+[C_/EG]
+
+
+Analysis: there was a missing parameter (bentpitch) in the function
+call to noteon_data() when channel == 9. As a result the function
+noteon_data() received a meaningless channel number. However,
+since channel 9 is reserved for percussion, it should never have 
+been assigned. To fix this problem, the global variable channels[9]
+was set to 1 in writetrack() (genmidi.c), so that findchannel()
+will not select this channel.
+
+

@@ -31,7 +31,7 @@
  * Wil Macaulay (wil@syndesis.com)
  */
 
-#define VERSION "1.95 October 28 2006"
+#define VERSION "1.96 November 03 2006"
 /* enables reading V: indication in header */
 #define XTEN1 1
 /*#define INFO_OCTAVE_DISABLED 1*/
@@ -2879,6 +2879,7 @@ int pitch;
      {
      nn = n/3; /* in case L:1/16 or smaller */
      if(nn < 1) nn=1;
+     bentpitch[notes] = active_pitchbend; /* [SS] 2006-11-3 */
      addfeature(NOTE, pitch, 4*nn,v->default_length);
      makecut(pitch,pitchup,active_pitchbend,bend_up,nn,m);
      makecut(pitch,pitchdown,active_pitchbend,bend_down,nn,m);
@@ -2990,9 +2991,11 @@ int xoctave, n, m;
           addfeature(REST, pitch, num*4, denom*(v->default_length));
         };
 	pitchline[notes] = pitch_noacc;
+        bentpitch[notes] = active_pitchbend;
         addfeature(NOTE, pitch, num*4, denom*2*(v->default_length));
       } else {
 	pitchline[notes] = pitch_noacc;
+        bentpitch[notes] = active_pitchbend;
         addfeature(NOTE, pitch, num*4, denom*2*(v->default_length));
         marknotestart();
         addfeature(REST, pitch, num*4, denom*2*(v->default_length));
