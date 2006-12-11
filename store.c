@@ -31,7 +31,7 @@
  * Wil Macaulay (wil@syndesis.com)
  */
 
-#define VERSION "1.96 November 03 2006"
+#define VERSION "1.97 December 11 2006"
 /* enables reading V: indication in header */
 #define XTEN1 1
 /*#define INFO_OCTAVE_DISABLED 1*/
@@ -149,6 +149,8 @@ struct voicecontext* head;
 struct voicecontext* vaddr[64]; /* address of all voices (by v->indexno) */
 /* vaddr is only a convenience for debugging */
 
+
+int dependent_voice[64]; /* flag to indicate type of voice */
 int voicecount;
 int numsplits=0;
 int splitdepth = 0;
@@ -837,6 +839,7 @@ if (v->fromsplitno == -1) {
   v->topindexno = topindexno;
   v->octaveshift = octaveshift;
  }
+dependent_voice[v->indexno] = 1;
 /* when syncing the split voice we want to be sure that
    we do not include the notes in the last bar in the source
    voice the notes in the split voice take their place.
@@ -1889,6 +1892,7 @@ struct voice_params *vp;
     if (pastheader)  checkbreak();
     v = getvoicecontext(n);
     addfeature(VOICE, v->indexno, 0, 0);
+    dependent_voice[v->indexno] = 0;
     if (vp->gotoctave) {
       event_octave(vp->octave,1);
     };
@@ -4432,6 +4436,7 @@ char *argv[];
   oldchordconvention = 0; /* for handling +..+ chords */
 
   for (i=0;i<DECSIZE;i++) decorators_passback[i]=0;
+  for (i=0;i<64;i++) dependent_voice[i]=0;
 
   event_init(argc, argv, &filename);
   if (argc < 2) {

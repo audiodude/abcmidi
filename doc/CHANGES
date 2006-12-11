@@ -5437,3 +5437,41 @@ was set to 1 in writetrack() (genmidi.c), so that findchannel()
 will not select this channel.
 
 
+December 9 2006
+
+Abc2midi bug: the %%MIDI drone command returns an error
+MIDI channel > 16.
+Fix: missing parameter in function midi_noteon(), pitchbend,
+was added.
+
+
+December 12 2006
+
+Abc2midi bug: split voices does not work correctly when
+it is embedded in a part (eg. P:B). For example:
+
+X: 1
+T: bad merge
+M: 4/4
+L: 1/8
+K: C
+P:A
+| C2 D2 E2 F2 | G2 A2 B2 c2 |
+P:B
+| C2 D2 E2 F2 & C,2 D,2 E,2 F,2 | G2 A2 B2 c2 |
+
+The split voice does not merge correctly in the
+above example.
+
+Analysis: not all voices may be indicated in a part. As a
+precaution, genmidi calls partbreak which fills in any missing
+voices. Unfortunately, split voices are automatically resynced
+which causes the voice to be filled in twice.
+Fix: a new global array dependent_voice[] was added in 
+store.c and linked to genmidi.c. This array contains flags
+indicating where the particular voice was a natural voice
+created by a voice command (V:) or whether this is a 
+split voice dependent on the natural voice. The function
+partbreak checks this flag and does nothing if is a
+dependent voice.
+ 

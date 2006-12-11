@@ -72,7 +72,7 @@ extern int chordnotes[MAXCHORDNAMES][6];
 extern int chordlen[MAXCHORDNAMES];
 
 /* general purpose storage structure */
-/* these 5 arrays are used to hold the tune data */
+/* these 6 arrays are used to hold the tune data */
 extern int *pitch, *num, *denom;
 extern int *bentpitch;
 extern featuretype *feature;
@@ -83,7 +83,6 @@ extern int quiet;
 extern int sf, mi;
 extern int gchordvoice, wordvoice, drumvoice, dronevoice;
 extern int gchordtrack, drumtrack, dronetrack;
-extern int nsplits;
 
 /* Part handling */
 extern struct vstring part;
@@ -95,6 +94,7 @@ int partrepno;
 int err_num, err_denom;
 
 extern int voicesused;
+extern int dependent_voice[];
 
 /* Tempo handling (Q: field) */
 extern long tempo;
@@ -600,6 +600,7 @@ int xtrack, voice, place;
   int newplace;
 
   newplace = place;
+  if (dependent_voice[voice]) return newplace;
   if (xtrack > 0) {
     fillvoice(partno, xtrack, voice);
   };
@@ -1792,8 +1793,8 @@ void start_drone()
 /*    delta = tracklen - drone.event; */
     delta = delta_time - drone.event;    
     if (drone.event == 0)  write_program(drone.prog, drone.chan);
-    midi_noteon(delta,drone.pitch1+global_transpose,drone.chan,drone.vel1);
-    midi_noteon(delta,drone.pitch2+global_transpose,drone.chan,drone.vel2);
+    midi_noteon(delta,drone.pitch1+global_transpose,8192,drone.chan,drone.vel1);
+    midi_noteon(delta,drone.pitch2+global_transpose,8192,drone.chan,drone.vel2);
 /*    drone.event = tracklen;*/
     drone.event = delta_time;
 }
