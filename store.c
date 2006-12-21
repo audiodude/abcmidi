@@ -31,7 +31,7 @@
  * Wil Macaulay (wil@syndesis.com)
  */
 
-#define VERSION "1.97 December 11 2006"
+#define VERSION "1.98 December 21  2006"
 /* enables reading V: indication in header */
 #define XTEN1 1
 /*#define INFO_OCTAVE_DISABLED 1*/
@@ -73,7 +73,7 @@ int setOutFileCreator(char *fileName,unsigned long theType,
 extern char* strchr();
 extern void reduce();
 #endif
-int snprintf(char *str, size_t size, const char *format, ...);
+/*int snprintf(char *str, size_t size, const char *format, ...);*/
 
 
 #define MAXLINE 500
@@ -1226,7 +1226,7 @@ char *package, *s;
 
     if (strcmp(command, "grace") == 0) {
       int a, b;
-      char msg[40];
+      char msg[200];
 
       skipspace(&p);
       a = readnump(&p);
@@ -1252,7 +1252,7 @@ char *package, *s;
 
     if(strcmp(command,"gracedivider") == 0) {
       int b;
-      char msg[40];
+      char msg[200];
       skipspace(&p);
       b = -1;
       b = readnump(&p);
@@ -3125,7 +3125,7 @@ char* s;
   name[i] = '\0';
   chordno = getchordnumber(name);
   if (chordno == 0) {
-    char msg[40];
+    char msg[200];
 
     sprintf(msg, "Unrecognized chord name \"%s\"", name);
     event_error(msg);

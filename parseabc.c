@@ -993,7 +993,7 @@ vparams.gotsname = 0;
 vparams.gotmiddle = 0;
 
 skipspace(&s);
-if (isnumberp(&s) == 0) {
+if (isnumberp(&s) == 1) {
   num = readnump(&s);
   } else {
   num = interpret_voicestring(s);

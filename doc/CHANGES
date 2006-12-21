@@ -5475,3 +5475,25 @@ split voice dependent on the natural voice. The function
 partbreak checks this flag and does nothing if is a
 dependent voice.
  
+
+December 21 2006
+
+Voice bug (abc2midi, yaps): the fix described in September 9 2006
+caused another bug. For the following example:
+
+X:1
+T: noel
+M: 2/4
+L: 1/4
+K: C
+V: alpha
+C E|D F|
+V: beta
+A C| G B|
+
+The parser fails to handle nonnumeric voice numbers.
+Fix: in line 996 of parseabc.c isnumberp returns 1
+if the character string is a positive number and 0 if
+it is not. The 0 was replaced with 1 as shown below.
+if (isnumberp(&s) == 1) {
+
