@@ -5497,3 +5497,68 @@ if the character string is a positive number and 0 if
 it is not. The 0 was replaced with 1 as shown below.
 if (isnumberp(&s) == 1) {
 
+December 26 2006
+
+Midi2abc bug. Some music notation programs automatically place
+short rests between notes and chords in order to improve the
+articulation. Midi2abc is able to ignore these rests using
+the -sr parameter as described in the midi2abc.1 documentation.
+Unfortunately, this feature does not work correctly when rests
+are placed in between chords.
+
+Analysis: the quantize() function decides whether to eliminate
+the rest based on the difference between the inter note interval
+(note->xnum) and the "on" time of the note (note->play). For
+some of the chordal notes, note->xnum is zero since all the notes
+in the chord start at the same time. This causes the program
+to produce erroneous results.
+
+Fix: a new function xnum_to_next_nonchordal_note() was introduced
+to look ahead past all the chordal notes and return the quantized
+note interval to the next nonchordal note. The quantize function
+uses this value when the -sr option is turned on. (I have
+a feeling this fix may not work correctly when the notes in
+the chord are not all equal length. In other words I do not
+recommend using the -sr option with -splitbars or -splitvoice.)
+
+
+January 02 2007
+
+Abc2midi bug: %%MIDI trim does not work according to documentation.
+The trim command is used to control the articulation of notes.
+Like staccato it shortens the playing time of the note,
+leaving a silent period before the next note. According to
+the documentation the amount shortened should be the trim
+fraction time the unit note length. It turns out that
+the trim length was not adjusted for the unit note length
+so that the following example did not work.
+
+X:1
+T: trim
+M: 2/4
+L: 1/8
+K: C
+%%MIDI trim 1/2
+CDEF|
+
+Fix: store.c was modified so that trim value set is a fraction
+of the unit note length as defined by the L: field command.
+Note, that if the unit note length is changed again, it is
+necessary to reissue another trim command, eg.
+
+
+X:1
+T: trim
+M: 2/4
+L: 1/8
+K: C
+%%MIDI trim 1/2
+CDEF|
+L: 1/16
+%%MIDI trim 1/2
+CDEF CDEF CDEF CDEF|
+
+Otherwise the trim length will remain unchanged.
+
+
+

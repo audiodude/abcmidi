@@ -46,7 +46,7 @@
  * based on public domain 'midifilelib' package.
  */
 
-#define VERSION "2.88 July 23 2005"
+#define VERSION "2.89 Dec 26 2006"
 #define SPLITCODE
 
 /* Microsoft Visual C++ Version 6.0 or higher */
@@ -1265,15 +1265,35 @@ int trackno;
 
   i = track[trackno].head;
   while (i != NULL) {
-    printf("Pitch %d chan %d vel %d time %ld xnum %d playnum %d\n",
+    printf("Pitch %d chan %d vel %d time %ld  %ld xnum %d playnum %d\n",
             i->note->pitch, i->note->chan, 
-            i->note->vel, i->note->dtnext,
+            i->note->vel, i->note->dtnext, i->note->tplay,
             i->note->xnum, i->note->playnum);
     i = i->next;
   };
 }
 
 
+int xnum_to_next_nonchordal_note(fromitem,spare,quantum)
+struct listx* fromitem;
+int spare,quantum;
+{
+struct anote* jnote;
+struct listx* nextitem;
+int i,xxnum;
+jnote = fromitem->note;
+if (jnote->xnum > 0) return jnote->xnum;
+i = 0;
+nextitem = fromitem->next;
+while (nextitem != NULL && i < 5) {
+  jnote = nextitem->note;
+  xxnum = (2*(jnote->dtnext + spare + (quantum/4)))/quantum;
+  if (xxnum > 0) return xxnum;
+  i++;
+  nextitem = nextitem->next;
+  }
+return 0;
+}
 
 int quantize(trackno, xunit)
 /* Work out how long each note is in musical time units.
@@ -1285,7 +1305,7 @@ int trackno, xunit;
   int spare;
   int toterror;
   int quantum;
-  int posnum;
+  int posnum,xxnum;
 
   /* fix to avoid division by zero errors in strange MIDI */
   if (xunit == 0) {
@@ -1309,9 +1329,10 @@ int trackno, xunit;
     /* In the event of short rests, the inter onset time
      * will be larger than the note length. However, for
      * chords the inter onset time can be zero.          */
-    if ((swallow_rests>=0) && (this->xnum - this->playnum <= restsize)
-		        && this->xnum > 0) {
-      this->playnum = this->xnum;
+    xxnum =  xnum_to_next_nonchordal_note(j,spare,quantum);
+    if ((swallow_rests>=0) && (xxnum - this->playnum <= restsize)
+		        && xxnum > 0) {
+      this->playnum = xxnum;
     };
    /* this->denom = parts_per_unitlen;  this variable is never used ! */
     spare = spare + this->dtnext - (this->xnum*xunit/parts_per_unitlen);

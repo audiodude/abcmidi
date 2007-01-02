@@ -31,7 +31,7 @@
  * Wil Macaulay (wil@syndesis.com)
  */
 
-#define VERSION "1.98 December 21  2006"
+#define VERSION "1.99 January 02  2007"
 /* enables reading V: indication in header */
 #define XTEN1 1
 /*#define INFO_OCTAVE_DISABLED 1*/
@@ -1277,7 +1277,7 @@ char *package, *s;
       } else {
         p = p + 1;
         b = readnump(&p);
-        addfeature(SETTRIM, 1, a, b);
+        addfeature(SETTRIM, 1, 4*a, b*v->default_length);
       };
       done = 1;
     };
