@@ -5561,4 +5561,29 @@ CDEF CDEF CDEF CDEF|
 Otherwise the trim length will remain unchanged.
 
 
+January 06 2007
+
+Abc2midi bug: wrong bar count when %%MIDI trim command
+mixed with chords. In the following example,
+
+X:1
+T: Bad barcount
+M: 2/4
+L: 1/8
+K: C 
+%%MIDI trim 1/2
+AB CD |AC DF |[A2c2] DF |
+[AB]2 [CD]2 |
+
+Abc2midi produces the following warnings:
+
+Warning in line 9 : Bar 2 has 7/4 units instead of 2
+Warning in line 10 : Bar 3 has 3/2 units instead of 2
+
+Furthermore, this may throw off the gchord accompaniment
+if it exists.
+
+Fix: in writetrack for case CHORDOFF: and CHORDOFFEX:,
+the function addunits() is called before trim adjustment
+instead of after.
 

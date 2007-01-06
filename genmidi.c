@@ -2236,11 +2236,11 @@ int xtrack;
       chordattack = staticchordattack;
       note_num = num[j];
       note_denom = denom[j];
+      addunits(note_num, note_denom);
       if (trim) {
           if (gtfract(note_num,note_denom,trim_num,trim_denom))
               addfract(&note_num,&note_denom,-trim_num,trim_denom);
       }
-      addunits(note_num, note_denom);
       break;
     case LINENUM:
       /* get correct line number for diagnostics */
