@@ -5587,3 +5587,15 @@ Fix: in writetrack for case CHORDOFF: and CHORDOFFEX:,
 the function addunits() is called before trim adjustment
 instead of after.
 
+
+March 15 2007
+
+Abc2midi ends a MIDI track immediately after the last note.
+On some MIDI synthesizers, this introduces a small artefact
+at the end of the MIDI file. Fix, a short delay of 25 MIDI
+pulses is inserted before the end of track. This was incorporated
+in the function clearQ() in queues.c.
+
+Midi2abc -mftext mode was modified to report end of track meta
+command.
+

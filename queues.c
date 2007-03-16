@@ -147,6 +147,7 @@ void clearQ()
     event_error("Sustained notes beyond end of track");
     timestep(Q[Qhead].delay+1, 1);
   };
+timestep(25,0); /* to avoid transient artefacts at end of track */
 }
 
 void printQ()

@@ -46,7 +46,7 @@
  * based on public domain 'midifilelib' package.
  */
 
-#define VERSION "2.89 Dec 26 2006"
+#define VERSION "2.90 March 15 2007"
 #define SPLITCODE
 
 /* Microsoft Visual C++ Version 6.0 or higher */
@@ -1144,6 +1144,11 @@ void mftxt_smpte(hr,mn,se,fr,ff)
   printf("Metatext SMPTE, %d:%d:%d  %d=%d\n", hr,mn,se,fr,ff);
 }
 
+void mftxt_metaeot()
+{
+  if (prtime()) return;
+  printf("Meta event, end of track\n");
+}
 
 
 void initfunc_for_midinotes()
@@ -1189,7 +1194,7 @@ void initfunc_for_mftext()
     Mf_sysex = no_op2;
     Mf_metamisc = no_op3;
     Mf_seqnum = no_op1;
-    Mf_eot = no_op0;
+    Mf_eot = mftxt_metaeot;
     Mf_timesig = mftxt_timesig;
     Mf_smpte = mftxt_smpte;
     Mf_tempo = mftxt_tempo;
