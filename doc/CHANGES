@@ -5599,3 +5599,32 @@ in the function clearQ() in queues.c.
 Midi2abc -mftext mode was modified to report end of track meta
 command.
 
+
+December 09 2007
+
+New feature in abc2midi: the program now recognizes the command
+
+%%propagate-accidentals not
+
+as described in http://abc.sourceforge.net/standard/abc2-draft.html
+directive 11.3
+
+This command suppresses propagation of accidentals across a bar.
+The commands
+%%propagate-accidentals pitch
+or
+%%propagate-accidentals octave
+
+restores propagation. Presently only octave method is used.
+
+For example:
+
+M:2/4
+L:1/8
+K:Eb
+%%propagate-accidentals not
+A =A A2|
+
+A2 is flattened since the natural sign does not propagate.
+
+

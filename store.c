@@ -31,7 +31,7 @@
  * Wil Macaulay (wil@syndesis.com)
  */
 
-#define VERSION "2.01 March 15 2007"
+#define VERSION "2.02 December 09 2007"
 /* enables reading V: indication in header */
 #define XTEN1 1
 /*#define INFO_OCTAVE_DISABLED 1*/
@@ -100,7 +100,7 @@ int retain_accidentals;
 int ratio_a, ratio_b;
 int velocitychange = 15;
 int chordstart=0;
-
+int nopropagate_accidentals = 0;
 /* microtonal support and scale temperament */
 int active_pitchbend;
 int microtone=0;
@@ -1457,6 +1457,7 @@ char *package, *s;
         }
         else
         {
+
            /* Changed by Anselm Lingnau, 2005-01-04, for security */
 #ifdef NO_SNPRINTF
           if (sprintf(msg, "%%%s%s", package, s) > sizeof(msg)) {
@@ -1470,6 +1471,16 @@ char *package, *s;
            event_comment(msg);
         }
       }
+     if (strcmp(package, "propagate") == 0) {
+          p = s;
+          p = p + 13;
+         printf("propagate-accidentals encountered\n");
+         if (strcmp(p,"not") == 0) {
+             nopropagate_accidentals = 1;
+          } else {nopropagate_accidentals = 0;}
+         done = 1;
+            }
+
     if (done == 0)  
     {
 
@@ -2962,7 +2973,10 @@ int xoctave, n, m;
   };
 
 /* linear temperament support */
-  pitch = pitchof_b(note, accidental, mult, octave, 1,&active_pitchbend);
+  if (nopropagate_accidentals == 1) 
+    pitch = pitchof_b(note, accidental, mult, octave, 0,&active_pitchbend);
+  else
+    pitch = pitchof_b(note, accidental, mult, octave, 1,&active_pitchbend);
   pitch_noacc = pitchof_b(note, 0, 0, octave, 0,&dummy);
 
   if (decorators[FERMATA]) {
