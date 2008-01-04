@@ -5628,3 +5628,19 @@ A =A A2|
 A2 is flattened since the natural sign does not propagate.
 
 
+January 04 2008
+
+Running yaps with the -E option to produce encapsulated
+postscript file (.eps) causes the program to crash with
+the error message
+*** glibc detected *** yaps: double free or corruption (!prev): 0x08d5f390 
+
+Analysis: the program attempts to close the output file twice.
+close_output_file was called once by printtune() (when it encountered
+a blank line) and again by event_eof() when it encountered an eof.
+The operating system does not set the filehandle to NULL after the
+file was closed defeating the conditional test in close_output_file.
+
+Fix: after closing the file the file handler is set to NULL.
+
+

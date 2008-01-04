@@ -2759,6 +2759,7 @@ void close_output_file()
   if (f != NULL) {
     closepage();
     fclose(f);
+    f = NULL;
   };
 }
 
