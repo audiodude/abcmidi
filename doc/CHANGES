@@ -5644,3 +5644,7 @@ file was closed defeating the conditional test in close_output_file.
 Fix: after closing the file the file handler is set to NULL.
 
 
+March 09 2008
+
+Midi2abc: added a new option -title for providing the title
+of the tune to insert in the abc file.

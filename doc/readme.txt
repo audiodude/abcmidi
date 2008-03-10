@@ -1,6 +1,6 @@
 abcMIDI :   abc <-> MIDI conversion utilities
 
-midi2abc version 2.90 March 15 2007
+midi2abc version 2.91 March 09 2008
 abc2midi version 2.02 Dec   09 2007
 abc2abc  version 1.56 Dec   21 2006
 yaps     version 1.50 Jan   04 2008
@@ -14,12 +14,11 @@ J.R.Allwright@westminster.ac.uk
 University of Westminster,
 London, UK
 
-December 2006
+March 2008
 
 Seymour Shlien
 seymour.shlien@crc.ca
-Communications Research Centre
-Ottawa
+retired
 
 This is free software. You may copy and re-distribute it under the terms of 
 the GNU General Public License version 2 or later, which is available from

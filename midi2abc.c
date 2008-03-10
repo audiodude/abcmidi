@@ -46,7 +46,7 @@
  * based on public domain 'midifilelib' package.
  */
 
-#define VERSION "2.90 March 15 2007"
+#define VERSION "2.91 March 10 2008"
 #define SPLITCODE
 
 /* Microsoft Visual C++ Version 6.0 or higher */
@@ -217,6 +217,8 @@ int notechan[2048],notechanvol[2048]; /*for linking on and off midi
 					channel commands            */
 int last_tick; /* for getting last pulse number in MIDI file */
 
+char *title = NULL; /* for pasting title from argv[] */
+char *origin = NULL; /* for adding O: info from argv[] */
 
 
 void remove_carriage_returns();
@@ -3235,10 +3237,22 @@ int argc;
      nogr=1;
   else nogr = 0;
 
+  arg = getarg("-title",argc,argv);
+  if (arg != -1) {
+       title = addstring(argv[arg]);
+       }
+
+  arg = getarg("-origin",argc,argv);
+  if (arg != -1) {
+       origin = addstring(argv[arg]);
+       }
+  
+
   arg = getarg("-f", argc, argv);
   if (arg == -1) {
     arg = huntfilename(argc, argv);
   };
+
   if ((arg != -1) && (arg < argc)) {
     F = efopen(argv[arg],"rb");
 /*    fprintf(outhandle,"%% input file %s\n", argv[arg]); */
@@ -3275,6 +3289,8 @@ int argc;
     printf("         -splitbars  splits bars to avoid nonhomophonic chords\n");
     printf("         -splitvoices  splits voices to avoid nonhomophonic chords\n");
 #endif
+    printf("         -title <string> Pastes title following\n");
+    printf("         -origin <string> Adds O: field containing string\n");
     printf("         -midigram   Prints midigram instead of abc file\n");
     printf("         -mftext mftext output\n"); 
     printf("         -ver version number\n");
@@ -3339,7 +3355,15 @@ int argc;
 /* print abc header block */
   argc = huntfilename(arg, argv);
   fprintf(outhandle,"X: 1\n"); 
+
+  if (title != NULL) 
+  fprintf(outhandle,"T: %s\n",title);
+  else
   fprintf(outhandle,"T: from %s\n",argv[argc]); 
+
+  if (origin != NULL)
+  fprintf(outhandle,"O: %s\n",origin);
+
   if (header_bsig == 0) {
      fprintf(outhandle,"%%***Missing time signature meta command in MIDI file\n");
      setup_timesig(4,  4,  8);
