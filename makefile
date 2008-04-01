@@ -32,7 +32,8 @@
 # return and line feed) to unix style end-of-line (line feed).
 
 CC=gcc
-CFLAGS=-DANSILIBS -O2 
+#CFLAGS=-DANSILIBS -O2 
+CFLAGS=-DANSILIBS -g 
 LNK=gcc
 INSTALL=install
 
@@ -114,16 +115,17 @@ clean :
 	rm *.o ${binaries}
 
 install: abc2midi midi2abc abc2abc mftext midicopy yaps abcmatch
-	$(INSTALL) -m 755 ${binaries} ${prefix}/${bindir}
+	test -d $(DESTDIR)${prefix}/${bindir} || mkdir -p $(DESTDIR)${prefix}/${bindir}
+	$(INSTALL) -m 755 ${binaries} $(DESTDIR)${prefix}/${bindir}
 
 	# install documentation
-	test -d ${PREFIX}/share/doc/abcmidi || mkdir -p ${prefix}/${docdir}
-	$(INSTALL) -m 644 doc/*.txt ${prefix}/${docdir}
-	$(INSTALL) -m 644 doc/AUTHORS ${prefix}/${docdir}
-	$(INSTALL) -m 644 doc/CHANGES ${prefix}/${docdir}
-	$(INSTALL) -m 644 VERSION ${prefix}/${docdir}
+	test -d $(DESTDIR)${PREFIX}/share/doc/abcmidi || mkdir -p $(DESTDIR)${prefix}/${docdir}
+	$(INSTALL) -m 644 doc/*.txt $(DESTDIR)${prefix}/${docdir}
+	$(INSTALL) -m 644 doc/authors $(DESTDIR)${prefix}/${docdir}
+	$(INSTALL) -m 644 doc/CHANGES $(DESTDIR)${prefix}/${docdir}
+	$(INSTALL) -m 644 VERSION $(DESTDIR)${prefix}/${docdir}
 
 	# install manpages
-	test -d ${prefix}/${mandir} || mkdir -p ${prefix}/${mandir};
-	$(INSTALL) -m 644 doc/*.1 ${prefix}/${mandir}
+	test -d $(DESTDIR)${prefix}/${mandir} || mkdir -p $(DESTDIR)${prefix}/${mandir};
+	$(INSTALL) -m 644 doc/*.1 $(DESTDIR)${prefix}/${mandir}
 
