@@ -2167,6 +2167,15 @@ int xtrack;
        if (channel == 9) 
         addtoQ(num[j], denom[j], drum_map[pitch[j]], channel, -totalnotedelay -1);
         else {
+            if ((notecount > 1) && ((note_num * denom[j]) !=  (note_denom * num[j])))
+               {
+               char msg[100];
+               sprintf(msg,"unequal notes in chord %d/%d versus %d/%d",
+                  note_num,note_denom,num[j],denom[j]);
+               event_warning(msg);
+	       num[j] = note_num;
+               denom[j] = note_denom;
+               }
             note_num = num[j];
             note_denom = denom[j];
 /* turn off slurring prematurely two separate two slurs in a row */

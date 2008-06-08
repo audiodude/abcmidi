@@ -5648,3 +5648,13 @@ March 09 2008
 
 Midi2abc: added a new option -title for providing the title
 of the tune to insert in the abc file.
+
+June 07 2008
+
+Abc2midi: introduced a warning for chords containing
+unequal notes (eg. [c2e] will cause a warning to be issued).
+The warning was added in writetrack in genmidi.c. In
+order to get a reasonable output, the incorrect chord
+will be played as [c2e2]. (The length of the first note
+dominates.)
+

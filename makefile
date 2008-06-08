@@ -121,7 +121,7 @@ install: abc2midi midi2abc abc2abc mftext midicopy yaps abcmatch
 	# install documentation
 	test -d $(DESTDIR)${PREFIX}/share/doc/abcmidi || mkdir -p $(DESTDIR)${prefix}/${docdir}
 	$(INSTALL) -m 644 doc/*.txt $(DESTDIR)${prefix}/${docdir}
-	$(INSTALL) -m 644 doc/authors $(DESTDIR)${prefix}/${docdir}
+	$(INSTALL) -m 644 doc/AUTHORS $(DESTDIR)${prefix}/${docdir}
 	$(INSTALL) -m 644 doc/CHANGES $(DESTDIR)${prefix}/${docdir}
 	$(INSTALL) -m 644 VERSION $(DESTDIR)${prefix}/${docdir}
 
