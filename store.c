@@ -31,7 +31,7 @@
  * Wil Macaulay (wil@syndesis.com)
  */
 
-#define VERSION "2.04 June 07 2008"
+#define VERSION "2.05 June 14 2008"
 /* enables reading V: indication in header */
 #define XTEN1 1
 /*#define INFO_OCTAVE_DISABLED 1*/
@@ -2619,17 +2619,24 @@ void event_chordon(int chorddecorators[])
 void event_chordoff(int chord_n, int chord_m)
 /* handles a chord close ] in the abc */
 {
+  int c_n,c_m;
+  if (chord_m == 1 && chord_n == 1) {
+     c_m = denom[chordstart];
+     c_n = num[chordstart];
+     }
+  else {c_m = chord_m; c_n = chord_n;}
+
   if (!v->inchord) {
     event_error("Chord already finished");
   } else {
   if (tuplecount > 0) {
-    chord_n = chord_n * tfact_num;
-    chord_m = chord_m * tfact_denom;
+    c_n = c_n * tfact_num;
+    c_m = c_m * tfact_denom;
     if (tnote_num == 0) {
-        tnote_num   = chord_n;
-        tnote_denom = chord_m;
+        tnote_num   = c_n;
+        tnote_denom = c_m;
     } else {
-       if (tnote_num * chord_m != chord_n * tnote_denom) {
+       if (tnote_num * c_m != c_n * tnote_denom) {
           if (!specialtuple) {
             event_warning("Different length notes in tuple for chord");
            };
@@ -2645,7 +2652,7 @@ void event_chordoff(int chord_n, int chord_m)
     else
       {
 
-      addfeature(CHORDOFFEX, 0, chord_n*4, chord_m*v->default_length);
+      addfeature(CHORDOFFEX, 0, c_n*4, c_m*v->default_length);
       fix_enclosed_note_lengths(chordstart, notes-1);
       }
       
@@ -2887,7 +2894,8 @@ int pitch;
   pitchdown = pitchof_b(down, v->basemap[(int)down - 'a'], 1, downoct, 0,&bend_down);
   marknotestart();
   /* normalize notelength to L:1/8 */
-  nnorm =n*8;
+  /*  nnorm =n*8; [SS] 2008-06-14 */
+  nnorm = n*(v->default_length);
   mnorm =m*(v->default_length);
   reduce(&nnorm,&mnorm);
   if (nnorm == 3 && mnorm == 1) /* dotted quarter note treated differently */
@@ -2946,7 +2954,8 @@ int xoctave, n, m;
   num = n;
   denom = m;
   if (v->inchord) v->chordcount = v->chordcount + 1;
-  if (tuplecount > 0 && !v->inchord) {
+/*  if (tuplecount > 0 && !v->inchord) { [SS] 2008-06-13} */
+  if (tuplecount > 0 ) {
     num = num * tfact_num;
     denom = denom * tfact_denom;
     if (tnote_num == 0) {

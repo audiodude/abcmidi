@@ -5658,3 +5658,38 @@ order to get a reasonable output, the incorrect chord
 will be played as [c2e2]. (The length of the first note
 dominates.)
 
+
+June 13 2008
+
+Abc2midi: produces a warning "Different length notes in tuple"
+when one of the notes in the tuple is a chord. eg.
+X:1
+T: triplet chord
+M: 2/4
+L: 1/16
+K: D
+[DF]4 (3[B2d2]c2d2 |
+
+Analysis: the problem was traced to a bug in the function
+event_chordoff in store.c which was introduced with the
+chord syntax extension described in November 4 2004.
+In computing the tuple adjusted note length, the function
+always uses chord_n and chord_m parameters even when
+they do not apply (equal to 1/1). Fix new local variables
+c_m and c_n are introduced which are set to chord_n,chord_m
+or num[chordstart] and denum[chordstart] depending on
+whether the chord syntax extension is used or not. The
+tuplet adjusted note length is computed from c_n and c_m.
+
+It was also necessary to change event_note so that
+tuples are processed for chords too.
+
+June 14
+
+Abc2midi: ornaments (eg ~G3) does not work correctly for
+default length other than 1/8 (L: 1/8). Analysis, doornament
+(in store.c) assumes L:1/8 for dotted quarter notes. This was fixed.
+ 
+
+
+~  
