@@ -1,5 +1,6 @@
 Guide to writing abc for abc2midi
 ---------------------------------
+(updated June 24 2008 -- drumbars)
 
 The defining document for abc is the abc version 1.6 specification which can 
 be found at http://www.gre.ac.uk/~c.walshaw/abc2mtex/abc.txt . This document
@@ -927,6 +928,21 @@ say _D using
 %%MIDI drummap _D 36.
 
 An example is provided in the file CHANGES (November 6 2005).
+
+
+%%MIDI drumbar n
+
+The %%MIDI drum line can sound quite monotonous if it is repeated
+each bar. To circumvent this problem a new MIDI command
+%%MIDI drumbars n
+where n is a small number will spread out the drum string over
+n consecutive bars. By default drumbars is set to 1 maintaining
+compatibility with existing abc files. You should take
+care that the drumstring is evenly divisible between the
+drumbar bars. Also the time signature should not change
+between bars in a drumbar unit. (Sample abc file in CHANGES
+June 24 2008.)
+
 
 
 %%MIDI control [bass/chord] n1 n2 

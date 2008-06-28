@@ -83,6 +83,8 @@ extern int quiet;
 extern int sf, mi;
 extern int gchordvoice, wordvoice, drumvoice, dronevoice;
 extern int gchordtrack, drumtrack, dronetrack;
+int drumbars;
+int drumbarcount;
 
 /* Part handling */
 extern struct vstring part;
@@ -412,7 +414,7 @@ char* s;
     event_error("Too many data items for drum sequence");
   };
   /* work out unit delay in 1/4 notes*/
-  drum_num = mtime_num * 4;
+  drum_num = mtime_num * 4*drumbars;
   drum_denom = mtime_denom * seq_len;
   reduce(&drum_num, &drum_denom);
 }
@@ -452,8 +454,12 @@ int pass;
     addtoQ(0, g_denom, -1, g_ptr, 0);
   };
   if (drumson) {
-    drum_ptr = 0;
-    addtoQ(0, drum_denom, -1, drum_ptr, 0);
+    if (drumbarcount < 1) {
+       drum_ptr = 0;
+       addtoQ(0, drum_denom, -1, drum_ptr, 0);
+       drumbarcount = drumbars;
+       }
+    drumbarcount--;
   };
 }
 
@@ -1423,6 +1429,14 @@ int noteson;
     set_drums(p);
     done = 1;
   };
+
+  if ((strcmp(command, "drumbars") == 0)) {
+     drumbars = readnump(&p);
+     if (drumbars < 1 || drumbars > 10) drumbars = 1;
+     drumbarcount = drumbars - 1;
+     done = 1;
+     }
+
   if ((strcmp(command, "chordprog") == 0))  {
     int prog;
 
@@ -2056,6 +2070,7 @@ int xtrack;
   graceflag = 0;
  /* ensure that the percussion channel is not selected by findchannel() */
   channels[9] = 1; 
+  drumbars = 1;
   if (karaoke) {
     if (xtrack < 3)                  
        karaokestarttrack(xtrack);

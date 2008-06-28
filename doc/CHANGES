@@ -4355,7 +4355,7 @@ K: none
 
 would be played on the percussion instruments
 bass drum (36)
-acoustic sname (38)
+acoustic snare (38)
 and closed hi-hat (42).
 
 Implementation: added new function parse_drummap() genmidi.c
@@ -5691,5 +5691,40 @@ default length other than 1/8 (L: 1/8). Analysis, doornament
 (in store.c) assumes L:1/8 for dotted quarter notes. This was fixed.
  
 
+
+June 24
+
+Abc2midi: new feature. The %%MIDI drum line can sound quite
+monotonous if it is repeated each bar. To circumvent this problem
+a new MIDI command
+%%MIDI drumbars n
+where n is a small number will spread out the drum string over
+n consecutive bars. By default drumbars is set to 1 maintaining
+compatibility with existing abc files. You should take
+care that the drumstring is evenly divisible between the
+drumbar bars. Also the time signature should not change
+between bars in a drumbar unit.
+
+Sample usage:
+
+X:1
+T: splitting a drum string into two bars
+M: 2/4
+L: 1/8
+K: G
+%%MIDI drum zdzdzdzd 39 59 50 60
+%%MIDI drumon
+z4| z4| z4| z4|
+%%MIDI drumbars 2
+%%MIDI drum zdzdzdzd 39 59 50 60
+z4| z4| z4| z4|
+
+
+
+Implementation: All the changes were confined to genmidi.c
+Two new variables drumbars and drumbarcount are introduced.
+Drumbars modifies drum_denom in set_drums. (This changes 
+the duration of a unit drum hit.) The function checkbar resets
+the drum_ptr every drumbars using the drumbarcount variable.
 
 ~  
