@@ -2071,6 +2071,7 @@ int xtrack;
  /* ensure that the percussion channel is not selected by findchannel() */
   channels[9] = 1; 
   drumbars = 1;
+  drumbarcount=0;
   if (karaoke) {
     if (xtrack < 3)                  
        karaokestarttrack(xtrack);

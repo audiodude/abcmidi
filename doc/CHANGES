@@ -5727,4 +5727,13 @@ Drumbars modifies drum_denom in set_drums. (This changes
 the duration of a unit drum hit.) The function checkbar resets
 the drum_ptr every drumbars using the drumbarcount variable.
 
+July 2 2009
+
+Regarding the drumbars implementation it is necessary
+to reset drumbarcount to 0 in writetrack after drumbars is
+initialized back to 1.
+
+
+
 ~  
+
