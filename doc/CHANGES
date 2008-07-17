@@ -5727,12 +5727,54 @@ Drumbars modifies drum_denom in set_drums. (This changes
 the duration of a unit drum hit.) The function checkbar resets
 the drum_ptr every drumbars using the drumbarcount variable.
 
-July 2 2009
+July 2 2008
 
 Regarding the drumbars implementation it is necessary
 to reset drumbarcount to 0 in writetrack after drumbars is
 initialized back to 1.
 
+
+July 17 2008
+
+Abc2midi bug: the following sample causes abc2midi to issue
+a warning
+
+Warning in line 9 : Bar 0 has 10 units instead of 6 in repeat
+
+X:1
+T: meter change
+M:5/8
+L:1/8
+K:C
+%
+|: [M:6/8] D6 &\
+[M:6/8] E6 |
+[M:4/8] F4 :|
+
+Analysis: the warning is issued when writetrack is processing
+track 2 which is the split voice track during the repeat.  The
+two [M:6/8] field commands ensure that the split voice track
+also sets the meter to 6/8 time. However the split voice track
+was not reset to [M:4/8] unless we do it explicitly with
+[M:4/8] F4 & [M:4/8] z4|. Store.c/sync_voices inserts a required
+rest z4 into bar 2 of the split voice but it does not include
+a time signature command which is needed to ensure that 
+genmidi/checkbar will process the bar correctly.
+
+Fix:
+
+Added 
+
+    case TIME:
+       addfeature(feature[j], pitch[j], num[j], denom[j]); /* copy feature */
+       break; /* [SS] 2008-07-17 */
+
+into the code of sync_voices.
+
+
+July 17 2008
+
+Abc2abc: removed the space between X: and the reference number.
 
 
 ~  

@@ -31,7 +31,7 @@
  * Wil Macaulay (wil@syndesis.com)
  */
 
-#define VERSION "2.07 July 02 2008"
+#define VERSION "2.08 July 17 2008"
 /* enables reading V: indication in header */
 #define XTEN1 1
 /*#define INFO_OCTAVE_DISABLED 1*/
@@ -675,7 +675,7 @@ static void sync_voice (struct voicecontext *vv, int sync_to, int ignorecurrentb
    all repeat signs and dynamic markings in the topvoice and
    inserts them in the current voice. 
 
-   This function is called by event_split_voice, complete_all_voices
+   This function is called by event_split_voice, complete_all_split_voices
    and event_bar (if split voices are present).
 
    The last_resync_point keeps track of what has been scanned,
@@ -755,6 +755,11 @@ while (j<=maxnotes) {
     case CHANNEL:
        addfeature(feature[j], pitch[j], 0, 0); /* copy feature */
        break;
+
+    case TIME:
+       addfeature(feature[j], pitch[j], num[j], denom[j]); /* copy feature */
+       break; /* [SS] 2008-07-17 */
+
     case NOTE:
     case TNOTE:
     case REST:

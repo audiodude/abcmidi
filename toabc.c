@@ -21,7 +21,7 @@
 
 /* back-end for outputting (possibly modified) abc */
 
-#define VERSION "1.56 December 21 2006"
+#define VERSION "1.57 July 17 2008"
 
 /* for Microsoft Visual C++ 6.0 or higher */
 #ifdef _MSC_VER
@@ -1191,10 +1191,10 @@ int n;
   };
   output_on = 1;
   if (newrefnos) {
-    emit_int_sprintf("X: %d", newref);
+    emit_int_sprintf("X:%d", newref);
     newref = newref + 1;
   } else {
-    emit_int_sprintf("X: %d", n);
+    emit_int_sprintf("X:%d", n);
   };
   parseron();
   xinhead = 1;
