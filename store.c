@@ -31,7 +31,7 @@
  * Wil Macaulay (wil@syndesis.com)
  */
 
-#define VERSION "2.08 July 17 2008"
+#define VERSION "2.09 July 21 2008"
 /* enables reading V: indication in header */
 #define XTEN1 1
 /*#define INFO_OCTAVE_DISABLED 1*/
@@ -142,6 +142,7 @@ struct voicecontext {
   int brokentype, brokenmult, brokenpending;
   int broken_stack[7];
   struct voicecontext* next;
+  int drumchannel;
 };
 struct voicecontext global;
 struct voicecontext* v;
@@ -291,6 +292,7 @@ int n;
     }
   s->keyset = global.keyset;
   s->octaveshift = global.octaveshift;
+  s->drumchannel = 0;
   vaddr[voicecount] = s;
   return(s);
 }
@@ -1159,6 +1161,10 @@ char *package, *s;
     if (strcmp(command, "channel") == 0) {
       skipspace(&p);
       ch = readnump(&p) - 1;
+      if (v != NULL) {
+        if (ch == 9) v->drumchannel = 1;
+        else v->drumchannel = 0;
+        }
       addfeature(CHANNEL, ch, 0, 0);
       done = 1;
     };
@@ -2713,7 +2719,24 @@ int propogate_accs;
   return p + 12*octave + middle_c;
 }
 
-
+static int barepitch(note, accidental, mult, octave) 
+/* Computes MIDI pitch ignoring any key signature.
+ * Required for drum track
+ */
+char note, accidental;
+int mult, octave;
+{
+int p,pitch;
+int accidental_size = 1;
+static const char *anoctave = "cdefgab";
+static int scale[7] = {0, 2, 4, 5, 7, 9, 11};
+p = (int) ((long) strchr(anoctave, note) - (long) anoctave);
+p = scale[p];
+if (accidental == '^') p = p + mult*accidental_size;
+if (accidental == '_') p = p - mult*accidental_size;
+pitch = p + 12*octave + middle_c;
+return pitch;
+}
 
 static int pitchof_b(note, accidental, mult, octave, propogate_accs,pitchbend)
 /* computes MIDI pitch for note. If global temperament is set,
@@ -2987,7 +3010,8 @@ int xoctave, n, m;
   };
 
 /* linear temperament support */
-  if (nopropagate_accidentals == 1) 
+  if (v->drumchannel) pitch = barepitch(note,accidental,mult,octave);
+  else if (nopropagate_accidentals == 1 ) 
     pitch = pitchof_b(note, accidental, mult, octave, 0,&active_pitchbend);
   else
     pitch = pitchof_b(note, accidental, mult, octave, 1,&active_pitchbend);

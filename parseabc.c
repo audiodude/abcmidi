@@ -69,14 +69,14 @@ extern char* strchr();
 #endif
 
 int lineno;
-static int parsing_started =0;
-static int parsing, slur;
-static int inhead, inbody;
-static int parserinchord;
-static int ingrace=0;
+int parsing_started =0;
+int parsing, slur;
+int inhead, inbody;
+int parserinchord;
+int ingrace=0;
 int chorddecorators[DECSIZE];
 char decorations[] = ".MLRH~Tuv";
-static char *abbreviation[SIZE_ABBREVIATIONS];
+char *abbreviation[SIZE_ABBREVIATIONS];
 
 int voicecodes = 0;
 char voicecode[16][30]; /*for interpreting V: string */
@@ -544,7 +544,7 @@ char* s;
   return(p);
 }
 
-static void lcase(s)
+void lcase(s)
 /* convert word to lower case */
 char* s;
 {
@@ -843,9 +843,11 @@ char* str;
   int modmul[7];
   int i, j;
   int cgotoctave,coctave;
-  static char *key = "FCGDAEB";
+  char *key = "FCGDAEB";
   int modeindex;
 
+  clefstr[0] = (char) 0;
+  modestr[0] = (char) 0;
   s = str;
   transpose = 0;
   gottranspose = 0;
@@ -972,7 +974,7 @@ char* str;
 }
 
 
-static void parsevoice(s)
+void parsevoice(s)
 char *s;
 {
 int num;		/* voice number */
@@ -1024,7 +1026,7 @@ if(gotmiddle) printf("parsevoice: middle= %s\n", vparams.middlestring);
 }
 
 
-static void parsenote(s)
+void parsenote(s)
 char **s;
 /* parse abc note and advance character pointer */
 {
@@ -1233,7 +1235,7 @@ int limit;
   out[i] = '\0';
 }
 
-static void parse_precomment(s)
+void parse_precomment(s)
 char* s;
 /* handles a comment field */
 {
@@ -1249,7 +1251,7 @@ char* s;
   };
 }
 
-static void parse_tempo(place)
+void parse_tempo(place)
 char* place;
 /* parse tempo descriptor i.e. Q: field */
 {
@@ -1315,7 +1317,7 @@ char* place;
   event_tempo(n, a, b, relative, pre_string, post_string);
 }
 
-static void
+void
 preparse_words(s)
 char *s;
 /* takes a line of lyrics (w: field) and strips off */
@@ -1393,7 +1395,7 @@ void free_abbreviations()
   };
 }
 
-static void parsefield(key, field)
+void parsefield(key, field)
 char key;
 char* field;
 /* top-level routine handling all lines containing a field */
@@ -1585,7 +1587,7 @@ char* p;
   return(q);
 }
 
-static void parsemusic(field)
+void parsemusic(field)
 char* field;
 /* parse a line of abc notes */
 {
@@ -1958,7 +1960,7 @@ char* field;
   };
 }
 
-static void parseline(line)
+void parseline(line)
 char* line;
 /* top-level routine for handling a line in abc file */
 {

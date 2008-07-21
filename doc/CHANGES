@@ -5777,5 +5777,44 @@ July 17 2008
 Abc2abc: removed the space between X: and the reference number.
 
 
-~  
+
+July 21 2008
+
+Removed all static declarations in parseabc.c
+In parsekey(str) initialized the local string
+clefstr and modestr.
+
+July 21 2008
+
+Abc2midi bug: key signature and accidental propagation
+applied to drum channel. In the following example,
+
+X:1
+T: drum key
+M: 4/4
+L: 1/8
+K: A
+V:1
+Z|ABcd efga|
+V:2
+%%MIDI channel 10
+G,, ^F,, z1 F,, E,, ^D,, z2|G,, ^F,, z1 F,, E,, ^D,, z2|
+
+voice 2 is assigned to the drum channel so the notes
+G,, ^F reference individual drum instruments rather than
+pitches. Since the key signature is A major (F#, C# and G#),
+event_note automatically raises G and F one semitone
+and propagates ^F across the bar. This is not desired
+for the drum channel.
+
+Fix: in store.c, a new variable, int drumchannel was
+added to struct voicecontext. It is initialized to 0.
+When event_specific handles a %%MIDI channel 10,
+drumchannel is set to 1. For other channels it is set
+to 0. A new function barepitch() was created from
+the function pitchof_b. This function does not apply
+the key signature or note propagation. The function
+event_note now checks whether v->drumchannel is set and calls
+barepitch() instead of pitchof_b() in such circumstances.
+(See Cuckoo's Nest in demo.abc for a sample.) 
 
