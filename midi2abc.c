@@ -46,7 +46,7 @@
  * based on public domain 'midifilelib' package.
  */
 
-#define VERSION "2.91 March 10 2008"
+#define VERSION "2.92 August 04 2008"
 #define SPLITCODE
 
 /* Microsoft Visual C++ Version 6.0 or higher */
@@ -879,6 +879,29 @@ char* s = name;
   return  name;
 }
 
+
+void pitch2drum(midipitch)
+int midipitch;
+{
+static char *drumpatches[] = {
+ "Acoustic Bass Drum", "Bass Drum 1", "Side Stick", "Acoustic Snare",
+ "Hand Clap", "Electric Snare", "Low Floor Tom", "Closed Hi Hat",
+ "High Floor Tom", "Pedal Hi-Hat", "Low Tom", "Open Hi-Hat",
+ "Low-Mid Tom", "Hi Mid Tom", "Crash Cymbal 1", "High Tom",		
+ "Ride Cymbal 1", "Chinese Cymbal", "Ride Bell", "Tambourine",
+ "Splash Cymbal", "Cowbell", "Crash Cymbal 2", "Vibraslap",
+ "Ride Cymbal 2", "Hi Bongo", "Low Bongo",	"Mute Hi Conga",
+ "Open Hi Conga", "Low Conga", "High Timbale", "Low Timbale",
+ "High Agogo", "Low Agogo", "Cabasa", "Maracas",
+ "Short Whistle", "Long Whistle", "Short Guiro", "Long Guiro",
+ "Claves", "Hi Wood Block", "Low Wood Block", "Mute Cuica",
+ "Open Cuica", "Mute Triangle", "Open Triangle" };
+if (midipitch >= 35 && midipitch <= 81) {
+  printf(" (%s)",drumpatches[midipitch-35]);
+  }
+}
+
+
 void mftxt_header (int format, int ntrks, int ldivision)
 {
   division = ldivision;
@@ -903,7 +926,9 @@ void mftxt_noteon(chan,pitch,vol)
 */
   if (prtime()) return;
   key = pitch2key(pitch);
-  printf("Note on  %2d  %3s %3d\n",chan+1, key,vol);
+  printf("Note on  %2d  %3s %3d",chan+1, key,vol);
+  if (chan == 9) pitch2drum(pitch);
+  printf("\n");
 }
 
 void mftxt_noteoff(chan,pitch,vol)

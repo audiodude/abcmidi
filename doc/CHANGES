@@ -5818,3 +5818,9 @@ event_note now checks whether v->drumchannel is set and calls
 barepitch() instead of pitchof_b() in such circumstances.
 (See Cuckoo's Nest in demo.abc for a sample.) 
 
+
+August 4 2008
+
+Midi2abc: new feature. The -mftext prints the name of
+the drum patch for channel 10 and noteon commands.
+
