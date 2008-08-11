@@ -31,7 +31,7 @@
  * Wil Macaulay (wil@syndesis.com)
  */
 
-#define VERSION "2.09 July 21 2008"
+#define VERSION "2.10 August 11 2008"
 /* enables reading V: indication in header */
 #define XTEN1 1
 /*#define INFO_OCTAVE_DISABLED 1*/
@@ -1288,7 +1288,14 @@ char *package, *s;
       } else {
         p = p + 1;
         b = readnump(&p);
+       if (v != NULL) {
         addfeature(SETTRIM, 1, 4*a, b*v->default_length);
+        } else {
+        if (global.default_length == -1) 
+          event_error("Need to define L: before trim command: trim command ignored.");
+        else 
+          addfeature(SETTRIM,1,4*a, b*global.default_length);
+       };
       };
       done = 1;
     };

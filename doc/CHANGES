@@ -5824,3 +5824,30 @@ August 4 2008
 Midi2abc: new feature. The -mftext prints the name of
 the drum patch for channel 10 and noteon commands.
 
+
+August 11 2008
+
+Abc2midi bug: The following abc file cause abc2midi
+to halt with a segmentation error.
+
+X:1
+T: trim problem
+M:3/4
+L:1/4
+%%MIDI trim 1/8
+K:C
+ABC|DEF|
+
+Analysis: the error occurs in event_specific when the function 
+   addfeature(SETTRIM, 1, 4*a, b*v->default_length);
+is called. The voice structure does not exist causing
+a segmentation error when v->default_length is addressed.
+(v does not exist until the body of the abc file.)
+Fix: if v does not exist, addfeature(SETTRIM,...)
+get the default_length from global.default_length.
+Comment: event_refno creates the voice structure and
+then destroys it when it calls startfile(). This does
+not cause a problem but makes the code obscure. 
+
+
+
