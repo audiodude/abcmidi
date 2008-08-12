@@ -31,7 +31,7 @@
  * Wil Macaulay (wil@syndesis.com)
  */
 
-#define VERSION "2.10 August 11 2008"
+#define VERSION "2.11 August 12 2008"
 /* enables reading V: indication in header */
 #define XTEN1 1
 /*#define INFO_OCTAVE_DISABLED 1*/
@@ -761,6 +761,10 @@ while (j<=maxnotes) {
     case TIME:
        addfeature(feature[j], pitch[j], num[j], denom[j]); /* copy feature */
        break; /* [SS] 2008-07-17 */
+
+    case SETTRIM:
+       addfeature(feature[j], pitch[j], num[j], denom[j]); /* copy feature */
+       break; /* [SS] 2008-08-12 */
 
     case NOTE:
     case TNOTE:

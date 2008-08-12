@@ -5850,4 +5850,49 @@ then destroys it when it calls startfile(). This does
 not cause a problem but makes the code obscure. 
 
 
+August 12 2008
+
+Another abc2midi trim bug: the following warnings are
+
+Warning in line 9 : unequal notes in chord 7/8 versus 1/1
+Warning in line 9 : unequal notes in chord 3/4 versus 1/1
+
+are the produced from this file.
+
+X:1
+T: trim problem
+M:3/4
+L:1/4
+K:C
+%%MIDI trim 1/8
+%%MIDI makechordchannels 2
+CD[ABc]|
+
+Analysis: the problem was traced to the function writetrack in genmidi.c.
+The note length is trimmed inside the switch case for NOTE:. The
+length of the trimmed  note is saved and trimming is reapplied to this
+length for each note of the chord.  This bug was probably introduced
+in June 7 2008 in order to make the the first note in a chord to dominate.
+Fix: new variables tnote_num and tnote_denom are introduced specifically
+for note trimming.
+
+August 12 2008
+
+Still another abc2midi trim bug. For split voices, the notes are
+trimmed in only one voice. In the following example, the notes
+CDE are trimmed but not EFG.
+
+X:1
+T: another trim problem
+M:3/4
+L:1/4
+%%MIDI trim 1/8
+%%MIDI makechordchannels 2
+%%MIDI program 20
+K:C
+CDE & EFG| 
+
+Fix: another case statement SETTRIM: was added to sync_voice() in store.c
+Note that %%MIDI trim command only applies to a single voice.
+
 
