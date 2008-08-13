@@ -2044,6 +2044,7 @@ int xtrack;
   int texton;
   int timekey;
   int note_num,note_denom;
+  int tnote_num,tnote_denom; /* for note trimming */
   int graceflag;
 
 /*  printf("writing track %d\n",xtrack); */
@@ -2197,13 +2198,17 @@ int xtrack;
 /* turn off slurring prematurely two separate two slurs in a row */
             if (slurring && feature[j+1] == SLUR_OFF) slurring = 0;
             if (trim && !slurring && !graceflag) {
+              tnote_num = note_num;
+              tnote_denom = note_denom;
               if (gtfract(note_num,note_denom,trim_num,trim_denom))
-                addfract(&note_num,&note_denom,-trim_num,trim_denom);
+                addfract(&tnote_num,&tnote_denom,-trim_num,trim_denom);
+              addtoQ(tnote_num, tnote_denom, pitch[j] + transpose +global_transpose,
+               channel, -totalnotedelay -1);
         /*     else
                 addfract(&note_num,&note_denom,-note_num,trim_denom*2); */
                 /* no note trimming for short notes 2006-08-05 at
                    Hudson Lacerda's request.                             */
-               }
+               } else
             addtoQ(note_num, note_denom, pitch[j] + transpose +global_transpose,
                channel, -totalnotedelay -1);
              }
