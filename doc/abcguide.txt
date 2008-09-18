@@ -350,7 +350,7 @@ this behaviour. Missing start repeats are not supported in multiple voice
 music. Also, abc2midi does not allow nested repeats. However, you can use 
 the more versatile part notation to achieve multiple repeats.
 
-It is not unusual to see music where a repeat does not co-incide with the 
+It is not unusual to see music where a repeat does not coincide with the 
 end of a bar and the number of beats is not quite correct if the piece is 
 played exactly as written. A human player usually knows enough to correct 
 the mistake themselves, but abc2midi will play exactly what is written, so 

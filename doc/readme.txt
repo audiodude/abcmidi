@@ -1,7 +1,7 @@
 abcMIDI :   abc <-> MIDI conversion utilities
 
 midi2abc version 2.92 August 04 2008
-abc2midi version 2.12 August 13 2008
+abc2midi version 2.13 September 18 2008
 abc2abc  version 1.57 July  17 2008
 yaps     version 1.50 Jan   04 2008
 abcmatch version 1.42 Dec   21 2006
@@ -230,7 +230,7 @@ in piano roll format.
 
 abc2midi  - converts abc file to MIDI file(s).
 Usage : abc2midi <abc file> [reference number] [-c] [-v] [-o filename]
-        [-t] [-n <value>] [-ver]
+        [-t] [-n <value>] [-ver] [-NFNP] [-NCOM] [-OCC]
         [reference number] selects a tune
         -c  selects checking only
         -v  selects verbose option
@@ -241,6 +241,7 @@ Usage : abc2midi <abc file> [reference number] [-c] [-v] [-o filename]
         -quiet suppress some common warnings
         -Q <tempo> in quarter notes/minute
         -NFNP ignore all dynamic indications (!f! !ff! !p! etc.)
+        -NCOM suppress comments
         -ver prints version number and exits
         -OCC old chord convention (eg. +CE+)
 

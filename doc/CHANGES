@@ -5896,3 +5896,18 @@ Fix: another case statement SETTRIM: was added to sync_voice() in store.c
 Note that %%MIDI trim command only applies to a single voice.
 
 
+September 17 2008
+
+Abc2midi bug: wrong bass note when expanding guitar chord with inversion.
+The bass note should be the note after the / rather than the pitch
+of the chord. Thus "C/E" should be represented by E,,x [G,E,C,] rather
+than C,,x [G,E,C].
+
+Fix: case 'f' in function dogchords() in genmidi.c no tests for
+an inversion. If an inversion is indicated, the bass note is changed.
+  
+
+September 18 2008
+
+Abc2midi new feature: added the run time option (-NCOM) to suppress
+some textual comments in the output midi file. 

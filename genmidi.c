@@ -1706,7 +1706,10 @@ int j;
     case 'f':
       if (g_started && gchords) {
         /* do fundamental */
+        if (inversion == -1)
         save_note(g_num*len, g_denom, basepitch+fun.base, 8192, fun.chan, fun.vel);
+        else
+        save_note(g_num*len, g_denom, inversion+fun.base, 8192, fun.chan, fun.vel);
       };
       break;
 

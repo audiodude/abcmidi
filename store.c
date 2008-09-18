@@ -31,7 +31,7 @@
  * Wil Macaulay (wil@syndesis.com)
  */
 
-#define VERSION "2.12 August 13 2008"
+#define VERSION "2.13 September 18 2008"
 /* enables reading V: indication in header */
 #define XTEN1 1
 /*#define INFO_OCTAVE_DISABLED 1*/
@@ -212,6 +212,7 @@ char *outname = NULL;
 char *outbase = NULL;
 int check;
 int nofnop; /* for suppressing dynamics (ff, pp etc) */
+int nocom;  /* for suppressing comments in MIDI file */
 int ntracks;
 
 /* bar length checking */
@@ -507,6 +508,13 @@ char **filename;
     nofnop = 0;
   }
 
+  if (getarg("-NCOM", argc, argv) != -1) {
+    nocom = 1;
+  } else {
+    nocom = 0;
+  }
+
+
   if (getarg("-OCC",argc,argv) != -1) oldchordconvention=1;
 
   maxnotes = 500;
@@ -526,7 +534,7 @@ char **filename;
     printf("abc2midi version %s\n",VERSION);
     printf("Usage : abc2midi <abc file> [reference number] [-c] [-v] ");
     printf("[-o filename]\n");
-    printf("        [-t] [-n <value>] [-RS] [-NFNP]\n");
+    printf("        [-t] [-n <value>] [-RS] [-NFNP] [-NCOM]\n");
     printf("        [reference number] selects a tune\n");
     printf("        -c  selects checking only\n");
     printf("        -v  selects verbose option\n");
@@ -538,6 +546,7 @@ char **filename;
     printf("        -quiet suppress some common warnings\n");
     printf("        -Q default tempo (quarter notes/minute)\n");
     printf("        -NFNP don't process !p! or !f!-like fields\n");
+    printf("        -NCOM suppress comments in output MIDI file\n");
     printf("        -OCC old chord convention (eg. +CE+)\n");
     printf(" The default action is to write a MIDI file for each abc tune\n");
     printf(" with the filename <stem>N.mid, where <stem> is the filestem\n");
@@ -1131,6 +1140,7 @@ void event_comment(s)
 /* comment found in abc */
 char *s;
 {
+  if (nocom) return;
   if (dotune) {
     if (pastheader) {
       textfeature(TEXT, s);
@@ -1490,7 +1500,7 @@ char *package, *s;
               event_warning("event_specific: comment too long");
           }
 #endif
-           event_comment(msg);
+        event_comment(msg);
         }
       }
      if (strcmp(package, "propagate") == 0) {

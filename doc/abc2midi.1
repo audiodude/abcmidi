@@ -2,7 +2,7 @@
 .SH NAME
 \fBabc2midi\fP \- converts abc file to MIDI file(s)
 .SH SYNOPSIS
-abc2midi \fIinfile\fP [\fIrefnum\fP] [-c] [-v] [-ver] [-t] [-n limit] [-RS] [-quiet] [-Q tempo] [-NFNP] [-OCC] [-o outfile]
+abc2midi \fIinfile\fP [\fIrefnum\fP] [-c] [-v] [-ver] [-t] [-n limit] [-RS] [-quiet] [-Q tempo] [-NFNP] [-OCC] [-NCOM] [-o outfile]
 .SH DESCRIPTION
  The default action is to write a MIDI file for each abc tune
  with the filename <stem>N.mid, where <stem> is the filestem
@@ -42,6 +42,9 @@ specified in the abc header.
 .TP
 .B -NFNP
 Ignore any dynamic indications !f! !ff! etc.
+.TP
+.B -NCOM
+Suppress some comments in the output MIDI file.
 .TP
 .B -OCC
 Accept old chord convention (eg +D2G2+ instead of [DG]2).
