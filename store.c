@@ -31,7 +31,7 @@
  * Wil Macaulay (wil@syndesis.com)
  */
 
-#define VERSION "2.13 September 18 2008"
+#define VERSION "2.14 September 24 2008"
 /* enables reading V: indication in header */
 #define XTEN1 1
 /*#define INFO_OCTAVE_DISABLED 1*/
@@ -4194,6 +4194,7 @@ static void startfile()
   wcount = 0;
   parts = -1;
   middle_c = default_middle_c;
+  temperament=0;
   for (j=0; j<26; j++) {
     part_start[j] = -1;
   };

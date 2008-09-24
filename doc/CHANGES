@@ -5911,3 +5911,16 @@ September 18 2008
 
 Abc2midi new feature: added the run time option (-NCOM) to suppress
 some textual comments in the output midi file. 
+
+September 24 2008
+
+Abc2midi bug: for multitune abc files, the temperament is not automatically
+turned off at the start of the next tune. Fix: temperament is initialized
+to zero in startfile() in store.c
+
+September 24 2008
+Abc2midi new behaviour: the 'strange note' in a gchord is no longer
+included in the chord. (i.e. F/G is now expanded as G,, [F,A,C] instead
+of G,, [G,,F,A,C]. (Suggested by H. Lacerda). Change made in
+configure_gchord() in genmidi.c
+

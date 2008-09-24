@@ -275,11 +275,14 @@ if (inversion != -1) {
             inchord = j;
 	    };
        };
-  if ((inchord == 0) && (inversion > basepitch)) {
-        inversion = inversion - 12;
-        gchordnotes[gchordnotes_size] = inversion+gchord.base;
-        gchordnotes_size++;
-        };
+
+/* do not add strange note to chord [SS] 2008-09-24 */
+/*  if ((inchord == 0) && (inversion > basepitch)) {
+**        inversion = inversion - 12;
+**        gchordnotes[gchordnotes_size] = inversion+gchord.base;
+**        gchordnotes_size++;
+**        };
+***/
    };
 for (j=0; j<chordlen[chordnum]; j++) {
     note = basepitch + chordnotes[chordnum][j]; 
