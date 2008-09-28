@@ -5924,3 +5924,66 @@ included in the chord. (i.e. F/G is now expanded as G,, [F,A,C] instead
 of G,, [G,,F,A,C]. (Suggested by H. Lacerda). Change made in
 configure_gchord() in genmidi.c
 
+
+September 28 2008
+Abc2midi bug when selecting tune from collection. When the abc2midi
+is used to create a single MIDI file from an abc file containing
+a collection of tune which contains %%MIDI commands, abc2midi
+numerous warnings 'cannot handle this MIDI directive here' for
+the non-selected tunes. For
+example
+abc2midi balk2.abc 237 -v
+Reference X: 180
+Warning in line 9 : cannot handle this MIDI directive here
+Reference X: 181
+Warning in line 34 : cannot handle this MIDI directive here
+Warning in line 35 : cannot handle this MIDI directive here
+Warning in line 36 : cannot handle this MIDI directive here
+Warning in line 37 : cannot handle this MIDI directive here
+Reference X: 182
+[snip]
+This obscures real warnings from the selected tune.
+
+Analysis: the messages are issued by event_specific_in_header()
+which was designed to process MIDI commands which appear before
+the first tune (X: refno), in the file. The function is called
+when dotune == 0, which is true for unselected tunes. This means
+that some of the directives in the nonselected tunes (e.g. nobarlines,
+fermatafixed, ...) can affect the selected tune. Furthermore,
+some other MIDI directives which are not recognized by the function
+cause the above warnings to occur. In the following example
+(headercommands.abc),
+
+%%MIDI nobarlines
+X:1
+T: tune 1
+M: 2/4
+K:G
+%%MIDI barlines
+%%MIDI program 100
+
+
+X:2
+T: tune 2
+M: 2/4
+K: F
+etc.
+
+the directive %%MIDI nobarlines appearing before the first tune
+is to apply to all tunes in the abc file except where specifically
+overrided (in tune 1). When we run
+
+abc2midi headercommands 2
+
+we are expecting %%MIDI nobarlines to apply to tune 2. However,
+this was changed in the nonselected tune 1 and the %%MIDI program 100
+command causes the message 'cannot handle this MIDI directive here'.
+
+Fix: a new global variable started_parsing initialized to zero was
+introduced in store.c. When event_refno is invoked, the variable
+started_parsing is set to 1. The function event_specific_in_header
+is called only if started_parsing is still 0.
+
+
+ 
+

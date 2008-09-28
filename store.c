@@ -31,7 +31,7 @@
  * Wil Macaulay (wil@syndesis.com)
  */
 
-#define VERSION "2.14 September 24 2008"
+#define VERSION "2.15 September 28 2008"
 /* enables reading V: indication in header */
 #define XTEN1 1
 /*#define INFO_OCTAVE_DISABLED 1*/
@@ -108,6 +108,7 @@ int temperament = 0;
 #define SEMISIZE 4096
 int octave_size = 12*SEMISIZE;
 int fifth_size = 7*SEMISIZE; /* default to 12-edo */
+int started_parsing=0;
 
 
 
@@ -1159,7 +1160,7 @@ char *package, *s;
   char *p;
   int done;
 
-  if (dotune == 0) {
+  if (started_parsing == 0) {
         event_specific_in_header(package,s);
         return;
         }
@@ -1636,7 +1637,7 @@ char *package, *s;
       }
 
     if (done == 0) {
-       event_warning("cannot handle this MIDI directive here");
+       event_warning("cannot handle this MIDI directive in file header");
     }
   }
 }
@@ -4434,6 +4435,7 @@ int n;
   char numstr[23]; /* Big enough for a 64-bit int! */
   char newname[256];
 
+  started_parsing = 1;
   if (dotune) {
     finishfile();
     parseroff();
