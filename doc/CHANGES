@@ -5984,6 +5984,31 @@ introduced in store.c. When event_refno is invoked, the variable
 started_parsing is set to 1. The function event_specific_in_header
 is called only if started_parsing is still 0.
 
-
  
+February 20 2009
+Yaps bug. The -E option (for encapsulated postscript) does
+not compute the boundingbox correctly if the abc file contains
+note fields (N:). eg.
 
+X:1
+T:A test
+N:A note
+K:C
+AB cd ef ga | \
+AB cd ef ga | \
+AB cd ef ga | \
+AB cd ef ga |
+AB cd ef ga | \
+AB cd ef ga | \
+AB cd ef ga | \
+AB cd ef ga |]
+
+The bottom part of the last staff is cutoff.
+
+Analysis: the function tuneheight() in drawtune.c did not
+account for space used by the note fields.
+
+Fix: added several lines of code to the function to scan
+through the notefield list and adjust the page height.
+
+Fix:

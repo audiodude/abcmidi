@@ -3383,6 +3383,7 @@ struct tune* t;
   struct voice* thisvoice;
   int doneline;
   double height;
+  char *notesfield; /* from N: field */
 
   height = 0.0;
   resettune(t);
@@ -3402,6 +3403,11 @@ struct tune* t;
   };
   if (t->parts != NULL) {
     height = height + composerfont.pointsize + composerfont.space;
+  };
+  notesfield = firstitem(&t->notes);
+  while (notesfield != NULL) {
+    height = height + composerfont.pointsize + composerfont.space;
+    notesfield = nextitem(&t->notes);
   };
   thisvoice = firstitem(&t->voices);
   if (separate_voices) {
