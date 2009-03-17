@@ -84,6 +84,8 @@ extern int sf, mi;
 extern int gchordvoice, wordvoice, drumvoice, dronevoice;
 extern int gchordtrack, drumtrack, dronetrack;
 int drumbars;
+int gchordbars;
+int gchordbarcount;
 int drumbarcount;
 
 /* Part handling */
@@ -331,7 +333,7 @@ char* s;
     event_error("Sequence string too long");
   };
   /* work out unit delay in 1/4 notes*/
-  g_num = mtime_num * 4;
+  g_num = mtime_num * 4*gchordbars;
   g_denom = mtime_denom * seq_len;
   reduce(&g_num, &g_denom);
 /*  printf("%s  %d %d\n",s,g_num,g_denom); */
@@ -453,9 +455,13 @@ int pass;
   bar_denom = 1;
   /* zero place in gchord sequence */
   if (gchordson) {
-    g_ptr = 0;
-    addtoQ(0, g_denom, -1, g_ptr, 0);
-  };
+    if (gchordbarcount < 1) {
+      g_ptr = 0;
+      addtoQ(0, g_denom, -1, g_ptr, 0);
+      gchordbarcount = gchordbars;
+      }
+    gchordbarcount--;
+    };
   if (drumson) {
     if (drumbarcount < 1) {
        drum_ptr = 0;
@@ -1440,6 +1446,13 @@ int noteson;
      done = 1;
      }
 
+  if ((strcmp(command, "gchordbars") == 0)) {
+     gchordbars = readnump(&p);
+     if (gchordbars < 1 || gchordbars > 10) gchordbars = 1;
+     gchordbarcount = gchordbars - 1;
+     done = 1;
+     }
+
   if ((strcmp(command, "chordprog") == 0))  {
     int prog;
 
@@ -2078,7 +2091,9 @@ int xtrack;
  /* ensure that the percussion channel is not selected by findchannel() */
   channels[9] = 1; 
   drumbars = 1;
+  gchordbars = 1;
   drumbarcount=0;
+  gchordbarcount=0;
   if (karaoke) {
     if (xtrack < 3)                  
        karaokestarttrack(xtrack);

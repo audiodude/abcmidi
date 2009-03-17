@@ -1,6 +1,6 @@
 Guide to writing abc for abc2midi
 ---------------------------------
-(updated June 24 2008 -- drumbars)
+(updated March 17 2009 -- gchordbars)
 
 The defining document for abc is the abc version 1.6 specification which can 
 be found at http://www.gre.ac.uk/~c.walshaw/abc2mtex/abc.txt . This document
@@ -930,7 +930,7 @@ say _D using
 An example is provided in the file CHANGES (November 6 2005).
 
 
-%%MIDI drumbar n
+%%MIDI drumbars n
 
 The %%MIDI drum line can sound quite monotonous if it is repeated
 each bar. To circumvent this problem a new MIDI command
@@ -943,7 +943,12 @@ drumbar bars. Also the time signature should not change
 between bars in a drumbar unit. (Sample abc file in CHANGES
 June 24 2008.)
 
+%%MIDI gchordbars n
 
+This command spreads the gchord string over n consecutive bars
+of equal length. The gchord string should be evenly divisible
+by n or else the gchords will not work properly. A sample
+abc file is found in CHANGES March 17 2009.
 
 %%MIDI control [bass/chord] n1 n2 
 

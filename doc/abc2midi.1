@@ -363,7 +363,7 @@ as done in the body of the music, but it is still possible to express
 complex rhythms. For example, to indicate a rhythm such as
 (3ddd d/d/d/d, you would write the string "d4d4d4d3d3d3d3".
 .PP
-%%MIDI drumbar n
+%%MIDI drumbars n
 .PP
 The %%MIDI drum line can sound quite monotonous if it is repeated
 each bar. To circumvent this problem a new MIDI command
@@ -375,6 +375,13 @@ care that the drumstring is evenly divisible between the
 drumbar bars. Also the time signature should not change
 between bars in a drumbar unit. (Sample abc file in doc/CHANGES
 June 24 2008.)
+.PP
+%%MIDI gchordbars n
+.PP
+This command spreads the gchord string over n consecutive bars
+just like drumbars (above). (A sample is found in doc/CHANGES
+March 17 2009.)
+
 
 
 

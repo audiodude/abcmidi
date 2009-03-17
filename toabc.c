@@ -21,7 +21,7 @@
 
 /* back-end for outputting (possibly modified) abc */
 
-#define VERSION "1.57 July 17 2008"
+#define VERSION "1.58 March 17 2009"
 
 /* for Microsoft Visual C++ 6.0 or higher */
 #ifdef _MSC_VER
@@ -576,9 +576,11 @@ char** filename;
     } else {
       if (*argv[targ] == '-') {
         transpose = -readnumf(argv[targ]+1);
+      } else if (*argv[targ] == '+') {
+          transpose = readnumf(argv[targ]+1);
       } else {
-        transpose = readnumf(argv[targ]);
-      };
+          transpose = readnumf(argv[targ]);
+        };
     };
   };
   targ = getarg("-nda",argc,argv);
