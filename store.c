@@ -31,7 +31,7 @@
  * Wil Macaulay (wil@syndesis.com)
  */
 
-#define VERSION "2.16 March 17 2009"
+#define VERSION "2.17 June 23 2009"
 /* enables reading V: indication in header */
 #define XTEN1 1
 /*#define INFO_OCTAVE_DISABLED 1*/
@@ -245,7 +245,7 @@ void addfract(int *xnum, int *xdenom, int a, int b);
 static void zerobar();
 static void addfeature(int f,int p,int n,int d);
 static void replacefeature(int f, int p, int n, int d, int loc);
-static void insertfeature(int f, int p, int n, int d, int loc);
+void insertfeature(int f, int p, int n, int d, int loc);
 static void textfeature(int type, char *s);
 extern long writetrack();
 void init_drum_map();
@@ -1066,7 +1066,7 @@ int f, p, n, d, loc;
 }
 
 
-static void insertfeature(f, p, n, d, loc)
+void insertfeature(f, p, n, d, loc)
 /* insert feature in internal table */
 int f,p,n,d,loc;
 { int i;
@@ -4329,6 +4329,76 @@ char* clefname;
   };
 }
 
+
+
+/* Handling missing repeats in multivoiced and multipart abc tune */
+
+
+int voicestart[64];
+int bar_rep_found[64];
+int add_leftrepeat_at[100];
+int num2add = 0;
+
+void add_missing_repeats (); 
+
+void clear_voice_repeat_arrays () {
+int i;
+for (i=0;i<64;i++) {
+   voicestart[i] = 0;
+   bar_rep_found[i] = 0;
+   }
+}
+  
+
+
+void scan_for_missing_repeats ()
+{
+/* The function attempts to clean up the missing left repeats |:
+ * that occur in many multivoiced or multipart abc tunes.
+ * The function scans the feature[] representation and
+ * keeps track where the voice appears for the first time
+ * in an individual part. If a :| appears in that voice,
+ * but no |: was detected, then the function inserts a |:
+ * at the point where the voice first appears.
+ */
+int i,j;
+int voicenum;
+char part;
+part = '0';
+voicenum = 0;
+for (i=0;i<notes;i++) {
+  j = feature[i];
+  if (j == PART || j == VOICE || j == BAR_REP || j == REP_BAR
+     || j == DOUBLE_REP) 
+  if (j == PART) {clear_voice_repeat_arrays();
+                  part = (char) pitch[i];
+                 }
+  if (j == VOICE) {
+        voicenum = pitch[i];
+        if(!voicestart[voicenum]) voicestart[voicenum] = i;
+        }
+  if (j == BAR_REP) bar_rep_found[voicenum] = 1;
+  if ((j == REP_BAR || j == DOUBLE_REP) && (!bar_rep_found[voicenum])) {
+     printf("missing BAR_REP for voice inserted for voice %d part %c\n",voicenum,part);
+     add_leftrepeat_at[num2add] = voicestart[voicenum]+3;
+     num2add++;
+     }
+  }
+if (num2add > 0) 
+ add_missing_repeats (); 
+
+}
+
+
+void add_missing_repeats () {
+int i,j;
+for (i = num2add-1; i >= 0; i--) {
+ insertfeature(BAR_REP,0,0,0,add_leftrepeat_at[i]); 
+  }
+}
+
+
+
 static void finishfile()
 /* end of tune has been reached - write out MIDI file */
 {
@@ -4342,6 +4412,8 @@ static void finishfile()
     event_error("No valid K: field found at start of tune");
   } else {
     int i;
+
+    scan_for_missing_repeats();
 
     if (parts > -1) {
       addfeature(PART, ' ', 0, 0);

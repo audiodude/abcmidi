@@ -5684,7 +5684,7 @@ tuplet adjusted note length is computed from c_n and c_m.
 It was also necessary to change event_note so that
 tuples are processed for chords too.
 
-June 14
+June 14 2008
 
 Abc2midi: ornaments (eg ~G3) does not work correctly for
 default length other than 1/8 (L: 1/8). Analysis, doornament
@@ -5692,7 +5692,7 @@ default length other than 1/8 (L: 1/8). Analysis, doornament
  
 
 
-June 24
+June 24 2008
 
 Abc2midi: new feature. The %%MIDI drum line can sound quite
 monotonous if it is repeated each bar. To circumvent this problem
@@ -6011,4 +6011,42 @@ account for space used by the note fields.
 Fix: added several lines of code to the function to scan
 through the notefield list and adjust the page height.
 
-Fix:
+
+March 17 2009
+
+Abc2midi new feature: a new command
+%%MIDI gchordbars n
+was introduced that acts in the same manner as %%MIDI drumbars (see
+June 14 2008).  but applies to the gchord string instead. The command
+spreads the gchord string over n consecutive bars.  In the following
+example:
+
+X:1
+T: gchordbars
+M: 2/4
+L: 1/8
+K: C
+%%MIDI gchordbars 2
+%%MIDI gchord fzczIzHz
+"C" c2 "G" c2|"C" g4|"G"c4|g4|
+
+fzcz applies to bars 0 and 2 while IzHz applies to bars 1 and 3.
+For this function to work properly, it is important that
+the length of the gchord string be exactly divisible by n
+where n is the number of bars that the gchord string applies to.
+If gchordbars is not specified, it is assumed to be one bar.
+
+Implementation is similar to drumbars. New variables gchordbars
+and gchordbarcount were introduced in genmidi.c
+
+
+June 23 2009
+
+Abc2midi does not attempt  to fill in missing left repeats |:
+in multipart and multivoiced files. New code was introduced
+to solve this problem. The functions scan_for_missing_repeats(),
+add_missing_repeats(), clear_voice_repeat_arrays() was added
+to store.c.
+
+
+
