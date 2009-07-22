@@ -6049,4 +6049,32 @@ add_missing_repeats(), clear_voice_repeat_arrays() was added
 to store.c.
 
 
+July 22 2009
+
+Abc2midi produces irrelevant error messages
+ %%MIDI drumon must occur after the first K: header
+when extracting a particular tune in a file containing a
+collection, eg.
+abc2midi balk1.abc 10
+
+Fix: in event_specific() in store.c now check the flag dotune.
+ if (strcmp(command,"drumon") == 0 && dotune) {
+   addfeature(DRUMON, 0, 0, 0);
+   etc.
+
+July 22 2009
+
+Abc2midi produces the error message
+ found another |: after a |:
+for the file
+
+X:1
+T:title
+M:4/4
+L:1/4
+K:C
+A2 c2 :: d2 c2 :|
+
+Fix: set bar_rep_found[voicenum] = 1 after inserting missing BAR_REP.
+
 

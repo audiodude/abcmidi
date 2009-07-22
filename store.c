@@ -31,7 +31,7 @@
  * Wil Macaulay (wil@syndesis.com)
  */
 
-#define VERSION "2.18 June 26 2009"
+#define VERSION "2.19 July 22 2009"
 /* enables reading V: indication in header */
 #define XTEN1 1
 /*#define INFO_OCTAVE_DISABLED 1*/
@@ -1374,7 +1374,7 @@ char *package, *s;
       }
 
 
-    if (strcmp(command,"drumon") == 0) {
+    if (strcmp(command,"drumon") == 0 && dotune) {
       addfeature(DRUMON, 0, 0, 0);
       if ((drumvoice != 0) && (drumvoice != v->indexno)) {
         event_warning("Implementation limit: drums only supported in one voice");
@@ -4383,6 +4383,7 @@ for (i=0;i<notes;i++) {
      printf("missing BAR_REP for voice inserted for voice %d part %c\n",voicenum,part);
      add_leftrepeat_at[num2add] = voicestart[voicenum]+3;
      num2add++;
+     bar_rep_found[voicenum] = 1;
      }
   }
 if (num2add > 0) 
