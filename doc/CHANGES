@@ -6078,3 +6078,76 @@ A2 c2 :: d2 c2 :|
 Fix: set bar_rep_found[voicenum] = 1 after inserting missing BAR_REP.
 
 
+
+September 20 2009
+
+Abc2midi bug: the following file produces a faulty midi file.  
+
+X:1
+T: bug
+M: 4/4
+L: 1/4
+K: G
+V:1
+%%MIDI control 7 49
+C4|\
+%%MIDI control 7 48
+C4|\
+%%MIDI control 7 47
+C4|\
+%%MIDI control 7 46
+C4|
+%%MIDI control 7 45
+
+Analysis: As seen below track 1 which contains only control codes is 56 beats
+long while track 2 which contains the notes is only 16 notes.
+The control codes in track 1 are not placed at the correct times.
+
+
+ur@localhost abc]$ midi2abc err1.mid -mftext
+Header format=1 ntrks=2 division=480
+Track 1 contains 57 bytes
+  0.00   Metatext tempo = 120.00 bpm
+  0.00   Metatext key signature G (1/0)
+  0.00   Metatext time signature=4/4
+  0.00   Metatext (Seqnce/Track Name) bug
+  0.00   CntlParm  1 Volume = 49
+  4.00   CntlParm  1 Volume = 48
+ 12.00   CntlParm  1 Volume = 47
+ 24.00   CntlParm  1 Volume = 46
+ 40.00   CntlParm  1 Volume = 45
+ 56.05   Meta event, end of track
+Track 2 contains 67 bytes
+  0.00   Metatext (Seqnce/Track Name) bug
+  0.00   CntlParm  1 Volume = 49
+  0.00   Note on   1   c4 105
+  4.00   Note off  1   c4   0
+  4.00   CntlParm  1 Volume = 48
+  4.00   Note on   1   c4 105
+  8.00   Note off  1   c4   0
+  8.00   CntlParm  1 Volume = 47
+  8.00   Note on   1   c4 105
+ 12.00   Note off  1   c4   0
+ 12.00   CntlParm  1 Volume = 46
+ 12.01   Note on   1   c4 105
+ 16.00   Note off  1   c4   0
+ 16.01   CntlParm  1 Volume = 45
+ 16.06   Meta event, end of track
+
+Explanation: when abc2midi produces a type 2 MIDI file (multitracks),
+track 1 only contains comments, time signature and control codes
+while the other tracks contain the actual note-on/note-off codes
+corresponding to the different voices. When abc2midi produces a
+type 1 MIDI file corresponding to the bare bones abc file (no
+voices or accompaniment), then there is only one track and
+all note-on/note-off commands are in the same track. For
+historic reasons, MIDI control codes are placed in both
+track 1 and track 2 for voice 1, and the control codes for the
+other voices are put into their own track. (I dare not
+change this since it could cause a problem somewhere else.)
+However, there appears to be a bug since the times of the
+control codes seem to be incorrect.
+
+Fix: I reset delta_time to 0 at the end of the function
+genmidi.c/dodeferred(). It seems to fix the problem.
+ 

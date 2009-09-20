@@ -1667,6 +1667,7 @@ int noteson;
     sprintf(errmsg, "%%%%MIDI command \"%s\" not recognized",command);
     event_error(errmsg);
   };
+  delta_time = 0L; /* [SS] 2009-09-20 */
 }
 
 static void delay(a, b, c)
