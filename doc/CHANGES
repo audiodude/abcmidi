@@ -6151,3 +6151,25 @@ control codes seem to be incorrect.
 Fix: I reset delta_time to 0 at the end of the function
 genmidi.c/dodeferred(). It seems to fix the problem.
  
+
+October 23 2009
+
+Abc2midi bug: the function dograce fails to adjust the length
+of the host notes in a chord. In the following example
+
+X:1
+T: grace chord problem
+M: 2/4
+L: 1/8
+K: C
+A2 B2|{edc}[cg]2 d2|
+
+The chord [cg]2 is not shortened by the length of the grace
+note {edc}; however if the chord is expressed as  [c2g2] the
+chord is shortened correctly.
+
+Analysis:the function applygrace_new() in store.c  fails to
+recognize the CHORDOFFEX feature which is used to express chords
+of this type. Fix: the function now checks for that feature.
+
+

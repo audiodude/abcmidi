@@ -31,7 +31,7 @@
  * Wil Macaulay (wil@syndesis.com)
  */
 
-#define VERSION "2.20 September 20 2009"
+#define VERSION "2.21 October 28 2009"
 /* enables reading V: indication in header */
 #define XTEN1 1
 /*#define INFO_OCTAVE_DISABLED 1*/
@@ -3753,8 +3753,9 @@ int place;
   hostnoteend = -1;
   if (nextinchord) {
     while ((hostnoteend == -1) && (j < notes)) {
-      if (feature[j] == CHORDOFF) {
-        hostnoteend = j-1;
+      if (feature[j] == CHORDOFF || feature[j] == CHORDOFFEX) {
+        /*hostnoteend = j-1; [SS] 2009-10-27 */
+        hostnoteend = j;
       };
       j = j + 1;
     };
@@ -3780,7 +3781,7 @@ int place;
     p = hostnotestart;
     while (p <= hostnoteend) {
       if ((feature[p] == NOTE) || (feature[p] == REST) || 
-          (feature[p] == CHORDOFF)) {
+          (feature[p] == CHORDOFF) || (feature[p] == CHORDOFFEX)) {
         next_num = num[p];
         next_denom = denom[p];
         num[p] = num[p] * (gfact_denom - gfact_num);
@@ -3861,8 +3862,9 @@ int place;
   hostnoteend = -1;
   if (nextinchord) {
     while ((hostnoteend == -1) && (j < notes)) {
-      if (feature[j] == CHORDOFF) {
-        hostnoteend = j-1;
+      if (feature[j] == CHORDOFF || feature[j] == CHORDOFFEX) {
+      /*  hostnoteend = j-1;  [SS] 2009-10-27 */
+      hostnoteend = j;
       };
       j = j + 1;
     };
@@ -3906,7 +3908,7 @@ int place;
     p = hostnotestart;
     while (p <= hostnoteend) {
       if ((feature[p] == NOTE) || (feature[p] == REST) || 
-          (feature[p] == CHORDOFF)) {
+          (feature[p] == CHORDOFF) || (feature[p] == CHORDOFFEX)) {
         num[p] = adjusted_num;
         denom[p] = adjusted_den;
         reduce(&num[p], &denom[p]);
