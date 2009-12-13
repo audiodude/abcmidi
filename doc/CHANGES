@@ -6172,4 +6172,24 @@ Analysis:the function applygrace_new() in store.c  fails to
 recognize the CHORDOFFEX feature which is used to express chords
 of this type. Fix: the function now checks for that feature.
 
+December 12 2009
 
+Abc2midi bug: dynamics (eg !pp!) deletes previous rest.
+In the following example:
+
+X:1
+T: dynamic problem
+M:4/4
+L:1/4
+K:C
+|ABcd|Az3|!pp!dcBA|]
+
+The rest z3 is destroyed by the !pp! indication. Analysis:
+this bug was introduced on September 20 2009 when
+delta_time was reset to 0 in dodeferred(). Fix, a global
+variable rest_pending was added to indicate that a rest
+has not yet been instantiated in the MIDI file and not
+to reset delta_time. The variable rest_pending is set to
+zero for every NOTE, TNOTE  or CHORDON feature but set
+to 1 for a REST feature. 
+ 

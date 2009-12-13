@@ -1388,6 +1388,7 @@ nchordchannels = n;
 return n;
 }
 
+int rest_pending;
 
 static void dodeferred(s,noteson)
 /* handle package-specific command which has been held over to be */
@@ -1667,7 +1668,8 @@ int noteson;
     sprintf(errmsg, "%%%%MIDI command \"%s\" not recognized",command);
     event_error(errmsg);
   };
-  delta_time = 0L; /* [SS] 2009-09-20 */
+  /*********  delta_time = 0L;  [SS] 2009-09-20 [SS] 2009-12-12*/
+  if (!rest_pending) delta_time = 0L; /* [SS] 2009-12-12 */
 }
 
 static void delay(a, b, c)
@@ -2049,6 +2051,7 @@ abc.sourceforge.net/standard/abc2-draft.html
     }
 }
 
+
 long writetrack(xtrack)
 /* this routine writes a MIDI track  */
 int xtrack;
@@ -2095,6 +2098,7 @@ int xtrack;
   gchordbars = 1;
   drumbarcount=0;
   gchordbarcount=0;
+  rest_pending = 0;
   if (karaoke) {
     if (xtrack < 3)                  
        karaokestarttrack(xtrack);
@@ -2186,6 +2190,7 @@ int xtrack;
   while (j < notes) {
     switch(feature[j]) {
     case NOTE:
+      rest_pending = 0;
       if (wordson) {
         write_syllable(j);
       };
@@ -2243,6 +2248,7 @@ int xtrack;
       };
       break;
     case TNOTE:
+      rest_pending = 0;
       if (wordson) {
         /* counts as 2 syllables : note + first tied note.
 	 * We ignore any bar line placed between tied notes
@@ -2270,10 +2276,12 @@ int xtrack;
       if (!inchord) {
         delay(num[j], denom[j], 0);
         addunits(num[j], denom[j]);
+        rest_pending = 1;
       };
       break;
     case CHORDON:
       inchord = 1;
+      rest_pending = 1;
       break;
     case CHORDOFF:
     case CHORDOFFEX:
