@@ -276,7 +276,7 @@ to ensure that the pointer spacing is not NULL prior to
 calling showtext.
 
 
-21 June 23
+21 June 2003
 
 Abc2midi assumes the last %%MIDI gchord string specified
 as the default for the start of the tune. In the following
@@ -6193,3 +6193,121 @@ to reset delta_time. The variable rest_pending is set to
 zero for every NOTE, TNOTE  or CHORDON feature but set
 to 1 for a REST feature. 
  
+December 18 2009
+
+Abc2midi bug: split voices (also known as voice overlay) works
+incorrectly when there are in repeats. For example
+
+X:1
+T: voice overlay in repeats 
+M: 2/4
+L: 1/4
+K: G
+|:C D &b/c/d/e/| F G:|
+
+used to work but now does not repeat the voice overlay. (It does not
+matter whether an opening repeat |: is present.)  However, if you
+put a V:1 after K:G as shown here
+
+X:1
+T: voice overlay in repeats
+M: 2/4
+L: 1/4
+K: G
+V: 1
+|:C D &b/c/d/e/| F G:|
+
+it then works correctly.
+
+Analysis: this is a new bug that was introduced after the changes
+on June 23 2009. The function scan_for_missing_repeats corrupts the
+feature arrays. Here is the feature arrays just before calling
+scan_for_missing_repeats.
+0 LINENUM   2 0 0 0 
+1 TITLE   0 0 0 0 
+2 LINENUM   3 0 0 0 
+3 LINENUM   4 0 0 0 
+4 LINENUM   5 0 0 0 
+5 DOUBLE_BAR   0 0 0 0 
+6 LINENUM   6 0 0 0 
+7 MUSICLINE   0 0 0 0 
+8 BAR_REP   0 0 0 0 
+9 NOTE   60 8192 1 1 
+10 NOTE   62 8192 1 1 
+11 SINGLE_BAR   0 0 0 0 
+12 VOICE   2 0 0 0 
+13 DOUBLE_BAR   0 0 0 0 
+14 BAR_REP   0 0 0 0 
+15 NOTE   83 8192 1 2 
+16 NOTE   72 8192 1 2 
+17 NOTE   74 8192 1 2 
+18 NOTE   76 8192 1 2 
+19 SINGLE_BAR   0 0 0 0 
+20 VOICE   1 0 0 0 
+21 NOTE   66 8192 1 1 
+22 NOTE   67 8192 1 1 
+23 REP_BAR   0 0 0 0 
+24 VOICE   2 0 0 0 
+25 REST   0 0 2 1 
+26 REP_BAR   0 0 0 0 
+27 VOICE   1 0 0 0 
+28 MUSICSTOP   0 0 0 0 
+29 LINENUM   7 0 0 0 
+30 VOICE   2 0 0 0 
+31 SINGLE_BAR   0 0 0 0 
+
+Here is the feature array afterwards.
+
+1 TITLE   0 0 0 0 
+2 LINENUM   3 0 0 0 
+3 LINENUM   4 0 0 0 
+4 LINENUM   5 0 0 0 
+5 DOUBLE_BAR   0 0 0 0 
+6 LINENUM   6 0 0 0 
+7 MUSICLINE   0 0 0 0 
+8 BAR_REP   0 0 0 0 
+9 NOTE   60 8192 1 1 
+10 NOTE   62 8192 1 1 
+11 SINGLE_BAR   0 0 0 0 
+12 VOICE   2 0 0 0 
+13 DOUBLE_BAR   0 0 0 0 
+14 BAR_REP   0 0 0 0 
+15 NOTE   83 8192 1 2 
+16 NOTE   72 8192 1 2 
+17 NOTE   74 8192 1 2 
+18 NOTE   76 8192 1 2 
+19 SINGLE_BAR   0 0 0 0 
+20 VOICE   1 0 0 0 
+21 NOTE   66 8192 1 1 
+22 NOTE   67 8192 1 1 
+23 BAR_REP   0 0 0 0 
+24 REP_BAR   0 0 0 0 
+25 VOICE   2 0 0 0 
+26 REST   0 0 2 1 
+27 REP_BAR   0 0 0 0 
+28 VOICE   1 0 0 0 
+29 MUSICSTOP   0 0 0 0 
+30 LINENUM   7 0 0 0 
+31 VOICE   2 0 0 0 
+32 SINGLE_BAR   0 0 0 0 
+
+Note that feature BAR_REP was placed at 23 immediately before
+REP_BAR. The problem is that the first VOICE 1 feature was found
+after the first bar was processed and a split voice (VOICE 2)
+was generated. scan_for_missing_repeats automatically places
+a BAR_REP 3 indices past (24) the VOICE 1 (20) command which it expects
+to be before the first note. This messes up the feature array.
+If the abc file has a V:1 after the K: then the BAR_REP is placed
+at the right place.
+
+Fix: Always place a VOICE 1 command after the first K: in the
+abc file. In event_key (store.c) addfeature(VOICE, ...) after
+getvoicecontext(1) if not inside body of abc file. (There may
+be a K: indication inside another voice and we do not want
+to automatically switch to VOICE 1.) It is all right to have
+an extraneous VOICE 1 in the feature array if a V:1 was already
+placed at the start of the body.
+
+
+
+

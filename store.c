@@ -31,7 +31,7 @@
  * Wil Macaulay (wil@syndesis.com)
  */
 
-#define VERSION "2.22 December 12 2009"
+#define VERSION "2.23 December 18 2009"
 /* enables reading V: indication in header */
 #define XTEN1 1
 /*#define INFO_OCTAVE_DISABLED 1*/
@@ -252,6 +252,7 @@ void init_drum_map();
 static void fix_enclosed_note_lengths(int from, int end);
 static int patchup_chordtie(int chordstart,int chordend);
 static void copymap(struct voicecontext* v);
+extern inbody; /* from parseabc.c [SS] 2009-12-18 */
 
 
 static struct voicecontext* newvoice(n)
@@ -4324,6 +4325,7 @@ char* clefname;
       headerprocess();
 
       v = getvoicecontext(1);
+      if (!inbody) addfeature(VOICE, v->indexno, 0, 0); /* [SS] 2009-12-18 */
     };
     if (gotoctave) {
       event_octave(octave,0);
