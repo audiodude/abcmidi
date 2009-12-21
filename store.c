@@ -31,7 +31,7 @@
  * Wil Macaulay (wil@syndesis.com)
  */
 
-#define VERSION "2.23 December 18 2009"
+#define VERSION "2.25 December 21 2009"
 /* enables reading V: indication in header */
 #define XTEN1 1
 /*#define INFO_OCTAVE_DISABLED 1*/
@@ -109,6 +109,7 @@ int temperament = 0;
 int octave_size = 12*SEMISIZE;
 int fifth_size = 7*SEMISIZE; /* default to 12-edo */
 int started_parsing=0;
+int v1index= -1;
 
 
 
@@ -833,6 +834,7 @@ int voiceno,indexno;
 int topvoiceno,topindexno;
 int program;
 int octaveshift;
+if (!voicesused) insertfeature(VOICE,1,0,0,v1index+1); /* [SS] 2009-12-21 */
 voicesused = 1; /* multivoice file */
 splitno = v->tosplitno;
 program = 0;
@@ -1932,11 +1934,15 @@ int n;
 char *s;
 struct voice_params *vp;
 {
+  int last_indexno;
   if (pastheader || XTEN1) {
     voicesused = 1;
     if (pastheader)  checkbreak();
-    v = getvoicecontext(n);
-    addfeature(VOICE, v->indexno, 0, 0);
+
+
+    v = getvoicecontext(n); 
+    addfeature(VOICE, v->indexno, 0, 0); 
+    
     dependent_voice[v->indexno] = 0;
     if (vp->gotoctave) {
       event_octave(vp->octave,1);
@@ -4325,7 +4331,7 @@ char* clefname;
       headerprocess();
 
       v = getvoicecontext(1);
-      if (!inbody) addfeature(VOICE, v->indexno, 0, 0); /* [SS] 2009-12-18 */
+      if (!inbody) v1index = notes; /* save position in case of split voice */
     };
     if (gotoctave) {
       event_octave(octave,0);
@@ -4385,7 +4391,8 @@ for (i=0;i<notes;i++) {
   if (j == BAR_REP) bar_rep_found[voicenum] = 1;
   if ((j == REP_BAR || j == DOUBLE_REP) && (!bar_rep_found[voicenum])) {
      printf("missing BAR_REP for voice inserted for voice %d part %c\n",voicenum,part);
-     add_leftrepeat_at[num2add] = voicestart[voicenum]+3;
+     /*** add_leftrepeat_at[num2add] = voicestart[voicenum]+3; [SS] 2009-12-20*/
+     add_leftrepeat_at[num2add] = voicestart[voicenum]+2; /* [SS] 2009-12-20*/
      num2add++;
      bar_rep_found[voicenum] = 1;
      }

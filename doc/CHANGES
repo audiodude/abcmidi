@@ -6304,10 +6304,48 @@ Fix: Always place a VOICE 1 command after the first K: in the
 abc file. In event_key (store.c) addfeature(VOICE, ...) after
 getvoicecontext(1) if not inside body of abc file. (There may
 be a K: indication inside another voice and we do not want
-to automatically switch to VOICE 1.) It is all right to have
-an extraneous VOICE 1 in the feature array if a V:1 was already
-placed at the start of the body.
+to automatically switch to VOICE 1.) ***This change was
+removed on December 21 ***.
 
 
 
+December 20 2009
 
+abc2midi bug:
+
+
+X:1
+T: embedded V: command and voice overlay
+%%MIDI program 2 41
+K:C
+[V:1] | cde2 & egc'2 | C8 & z4 e'4 | c8 :|
+[V:2] |C,D,E,2 | C,,8 | C,8  :|
+
+the voice overlay gets garbled but if we write
+V:1
+ | cde2 & egc'2 | C8 & z4 e'4 | c8 :|
+V:2
+ |C,D,E,2 | C,,8 | C,8  :|
+
+it works fine. In scan_for_missing_repeats changed
+ add_leftrepeat_at[num2add] = voicestart[voicenum]+3; 
+to
+ add_leftrepeat_at[num2add] = voicestart[voicenum]+2; 
+
+
+December 21 2009
+
+abc2midi bug: abc2midi fails to convert the simple file
+
+X:1
+T: one track
+M: 2/4
+L: 1/4
+K: C
+CD|EF|GA|Bc|
+
+Fix: removed insertion of VOICE feature after the event_key.
+instead event_key remembers the location to place a VOICE
+feature in the variable v1index in case a event_split_voice
+is encountered and voicesused is 0.
+ 
