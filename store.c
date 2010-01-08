@@ -31,7 +31,7 @@
  * Wil Macaulay (wil@syndesis.com)
  */
 
-#define VERSION "2.25 December 21 2009"
+#define VERSION "2.27 January 08 2010"
 /* enables reading V: indication in header */
 #define XTEN1 1
 /*#define INFO_OCTAVE_DISABLED 1*/
@@ -110,6 +110,8 @@ int octave_size = 12*SEMISIZE;
 int fifth_size = 7*SEMISIZE; /* default to 12-edo */
 int started_parsing=0;
 int v1index= -1;
+int ignore_fermata = 0; /* [SS] 2010-01-06 */
+int ignore_gracenotes = 0; /* [SS] 2010-01-08 */
 
 
 
@@ -511,6 +513,19 @@ char **filename;
     nofnop = 0;
   }
 
+  if (getarg("-NFER",argc, argv) != -1) {
+     ignore_fermata = 1;
+  } else {
+     ignore_fermata = 0;
+    }
+
+  if (getarg("-NGRA",argc, argv) != -1) {
+     ignore_gracenotes = 1;
+  } else {
+     ignore_gracenotes = 0;
+    }
+
+  
   if (getarg("-NCOM", argc, argv) != -1) {
     nocom = 1;
   } else {
@@ -537,7 +552,7 @@ char **filename;
     printf("abc2midi version %s\n",VERSION);
     printf("Usage : abc2midi <abc file> [reference number] [-c] [-v] ");
     printf("[-o filename]\n");
-    printf("        [-t] [-n <value>] [-RS] [-NFNP] [-NCOM]\n");
+    printf("        [-t] [-n <value>] [-RS] [-NFNP] [-NCOM] [-NFER] [-NGRA]\n");
     printf("        [reference number] selects a tune\n");
     printf("        -c  selects checking only\n");
     printf("        -v  selects verbose option\n");
@@ -550,6 +565,8 @@ char **filename;
     printf("        -Q default tempo (quarter notes/minute)\n");
     printf("        -NFNP don't process !p! or !f!-like fields\n");
     printf("        -NCOM suppress comments in output MIDI file\n");
+    printf("        -NFER ignore all fermata markings\n");
+    printf("        -NGRA ignore grace notes\n");
     printf("        -OCC old chord convention (eg. +CE+)\n");
     printf(" The default action is to write a MIDI file for each abc tune\n");
     printf(" with the filename <stem>N.mid, where <stem> is the filestem\n");
@@ -1544,7 +1561,6 @@ int default_retain_accidentals = 1;
 int default_fermata_fixed = 0;
 int default_ratio_a = 2;
 int default_ratio_b = 4;
-
 
 void event_specific_in_header(package, s)
 /* package-specific command found i.e. %%NAME */
@@ -2580,7 +2596,7 @@ int decorators[DECSIZE];
 
   num = n;
   denom = m;
-  if (decorators[FERMATA]) {
+  if (decorators[FERMATA] && !ignore_fermata) {
     if (fermata_fixed) addfract(&num,&denom,1,1);
     else num = num*2;
   };
@@ -3007,6 +3023,7 @@ int xoctave, n, m;
   if (v == NULL) {
     event_fatal_error("Internal error - no voice allocated");
   };
+  if (gracenotes && ignore_gracenotes) return; /* [SS] 2010-01-08 */
   octave = xoctave + v->octaveshift;
   num = n;
   denom = m;
@@ -3046,7 +3063,7 @@ int xoctave, n, m;
     pitch = pitchof_b(note, accidental, mult, octave, 1,&active_pitchbend);
   pitch_noacc = pitchof_b(note, 0, 0, octave, 0,&dummy);
 
-  if (decorators[FERMATA]) {
+  if (decorators[FERMATA] && !ignore_fermata) {
     if(fermata_fixed) addfract(&num,&denom,1,1);
     else num = num*2;
   };

@@ -6349,3 +6349,68 @@ instead event_key remembers the location to place a VOICE
 feature in the variable v1index in case a event_split_voice
 is encountered and voicesused is 0.
  
+
+January 05 2010
+
+abc2midi bug: loss of voice synchronization when stacatto,
+chords and dynamics mixed. In the following example,
+
+X:1
+T:staccato and dynamics
+M:4/4
+L:1/8
+K:G
+V:1
+C4 G4|A4 G4|
+V:2
+[.D4.G4]!p!C2C2|D4F4|
+
+the chord [.D4.G4] is one beat two short causing a loss of
+synchronization between the two voices. However if abc2midi
+is run with the option -NFNP which causes abc2midi to ignore
+the dynamic indication !p!, the voices remain in synchronization.
+
+Analysis, the stacatto markings embedded in a chord causes
+a REST feature to be embedded in the chord.
+21 CHORDON   0 0 0 0 
+22 REST   62 0 2 1 
+23 NOTE   62 8192 1 1 
+24 NOTE   67 8192 1 1 
+25 CHORDOFF   0 0 2 1
+normally a stacatto places the rest after the shortened note
+but for chords it is done differently. (It is rather unusual
+to find stacatto markings inside a chord.) Nevertheless, the
+notes are still played with the rest following. (Another
+quirk of abc2midi.) 
+Fix: in writetrack() (genmidi.c) rest_pending is no longer
+reset to 0 if the note is inside a chord.
+
+
+January 06 2010
+
+Abc2midi new feature: a missing Fermata in a multivoiced tune
+can cause a loss of synchrony between the voices. As an aid
+in detecting this problem, a new run parameter was introduced.
+-NFEM will cause abc2midi to ignore all fermata markings in
+the abc tune.
+
+Implementation: introduced a new global variable ignore_fermata
+which is normally set to 0 into store.c. If it is nonzero, then 
+decorators[FERMATA] is ignored.
+
+
+January 10 2010
+
+Abc2midi new feature: though abc2midi should shorten the notes
+preceded by a grace sequence in some circumstances it may fail
+to shorten it the right amount causing the voice track to lose
+synchrony with the other tracks. As an aid to detecting this
+problem, a new run parameter was introduced. -NGRA will cause
+abc2midi to ignore all notes in a grace sequence (enclosed
+in curly brackets {}).
+
+Implementation: a new global variable ignore_gracenotes (normally
+set to 0) was introduced in store.c. If both ignore_gracenotes
+and gracenotes are nonzero, then event_note ignores the 
+current note.
+

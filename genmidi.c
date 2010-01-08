@@ -2190,7 +2190,7 @@ int xtrack;
   while (j < notes) {
     switch(feature[j]) {
     case NOTE:
-      rest_pending = 0;
+      if (!inchord) rest_pending = 0; /* [SS] 2010-01-05 stacatto problem */
       if (wordson) {
         write_syllable(j);
       };
