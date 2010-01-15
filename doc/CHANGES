@@ -6414,3 +6414,94 @@ set to 0) was introduced in store.c. If both ignore_gracenotes
 and gracenotes are nonzero, then event_note ignores the 
 current note.
 
+
+January 14 2010
+
+Abc2midi bug: the -NGRA option messes up the output abc file
+for the following example. Track 2 is shorter than track 1.
+
+
+X:1
+T:-NGRA option makes a mess
+L:1/2
+M:2/2
+K:C
+V:1
+|: {d-}[de]f|ga  :|
+V:2
+|: {E-}[EF]G|AB :|
+
+Analysis: (You should review the operation of dotie and tiefix as described
+in this file at February 12 2005. Note the many other problems that
+were encountered with this code.) Before calling tiefix, the feature
+array looks as follows.
+
+(gdb) call dumpfeat(0,notes)
+0 LINENUM   3 0 0 0 
+1 TITLE   0 0 0 0 
+2 LINENUM   4 0 0 0 
+3 LINENUM   5 0 0 0 
+4 LINENUM   6 0 0 0 
+5 DOUBLE_BAR   0 0 0 0 
+6 LINENUM   7 0 0 0 
+7 VOICE   1 0 0 0 
+8 LINENUM   8 0 0 0 
+9 MUSICLINE   0 0 0 0 
+10 BAR_REP   0 0 0 0 
+11 GRACEON   0 0 0 0 
+12 TIE   0 0 0 0 
+13 GRACEOFF   0 0 0 0 
+14 CHORDON   0 0 0 0 
+15 NOTE   74 8192 2 1 
+16 NOTE   76 8192 2 1 
+17 CHORDOFF   0 0 2 1 
+18 NOTE   77 8192 2 1 
+19 SINGLE_BAR   0 0 0 0 
+20 NOTE   79 8192 2 1 
+21 NOTE   81 8192 2 1 
+22 REP_BAR   0 0 0 0 
+23 MUSICSTOP   0 0 0 0 
+24 LINENUM   9 0 0 0 
+25 VOICE   2 0 0 0 
+26 LINENUM   10 0 0 0 
+27 MUSICLINE   0 0 0 0 
+28 BAR_REP   0 0 0 0 
+29 GRACEON   0 0 0 0 
+30 TIE   0 0 0 0 
+31 GRACEOFF   0 0 0 0 
+32 CHORDON   0 0 0 0 
+33 NOTE   64 8192 2 1 
+34 NOTE   65 8192 2 1 
+35 CHORDOFF   0 0 2 1 
+36 NOTE   67 8192 2 1 
+37 SINGLE_BAR   0 0 0 0 
+38 NOTE   69 8192 2 1 
+39 NOTE   71 8192 2 1 
+40 REP_BAR   0 0 0 0 
+41 MUSICSTOP   0 0 0 0 
+42 LINENUM   11 0 0 0 
+43 SINGLE_BAR   0 0 0 0 
+
+Note that that there is a TIE feature enclosed in the GRACEON and GRACEOF
+area but there is no NOTE or REST preceding. This is because we ran
+abc2midi with -NGRA which had removed all the notes enclosed by the
+grace complex.  When dotie, attempts to process the TIE at 12 it fails
+to find a NOTE or REST and exits; however when dotie attempts to 
+process the TIE as 30, it finds a NOTE in a different voice
+at position 21 and all hell breaks loose a big mess.
+
+Fix: to prevent dotie from searching for a NOTE or REST in a previous
+voice, we cause a break when feature[TIENOTE] == VOICE.
+ while ((tienote > 0) && (feature[tienote] != NOTE) &&
+         (feature[tienote] != REST)) {
+    tienote = tienote - 1;
+    if (feature[tienote] == VOICE) break; /* [SS] 2010-01-15 */
+  };
+to prevent a TIE from appearing in the first place in a grace
+complex when -NGRA was specified we add
+if (gracenotes && ignore_gracenotes) return; /* [SS] 2010-01-12 */
+in the event_tie() function.
+
+ 
+ 
+

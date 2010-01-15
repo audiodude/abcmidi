@@ -31,7 +31,7 @@
  * Wil Macaulay (wil@syndesis.com)
  */
 
-#define VERSION "2.27 January 08 2010"
+#define VERSION "2.28 January 15 2010"
 /* enables reading V: indication in header */
 #define XTEN1 1
 /*#define INFO_OCTAVE_DISABLED 1*/
@@ -2253,6 +2253,7 @@ else event_warning("No slur to close");
 void event_tie()
 /* a tie - has been encountered in the abc */
 {
+if (gracenotes && ignore_gracenotes) return; /* [SS] 2010-01-12 */
 if (feature[notes-1] == CHORDOFF ||
     feature[notes-1] == CHORDOFFEX) { /* did a TIE connect with a chord */
        patchup_chordtie(chordstart,notes-1);
@@ -3474,6 +3475,7 @@ int j, xinchord,voiceno;
   while ((tienote > 0) && (feature[tienote] != NOTE) &&
          (feature[tienote] != REST)) {
     tienote = tienote - 1;
+    if (feature[tienote] == VOICE) break; /* [SS] 2010-01-15 */
   };
   if (feature[tienote] != NOTE) {
     event_error("Cannot find note before tie");
