@@ -2658,7 +2658,7 @@ char *featname[] = {
 "SPLITVOICE"
 }; 
 
-dumpfeat (int from, int to)
+void dumpfeat (int from, int to)
 {
 int i,j;
 for (i=from;i<=to;i++)

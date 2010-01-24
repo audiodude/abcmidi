@@ -120,6 +120,28 @@ static long to32bit();
 static int read16bit();
 static int to16bit();
 static char *msg();
+int skiptrack ();
+
+/* this block was previously in midifile.h [SS] 2010-01-23*/
+static int readtrack();
+static void readheader();
+static void badbyte();
+static void metaevent();
+static void sysex();
+static void chanmessage();
+static void msginit();
+static void msgadd();
+static void biggermsg();
+static void mf_write_track_chunk();
+static void mf_write_header_chunk();
+static void WriteVarLen();
+static void write32bit();
+static void write16bit();
+static int msgleng();
+static int eputc();
+/* end of block */
+
+
 /* following declaration added 27/8/96 JRA 
 static readheader(), readtrack(), badbyte(), metaevent(), sysex(),
        chanmessage(), msginit(), msgleng(), msgadd(), biggermsg();

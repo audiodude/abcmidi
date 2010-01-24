@@ -34,26 +34,10 @@ float mf_ticks2sec();
 long mf_sec2ticks();
 void mfwrite();
 void mfread();
-static int readtrack();
 int mf_write_meta_event();
 int mf_write_midi_event();
 void mf_write_tempo();
-static void readheader();
 void mferror();
-static void badbyte();
-static void metaevent();
-static void sysex();
-static void chanmessage();
-static void msginit();
-static void msgadd();
-static void biggermsg();
-static void mf_write_track_chunk();
-static void mf_write_header_chunk();
-static void WriteVarLen();
-static void write32bit();
-static void write16bit();
-static int msgleng();
-static int eputc();
 
 /* MIDI status commands most significant bit is 1 */
 #define note_off         	0x80

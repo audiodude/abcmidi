@@ -14,12 +14,15 @@
 #endif
 #include "midifile.h"
 
+void initfuncs();
+void midifile();
+
 static FILE *F;
 int SECONDS;      /* global that tells whether to display seconds or ticks */
 int division;        /* from the file header */
 long tempo = 500000; /* the default tempo is 120 beats/minute */
 
-filegetc()
+int filegetc()
 {
   return(getc(F));
 }
@@ -27,7 +30,7 @@ filegetc()
 /* for crack */
 extern int arg_index;
 
-main(argc,argv)
+int main(argc,argv)
 char **argv;
 {
   FILE *efopen();
@@ -241,7 +244,7 @@ char *mess;
   printf("Arbitrary bytes, leng=%d\n",leng);
 }
 
-initfuncs()
+void initfuncs()
 {
   Mf_error = error;
   Mf_header =  txt_header;

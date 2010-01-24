@@ -255,7 +255,7 @@ void init_drum_map();
 static void fix_enclosed_note_lengths(int from, int end);
 static int patchup_chordtie(int chordstart,int chordend);
 static void copymap(struct voicecontext* v);
-extern inbody; /* from parseabc.c [SS] 2009-12-18 */
+extern int inbody; /* from parseabc.c [SS] 2009-12-18 */
 
 
 static struct voicecontext* newvoice(n)
@@ -1950,7 +1950,6 @@ int n;
 char *s;
 struct voice_params *vp;
 {
-  int last_indexno;
   if (pastheader || XTEN1) {
     voicesused = 1;
     if (pastheader)  checkbreak();
@@ -3686,14 +3685,6 @@ static void tiefix()
       j = j + 1;
       break;
     case TIE:
-/*
-      if (chord_end+1 == j) { /* did a TIE connect with a chord */
-	      /* removefeature(j);
-	       patchup and backtrack/
-	      j = patchup_chordtie(chord_start,chord_end);
-	      inchord=1;
-              }
-*/
       dotie(j, inchord,voiceno);
       j = j + 1;
       break;
@@ -4423,7 +4414,7 @@ if (num2add > 0)
 
 
 void add_missing_repeats () {
-int i,j;
+int i;
 for (i = num2add-1; i >= 0; i--) {
  insertfeature(BAR_REP,0,0,0,add_leftrepeat_at[i]); 
   }

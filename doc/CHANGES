@@ -6504,4 +6504,10 @@ in the event_tie() function.
 
  
  
+January 23 2010
+
+Code clean-up to remove the numerous warnings when compiling
+with the -Wall compilation flag. genmidi.c, mftext.c, midifile.c,
+midifile.h, and store.c were modified. There are still a few
+warnings to be checked out later.
 
