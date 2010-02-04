@@ -31,7 +31,7 @@
  * Wil Macaulay (wil@syndesis.com)
  */
 
-#define VERSION "2.28 January 15 2010"
+#define VERSION "2.30 February 04 2010"
 /* enables reading V: indication in header */
 #define XTEN1 1
 /*#define INFO_OCTAVE_DISABLED 1*/
@@ -112,6 +112,7 @@ int started_parsing=0;
 int v1index= -1;
 int ignore_fermata = 0; /* [SS] 2010-01-06 */
 int ignore_gracenotes = 0; /* [SS] 2010-01-08 */
+int separate_tracks_for_words = 0; /* [SS] 2010-02-02 */
 
 
 
@@ -131,6 +132,8 @@ struct voicecontext {
   int topvoiceno,topindexno; /* links to original voice in the split */
   int hasgchords;
   int haswords;
+  int hasdrums;
+  int hasdrone;
   int inslur;
   int ingrace;
   int octaveshift;
@@ -154,6 +157,9 @@ struct voicecontext* head;
 struct voicecontext* vaddr[64]; /* address of all voices (by v->indexno) */
 /* vaddr is only a convenience for debugging */
 
+
+struct trackstruct trackdescriptor[40]; /* trackstruct defined in genmidi.h*/
+ 
 
 int dependent_voice[64]; /* flag to indicate type of voice */
 int voicecount;
@@ -186,7 +192,6 @@ int namelimit;
 int xmatch;
 int sf, mi;
 int gchordvoice, wordvoice, drumvoice, dronevoice;
-int gchordtrack, drumtrack, dronetrack;
 int ratio_standard = -1; /* flag corresponding to -RS parameter */
 /* when ratio_standard != -1 the ratio for a>b is 3:1 instead of 2:1 */
 int quiet = -1; /* if not -1 many common warnings and error messages */
@@ -274,6 +279,8 @@ int n;
   s->default_length = global.default_length;
   s->hasgchords = 0;
   s->haswords = 0;
+  s->hasdrums = 0;
+  s->hasdrone = 0;
   s->inslur = 0;
   s->ingrace = 0;
   s->inchord = 0;
@@ -342,6 +349,86 @@ int n;
     }
   return(p);
 }
+
+void dump_voicecontexts() {
+/* called while debugging */
+  struct voicecontext *p;
+  struct voicecontext *q;
+
+  p = head;
+  while (p != NULL) {
+    printf("num %d index %d gchords %d words %d drums %d drone %d tosplit %d fromsplit %d\n",
+ p->voiceno,p->indexno,p->hasgchords,p->haswords,p->hasdrums,p->hasdrone,p->tosplitno,p->fromsplitno);
+    q = p->next;
+    p = q;
+  };
+}
+
+
+void dump_trackdescriptor() {
+ int i;
+ for (i=0;i<ntracks;i++) {
+    printf("%d %d %d\n",i,trackdescriptor[i].tracktype,trackdescriptor[i].voicenum);
+ }
+}
+
+
+void setup_trackstructure () {
+  struct voicecontext *p;
+  struct voicecontext *q;
+
+
+  trackdescriptor[0].tracktype=NOTES;
+  trackdescriptor[0].voicenum=1;
+
+  p = head;
+  ntracks = 1;
+  while (p != NULL && verbose) {
+    printf("num %d index %d gchords %d words %d drums %d drone %d tosplit %d fromsplit %d\n",
+ p->voiceno,p->indexno,p->hasgchords,p->haswords,p->hasdrums,p->hasdrone,p->tosplitno,p->fromsplitno);
+    trackdescriptor[ntracks].tracktype = NOTES;
+    trackdescriptor[ntracks].voicenum = p->indexno;
+    if (p->haswords) {
+       if (!separate_tracks_for_words) {
+       trackdescriptor[ntracks].tracktype = NOTEWORDS;
+       trackdescriptor[ntracks].voicenum = p->indexno;
+       } else {
+       ntracks++;
+       trackdescriptor[ntracks].tracktype = WORDS;
+       trackdescriptor[ntracks].voicenum = trackdescriptor[ntracks-1].voicenum;
+       }
+    }
+    if (p->hasgchords) {
+       ntracks++;
+       trackdescriptor[ntracks].tracktype = GCHORDS;
+       trackdescriptor[ntracks].voicenum = p->indexno;
+       }
+    if (p->hasdrums) {
+        ntracks++;  
+        trackdescriptor[ntracks].tracktype = DRUMS;
+        trackdescriptor[ntracks].voicenum = p->indexno;
+      };
+    if (p->hasdrone) {
+        ntracks++;  
+        trackdescriptor[ntracks].tracktype = DRONE;
+        trackdescriptor[ntracks].voicenum = p->indexno;
+      };
+    ntracks++;
+    q = p->next;
+    p = q;
+    }
+
+    if ((voicesused == 0) && (!karaoke) && (gchordvoice == 0) && 
+        (drumvoice == 0) && (dronevoice==0)) {
+      ntracks = 1;
+      } 
+
+/*dump_trackdescriptor();*/
+}
+
+
+
+
 
 static void clearvoicecontexts()
 /* free up all the memory allocated to voices */
@@ -532,6 +619,12 @@ char **filename;
     nocom = 0;
   }
 
+  if (getarg("-STFW",argc,argv) != -1) {
+    separate_tracks_for_words = 1;
+  } else {
+    separate_tracks_for_words = 0;
+    }
+
 
   if (getarg("-OCC",argc,argv) != -1) oldchordconvention=1;
 
@@ -567,6 +660,7 @@ char **filename;
     printf("        -NCOM suppress comments in output MIDI file\n");
     printf("        -NFER ignore all fermata markings\n");
     printf("        -NGRA ignore grace notes\n");
+    printf("        -STFW separate tracks for words (lyrics)\n");
     printf("        -OCC old chord convention (eg. +CE+)\n");
     printf(" The default action is to write a MIDI file for each abc tune\n");
     printf(" with the filename <stem>N.mid, where <stem> is the filestem\n");
@@ -1396,14 +1490,9 @@ char *package, *s;
 
     if (strcmp(command,"drumon") == 0 && dotune) {
       addfeature(DRUMON, 0, 0, 0);
-      if ((drumvoice != 0) && (drumvoice != v->indexno)) {
-        event_warning("Implementation limit: drums only supported in one voice");
-       };
+      v->hasdrums = 1;
+      done = 1;
       if (v == NULL) event_error("%%MIDI drumon must occur after the first K: header");
-      else {
-           drumvoice = v->indexno;
-           done = 1;
-           }
     }
     if (strcmp(command,"drumoff") == 0) {
        addfeature(DRUMOFF, 0, 0, 0);
@@ -1412,6 +1501,7 @@ char *package, *s;
 
     if (strcmp(command,"droneon") == 0) {
       addfeature(DRONEON, 0, 0, 0);
+      v->hasdrone = 1;
       if ((dronevoice != 0) && (dronevoice != v->indexno)) {
         event_warning("Implementation limit: drones only supported in one voice");
        };
@@ -1761,10 +1851,11 @@ int continuation;
 {
 
   karaoke = 1;
+  if (v == NULL) {
+    event_error("missplaced w: field. w: field ignored");
+    return;
+    }
   v->haswords = 1;
-  if ((wordvoice != 0) && (wordvoice != v->indexno)) {
-    event_warning("More than one voice with words in");
-  };
   wordvoice = v->indexno;
   words[wcount] = addstring(p);
   addfeature(WORDLINE, wcount, 0, 0);
@@ -2170,60 +2261,6 @@ char* s;
 }
 
 
-static void slurtotie()
-/* converts a pair of identical slurred notes to tied notes */
-{
-  int last1, slurtie, last2, failed;
-  int j;
-
-  if ((!v->ingrace) && (!v->inchord)) {
-    j = notes-1;
-    failed = 0;
-    last1 = -1;
-    while ((j>=0) && (!failed) && (last1 == -1)) {
-      if (feature[j] == NOTE) {
-        last1 = j;
-      };
-      if ((j<=0) || (feature[j] == REST) || (feature[j] == CHORDOFF) ||
-          (feature[j] == GRACEOFF) || (feature[j] == SLUR_ON)) {
-        failed = 1;
-      };
-      j = j - 1;
-    };
-    slurtie = -1;
-    while ((j>=0) && (!failed) && (slurtie == -1)) {
-      if (feature[j] == SLUR_TIE) {
-        slurtie = j;
-      };
-      if ((j<=0) || (feature[j] == REST) || (feature[j] == CHORDOFF) ||
-          (feature[j] == GRACEOFF) || (feature[j] == SLUR_ON) ||
-          (feature[j] == NOTE)) {
-        failed = 1;
-      };
-      j = j - 1;
-    };
-    last2 = -1;
-    while ((j>=0) && (!failed) && (last2 == -1)) {
-      if (feature[j] == NOTE) {
-        last2 = j;
-      };
-      if ((j<=0) || (feature[j] == REST) || (feature[j] == CHORDOFF) ||
-          (feature[j] == GRACEOFF) || (feature[j] == SLUR_ON)) {
-        failed = 1;
-      };
-      j = j - 1;
-    };
-    if ((!failed) && (pitch[last1] == pitch[last2])) {
-      /* promote SLUR_TIE to tie */
-      feature[slurtie] = TIE;
-      event_warning("Slur in abc taken to mean a tie");
-    } else {
-      if (verbose) {
-        event_warning("Slur ignored");
-      };
-    };
-  };
-}
 
 void event_sluron(t)
 /* called when ( is encountered in the abc */
@@ -2241,7 +2278,6 @@ void event_sluroff(t)
 int t;
 {
 if (v->inslur) {
-    /*slurtotie(); [SS] 2005-08-13 */
     addfeature(SLUR_OFF, 0, 0, 0);
     v->inslur = 0;
     }
@@ -2362,135 +2398,6 @@ int n, a, b;
   };
 }
 
-static void applybroken(place, type, n)
-int place, type, n;
-/* adjust lengths of broken notes */
-{
-  int num1, num2, denom12;
-  int j;
-  int forechord, forestart, foreend, backchord, backstart, backend;
-  int failed, lastnote;
-
-  j = place;
-  failed = 0;
-  forestart = -1;
-  foreend = -1;
-  forechord = 0;
-  /* find following note or chord */
-  while ((!failed) && (forestart == -1)) {
-    if ((feature[j] == NOTE) || (feature[j] == REST)) {
-      forestart = j;
-      if (forechord) {
-        lastnote = forestart;
-      } else {
-        foreend = forestart;
-      };
-    };
-    if ((feature[j] == GRACEON) || (feature[j] == TIE)) {
-      event_error("Unexpected item following broken rhythm");
-    };
-    if (feature[j] == CHORDON) {
-      forechord = 1;
-    };
-    j = j + 1;
-    if (j>=notes) {
-      failed = 1;
-    };
-  };
-  /* look for extend of chord if there is one */
-  while ((!failed) && (foreend == -1)) {
-    if ((feature[j] == NOTE) || (feature[j] == REST)) {
-      lastnote = j;
-    };
-    if ((feature[j] == GRACEON) || (feature[j] == TIE)) {
-      event_error("Unexpected item following broken rhythm");
-    };
-    if (feature[j] == CHORDOFF) {
-      foreend = j;
-    };
-    j = j + 1;
-    if (j>=notes) {
-      failed = 1;
-    };
-  };
-  /* look for note or chord before broken rhythm symbol */
-  j = place;
-  backend = -1;
-  backstart = -1;
-  backchord = 0;
-  while ((!failed) && (backend == -1)) {
-    if ((feature[j] == NOTE) || (feature[j] == REST)) {
-      backend = j;
-      if (backchord) {
-        lastnote = backend;
-      } else {
-        backstart = backend;
-      };
-    };
-    if ((feature[j] == GRACEOFF) || (feature[j] == TIE)) {
-      event_error("Unexpected item preceding broken rhythm");
-    };
-    if (feature[j] == CHORDOFF) {
-      backchord = 1;
-      backend = j;
-    };
-    j = j - 1;
-    if (j<0) {
-      failed = 1;
-    };
-  };
-  /* look for extent of chord if there is one */
-  while ((!failed) && (backstart == -1)) {
-    if ((feature[j] == NOTE) || (feature[j] == REST)) {
-      lastnote = j;
-    };
-    if ((feature[j] == GRACEON) || (feature[j] == TIE)) {
-      event_error("Unexpected item following broken rhythm");
-    };
-    if (feature[j] == CHORDON) {
-      backstart = lastnote;
-    };
-    j = j - 1;
-    if (j<0) {
-      failed = 1;
-    };
-  };
-  switch(n) {
-    case 1:
-      num1 = 4;
-      num2 = 2;
-      break;
-    case 2:
-      num1 = 7;
-      num2 = 1;
-      break;
-    case 3:
-      num1 = 15;
-      num2 = 1;
-      break;
-  };
-  denom12 = (num1 + num2)/2;
-  if (type == LT) {
-    j = num1;
-    num1 = num2;
-    num2 = j;
-  };
-  /* check for same length notes */
-  if ((num[backstart]*denom[forestart]) != 
-             (num[forestart]*denom[backstart])) {
-    failed = 1;
-  };
-  if (failed) {
-    event_error("Cannot apply broken rhythm");
-  } else {
-    for (j=backstart; j<=backend; j++) {
-      lenmul(j, num1, denom12);
-    };
-    for (j=forestart; j<=foreend; j++) {
-      lenmul(j, num2, denom12);
-    };
-  };
-}
 
 static void brokenadjust()
 /* adjust lengths of broken notes */
@@ -3231,9 +3138,6 @@ char* s;
   } else {
     /* only record voice as having chords if we recognize chord type */
     v->hasgchords = 1;
-    if ((gchordvoice != 0) && (gchordvoice != v->indexno)) {
-      event_warning("More than one voice with guitar chords in");
-    };
     gchordvoice = v->indexno;
   };
   if (bassnote) {
@@ -4028,24 +3932,6 @@ else
 }
 
 
-static void delendrep(j)
-int j;
-/* remove bogus repeat */
-{
-  event_error("spurious repeat after second ending");
-  switch(feature[j]) {
-  case REP_BAR:
-    feature[j] = DOUBLE_BAR;
-    event_warning("replacing :| with double bar ||");
-    break;
-  case DOUBLE_REP:
-    feature[j] = BAR_REP;
-    event_warning("replacing :: with |:");
-    break;
-  default:
-    break;
-  };
-}
 
 static void placeendrep(j)
 /* patch up missing repeat */
@@ -4426,9 +4312,10 @@ static void finishfile()
 /* end of tune has been reached - write out MIDI file */
 {
   extern int nullputc();
-  
 
   complete_all_split_voices ();
+  /*dump_voicecontexts(); for debugging*/
+  setup_trackstructure();
   clearvoicecontexts();
   init_drum_map();
   if (!pastheader) {
@@ -4455,24 +4342,9 @@ static void finishfile()
       };
       fixreps();
     };
-    if ((voicesused == 0) && (!karaoke) && (gchordvoice == 0) && 
-        (drumvoice == 0) && (dronevoice==0)) {
-      ntracks = 1;
-    } else {
-      ntracks = voicecount + karaoke + 1;
-      if (gchordvoice != 0) {
-        gchordtrack = ntracks;
-        ntracks = ntracks + 1;
-      };
-      if (drumvoice != 0) {
-        drumtrack = ntracks;
-        ntracks = ntracks + 1;
-      };
-      if (dronevoice != 0) {
-	dronetrack = ntracks;
-	ntracks = ntracks + 1;
-      };
-    };
+
+
+
     if (check) {
       Mf_putc = nullputc;
       if (ntracks == 1) {

@@ -81,8 +81,6 @@ extern int notes;
 extern int verbose;
 extern int quiet;
 extern int sf, mi;
-extern int gchordvoice, wordvoice, drumvoice, dronevoice;
-extern int gchordtrack, drumtrack, dronetrack;
 int drumbars;
 int gchordbars;
 int gchordbarcount;
@@ -206,6 +204,10 @@ int trim_denom = 5;
 
 /* channel 10 drum handling */
 int drum_map[256];
+
+extern struct trackstruct trackdescriptor[40]; /* trackstruct defined in genmidi.h*/
+
+
 
 void reduce(a, b)
 /* elimate common factors in fraction a/b */
@@ -1388,7 +1390,6 @@ nchordchannels = n;
 return n;
 }
 
-int rest_pending;
 
 static void dodeferred(s,noteson)
 /* handle package-specific command which has been held over to be */
@@ -1668,8 +1669,8 @@ int noteson;
     sprintf(errmsg, "%%%%MIDI command \"%s\" not recognized",command);
     event_error(errmsg);
   };
-  /*********  delta_time = 0L;  [SS] 2009-09-20 [SS] 2009-12-12*/
-  if (!rest_pending) delta_time = 0L; /* [SS] 2009-12-12 */
+ if(wordson+noteson+gchordson+drumson+droneon == 0) delta_time = 0L;
+  
 }
 
 static void delay(a, b, c)
@@ -2052,6 +2053,7 @@ abc.sourceforge.net/standard/abc2-draft.html
 }
 
 
+
 long writetrack(xtrack)
 /* this routine writes a MIDI track  */
 int xtrack;
@@ -2077,7 +2079,6 @@ int xtrack;
   tracklen = 0L;
   delta_time = 0L;
   trackvoice = xtrack;
- /* if (trackvoice >= ntracks) trackvoice = xtrack-ntracks+32; */
   wordson = 0;
   noteson = 1;
   gchordson = 0;
@@ -2098,57 +2099,71 @@ int xtrack;
   gchordbars = 1;
   drumbarcount=0;
   gchordbarcount=0;
-  rest_pending = 0;
   if (karaoke) {
-    if (xtrack < 3)                  
+    if (xtrack == 0)                  
        karaokestarttrack(xtrack);
-    /* lyrics are in track 2 (track count starts from 0) */
-    if (xtrack == 2) {
-      kspace = 0;
-      noteson = 0;
-      wordson = 1;
+    }
+     
+  if (trackdescriptor[xtrack].tracktype == NOTES) {
+    kspace = 0;
+    noteson = 1;
+    wordson = 0;
+    trackvoice = trackdescriptor[xtrack].voicenum;
+   }
+
+  if (trackdescriptor[xtrack].tracktype == WORDS) {
+    kspace = 0;
+    noteson = 0;
+    wordson = 1;
 /*
  *  Turn text off for H:, A: and other fields.
  *  Putting it in Karaoke Words track (track 2) can throw off some Karaoke players.
  */   
-      texton = 0;
-      gchordson = 0;
-      trackvoice = wordvoice;
-    } else {
-      if (trackvoice > 2) trackvoice = xtrack - 1;
-    };
-  };
+    texton = 0;
+    gchordson = 0;
+    trackvoice = trackdescriptor[xtrack].voicenum;
+    }
+
+  if (trackdescriptor[xtrack].tracktype == NOTEWORDS) {
+    kspace = 0;
+    noteson = 1;
+    wordson = 1;
+    trackvoice = trackdescriptor[xtrack].voicenum;
+    }
+
   /* is this accompaniment track ? */
-  if ((gchordvoice != 0) && (xtrack == gchordtrack)) {
+  if (trackdescriptor[xtrack].tracktype == GCHORDS) {
     noteson = 0; 
     gchordson = 1;
     drumson = 0;
     droneon = 0;
     temposon = 0;
-    trackvoice = gchordvoice;
+    trackvoice = trackdescriptor[xtrack].voicenum;
 /* be sure set_meter is called before setbeat even if we
  * have to call it more than once at the start of the track */
     set_meter(header_time_num,header_time_denom);
 /*    printf("calling setbeat for accompaniment track\n"); */
     setbeat();
   };
+
   /* is this drum track ? */
-  if ((drumvoice != 0) && (xtrack == drumtrack)) {
+  if (trackdescriptor[xtrack].tracktype == DRUMS) {
     noteson = 0;
     gchordson = 0;
     drumson = 1;
     droneon =0;
     temposon = 0;
-    trackvoice = drumvoice;
+    trackvoice = trackdescriptor[xtrack].voicenum;
   };
+
   /* is this drone track ? */
-  if ((dronevoice != 0) && (xtrack == dronetrack)) {
+  if (trackdescriptor[xtrack].tracktype == DRONE) {
     noteson = 0;
     gchordson = 0;
     drumson = 0;
     droneon = 1;
     temposon = 0;
-    trackvoice = drumvoice;
+    trackvoice = trackdescriptor[xtrack].voicenum;
    };
   nchordchannels = 0;
   if (verbose) {
@@ -2171,6 +2186,8 @@ int xtrack;
        /* return(0L); */
     }
   }
+  if (verbose)
+     printf("trackvoice=%d xtrack=%d noteson=%d wordson=%d gchordson = %d drumson = %d droneon=%d\n",trackvoice,xtrack,noteson,wordson,gchordson,drumson,droneon);
   starttrack();
   inchord = 0;
   /* write notes */
@@ -2190,7 +2207,6 @@ int xtrack;
   while (j < notes) {
     switch(feature[j]) {
     case NOTE:
-      if (!inchord) rest_pending = 0; /* [SS] 2010-01-05 stacatto problem */
       if (wordson) {
         write_syllable(j);
       };
@@ -2248,7 +2264,6 @@ int xtrack;
       };
       break;
     case TNOTE:
-      rest_pending = 0;
       if (wordson) {
         /* counts as 2 syllables : note + first tied note.
 	 * We ignore any bar line placed between tied notes
@@ -2276,12 +2291,10 @@ int xtrack;
       if (!inchord) {
         delay(num[j], denom[j], 0);
         addunits(num[j], denom[j]);
-        rest_pending = 1;
       };
       break;
     case CHORDON:
       inchord = 1;
-      rest_pending = 1;
       break;
     case CHORDOFF:
     case CHORDOFFEX:
@@ -2525,11 +2538,11 @@ int xtrack;
       drum_on = 0;
       break;
     case DRONEON:
-      if ((dronevoice != 0) && (xtrack == dronetrack)) 
+      if (droneon) 
          start_drone();
       break;
     case DRONEOFF:
-      if ((dronevoice != 0) && (xtrack == dronetrack)) 
+      if (droneon) 
          stop_drone();
       break;
     case ARPEGGIO:

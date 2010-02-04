@@ -6192,6 +6192,8 @@ has not yet been instantiated in the MIDI file and not
 to reset delta_time. The variable rest_pending is set to
 zero for every NOTE, TNOTE  or CHORDON feature but set
 to 1 for a REST feature. 
+**note** this change was undone Feb 4 2010
+
  
 December 18 2009
 
@@ -6384,6 +6386,7 @@ notes are still played with the rest following. (Another
 quirk of abc2midi.) 
 Fix: in writetrack() (genmidi.c) rest_pending is no longer
 reset to 0 if the note is inside a chord.
+**note** this change was undone Feb 4 2010
 
 
 January 06 2010
@@ -6510,4 +6513,211 @@ Code clean-up to remove the numerous warnings when compiling
 with the -Wall compilation flag. genmidi.c, mftext.c, midifile.c,
 midifile.h, and store.c were modified. There are still a few
 warnings to be checked out later.
+
+
+February 01 2010
+
+Code clean-up. Removed unused functions -- slurtotie(), applybroken(),
+and delendrep() in store.c.
+
+
+
+February 01 2010
+
+Abc2midi: support for multivoiced lyrics introduced.
+The following tune illustrates multivoiced lyrics.
+
+X:1
+T:multivoiced lyrics
+M:2/4
+L:1/16
+K:C
+V:1 clef=treble
+V:2 clef=treble
+%%staves 1 2
+V:1
+C4 C4 | E4 G4 | c8 |]
+w: 1 2 3 4 5
+V:2
+C4 E4 | C4 B,4 | C8  |]
+w: 11 12 13 14 15
+
+A warning "More than one voice with words in" appears.
+Though the MIDI file plays properly, the lyrics do not appear
+correctly in MIDI file players such as Melody Player.  
+It was necessary to some significant changes to
+the way the information in the w: field is transferred to 
+the MIDI file in order to ensure compatibility.
+
+
+This section describes how abc2midi treats the w: field in order to
+incorporate lyric text into a karoake style MIDI file.  For multivoiced
+abc files, abc2midi only handles the lyrics in the first voice. There
+is interest in generalizing the program so that it can handle lyrics
+in multiple voices which are common in choir music.
+
+Parsing stage (store.c)
+------------------------
+
+All lyric text is copied into string array called words
+char** words;
+which is allocated by checkmalloc(maxwords*sizeof(char)
+where maxwords is set to INITWORDS 20.
+
+Each time a w: field is encountered, event_words() in store.c is
+invoked and places the string of text in the w: into 
+words[wcount] where wcount is incremented. A new feature,
+WORDLINE is added to the feature array. The index wcount is
+saved in the pitch[] component of the feature arrays.
+If there is no continuation, of the w: command, then a
+WORDSTOP feature is added to signal the end of the w: field.
+
+In the event that the wcount index reaches maxwords, the function
+textextend() doubles the allocated space in words[] and doubles
+maxwords.
+
+event_words() also verifies that the lyrics originate from only
+one voice.
+
+
+Creation of the MIDI file (genmidi.c)
+-------------------------------------
+
+Genmidi records the MIDI tracks using the function writetrack()
+which is called by mfwrite() in midifile.c. Mfwrite() was called
+by finishfile() in store.c
+
+There is no one to one correspondence between voices and MIDI
+tracks. Some voices may have two tracks. A voice containing
+lyrics is mapped into two tracks, one for the notes and another
+for the words. Two semaphores, wordson and noteson signal 
+writetrack whether to record only the words, only the notes or both
+in the track. When writetrack scans through all the features
+in the feat array for the specific voice, the NOTE: and TNOTE:
+blocks inscribe the words or notes in the MIDI file depending on
+the status of the wordson and noteon semaphores.
+The gchord accompaniment is placed in a separate
+track, gchordtrack which was set by finishfile() in store.c. The
+voice containing the gchord indications is passed frome store.c
+to genmidi.c by means of the variable gchordvoice. The same applies
+to drumtrack and dronetrack which rely on drumvoice and dronevoice
+to establish the synchronization.
+
+The voice structures used in store.c are not passed to genmidi.c.
+All the information for writing the MIDI tracks come from the
+above semaphores and the feature,pitch,num,denom arrays which
+were passed from store.c. Genmidi does not know whether it
+is writing a split voice track (voice overlay) or a regular
+voice track. They both look the same.
+
+Genmidi must know the number of tracks in the MIDI file since
+this is recorded in the header chunk of the MIDI file. 
+
+The current design of writetrack() assumes that if a lyrics
+track exists it must be in track 2 (counting from zero). There
+can be only one lyric track. 
+
+To allow more than one lyric track (or voice containing lyrics),
+to allow a track to have notes as well as words embedded requires
+passing more information to genmidi. For instance we need to know
+whether a particular track should record lyrics or notes, and
+which voice number is the source. 
+
+Changes:
+-------
+
+Created a new function dump_voicecontext() in store.c which prints out
+the descriptors of all the voice contexts.
+Created a new structure trackstructure in store.c
+struct trackstruct {enum {NOTES, WORDS, NOTEWORDS, GCHORDS, DRUMS, DRONE} tracktype;
+                    int voicenum;
+                   };
+
+and a new array
+Created struct trackstruct trackdescriptor[40];
+which will be shared with genmidi.c
+Created a new function setup_trackstructure() in store.c which
+modifies trackdescriptor[].
+Modified writetrack() in genmidi.c so that it can write more than
+one lyric track.
+Introduced an option to write lyrics in either the same track as
+the notes or else in a separate track (-STFW).
+Added "int hasdrums" to voice structure in store.c.
+Added "int hasdrone" to voice structure in store.c
+Cleaned out dronevoice, drumvoice, dronetrack, drumtrack, gchordvoice,
+gchordtrack variables from store.c and genmidi.c
+Removed warning "More than one voice with guitar chords in"
+
+One of the benefits of the new organization is that now you can
+have drums and gchords in more than one voice as shown in the
+following examples
+
+
+X:1
+T: double gchords
+M: 2/4
+L: 1/8
+K: C
+V:1
+%%MIDI chordprog 1
+%%MIDI gchord fffff
+"G" z4|z4|
+V:2
+%%MIDI chordprog 90
+%%MIDI bassprog 90
+%%MIDI gchord ghii
+"G" z4|z4|
+
+
+
+X:1
+T: drums in two voices
+M: 2/4
+L:1/8
+K: C
+V:1
+%%MIDI drum dddddddd 35 36 37 38 35 36 37 38
+%%MIDI drumon
+|G4|G4|
+V:2
+%%MIDI drum d2d2 40 41 
+%%MIDI drumon
+|C2D2|EFGA|
+
+
+
+
+
+February 04 2010
+
+Abc2midi bug: the following tune is not converted correctly and
+the drone is not heard.
+
+X: 129
+T: Drone Bug
+M: 2/4
+L: 1/8
+K: Gdor
+Q:1/4=140
+G\
+%%MIDI drone 109 67 67 50 50
+%%MIDI droneon
+%%MIDI program 41
+| c2 c2   |(3cBA GB|c2 c2   |(3cBA GB |
+%%MIDI program 111
+%%MIDI droneoff
+
+Analysis: this yet another bug introduced by the change in dodeferred
+(September 20 2009). (See also December 12 2009 and Jan 05 2010).
+Fix: in dodeferred replaced the lines
+/*********  delta_time = 0L;  [SS] 2009-09-20 [SS] 2009-12-12*/
+  if (!rest_pending) delta_time = 0L; /* [SS] 2009-12-12 */
+
+with
+if(wordson+noteson+gchordson+drumson+droneon == 0) delta_time = 0L;
+
+This is a better fix to the bug addressed on September 20 2009.
+Removed the variable rest_pending and all references in genmidi.c
+
+
 
