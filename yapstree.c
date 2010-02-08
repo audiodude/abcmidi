@@ -584,6 +584,8 @@ static int notenum(int octave, char ch, enum cleftype clef, int clefoctave)
   case bass:
     n = n + 12;
     break;
+  case noclef:
+    break;
   };
   switch (clefoctave) {
   case -22:

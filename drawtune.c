@@ -710,6 +710,8 @@ static void draw_keysig(char oldmap[], char newmap[], int newmult[],
   case bass:
     offset = 12;
     break;
+  case noclef:
+    break;
   };
   xpos = x;
   /* draw naturals to cancel out old accidentals */
@@ -1525,6 +1527,8 @@ static void sizevoice(struct voice* v, struct tune* t)
         ft->xright = BASS_RIGHT;
         ft->xleft = BASS_LEFT;
         break;
+      case noclef:
+	break;
       };
       if (theclef->octave > 0) {
         ft->yup = ft->yup + CLEFNUM_HT;
@@ -1820,6 +1824,8 @@ static void handlegracebeam(struct note *n, struct feature* ft)
       event_error("Internal beaming error");
       exit(1);
     };
+    break;
+  case nostem:
     break;
   };
 }

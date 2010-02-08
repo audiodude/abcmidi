@@ -538,6 +538,8 @@ int partno, xtrack, voice;
   char msg[100];
   long now;
 
+ if (partlabel <-1 || partlabel >25) printf("genmidi.c:fillvoice partlabel %d out of range\n",partlabel);
+
   now = tracklen + delta_time;
   if (partlabel == -1) {
     if (xtrack == 1) {

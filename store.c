@@ -31,7 +31,7 @@
  * Wil Macaulay (wil@syndesis.com)
  */
 
-#define VERSION "2.30 February 04 2010"
+#define VERSION "2.32 February 07 2010"
 /* enables reading V: indication in header */
 #define XTEN1 1
 /*#define INFO_OCTAVE_DISABLED 1*/
@@ -383,9 +383,10 @@ void setup_trackstructure () {
 
   p = head;
   ntracks = 1;
-  while (p != NULL && verbose) {
+  while (p != NULL) {
+    if (verbose) {
     printf("num %d index %d gchords %d words %d drums %d drone %d tosplit %d fromsplit %d\n",
- p->voiceno,p->indexno,p->hasgchords,p->haswords,p->hasdrums,p->hasdrone,p->tosplitno,p->fromsplitno);
+ p->voiceno,p->indexno,p->hasgchords,p->haswords,p->hasdrums,p->hasdrone,p->tosplitno,p->fromsplitno);}
     trackdescriptor[ntracks].tracktype = NOTES;
     trackdescriptor[ntracks].voicenum = p->indexno;
     if (p->haswords) {
@@ -4088,6 +4089,8 @@ static void startfile()
   hornpipe = 0;
   karaoke = 0;
   numsplits = 0;
+  splitdepth = 0; /* [SS] 2010-02-07 */
+  v1index = -1; /* [SS] 2010-02-07 */
   retain_accidentals = default_retain_accidentals;
   fermata_fixed = default_fermata_fixed;
   if (ratio_standard == -1) {
@@ -4243,7 +4246,7 @@ char* clefname;
 int voicestart[64];
 int bar_rep_found[64];
 int add_leftrepeat_at[100];
-int num2add = 0;
+int num2add;
 
 void add_missing_repeats (); 
 
@@ -4270,6 +4273,7 @@ void scan_for_missing_repeats ()
 int i,j;
 int voicenum;
 char part;
+num2add = 0; /* 2010-02-06 */
 part = '0';
 voicenum = 0;
 for (i=0;i<notes;i++) {
@@ -4300,9 +4304,13 @@ if (num2add > 0)
 
 
 void add_missing_repeats () {
-int i;
+int i,j;
 for (i = num2add-1; i >= 0; i--) {
  insertfeature(BAR_REP,0,0,0,add_leftrepeat_at[i]); 
+ for (j=0;j<parts;j++) {
+   if (part_start[j] > add_leftrepeat_at[i])
+     part_start[j]++;
+     }
   }
 }
 

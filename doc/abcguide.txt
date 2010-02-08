@@ -1,6 +1,6 @@
 Guide to writing abc for abc2midi
 ---------------------------------
-(updated March 17 2009 -- gchordbars)
+(updated February 08 2010 -- gchordbars)
 
 The defining document for abc is the abc version 1.6 specification which can 
 be found at http://www.gre.ac.uk/~c.walshaw/abc2mtex/abc.txt . This document
@@ -545,11 +545,13 @@ if the abc is printed out. The w: field (lower case w) in the body of a tune
 supplies a line of lyrics to be matched syllable by syllable to the last line 
 of notes. These are usually printed below the notes if the abc is typeset.  
 abc2midi uses these to generate karaoke MIDI files. A karaoke MIDI file can
-only contain one set of lyrics; abc2midi will generate a warning if the abc 
-file contains multiple voices with lyrics in. When the karaoke MIDI file 
-is played using an appropriate player program, the lyrics appear on the screen 
-with the current syllable highlighted. Within the lyrics, the following 
-symbols may be used :
+contain more than one set of lyrics in separate voices; an example is shown
+at the end of this section. By default the lyrics are embedded in the same
+MIDI track as the notes. If the runtime parameter -STFW is included,
+then the lyrics will be placed in separate and adjoining MIDI tracks.
+When the karaoke MIDI file is played using an appropriate player program,
+the lyrics appear on the screen with the current syllable highlighted.
+Within the lyrics, the following symbols may be used :
 
 <space> break between words
 -       break between syllables within a word
@@ -589,6 +591,23 @@ The first w: field is used the first time that part is played, then
 the second and so on. If the tune uses repeats, these must be placed
 at the end of a line of music in order to make sure that the start of
 a w: field matches up with the repeat.
+
+Multivoiced lyrics example:
+
+X:1
+T:Multivoiced lyrics
+M:2/4
+L:1/16
+K:C
+V:1
+C4 C4 | E4 G4 | c8 |]
+w: 1 2 3 4 5
+V:2
+C4 E4 | C4 B,4 | C8  |]
+w: 11 12 13 14 15
+
+
+
 
 abc2midi-specific commands (%%MIDI)
 ------------------------------------
@@ -786,6 +805,26 @@ Like other gchord codes, you may append a numeral indicating
 the duration of the note. The same rules apply as before.
 You can use any combination of the gchord codes,
 (fcbghijGHIJz).
+
+Another recent extension to gchords is the presence
+of gchords in separate voices. Here is an example:
+
+X:1
+T: gchord multivoice extension
+M: 4/4
+L: 1/4
+K: G
+V: 1
+%%MIDI gchord ghih
+"G" z4| z4|\
+%%MIDI gchordoff
+z4|
+V:2
+%%MIDI chordprog 12
+%%MIDI gchord GHIHG
+z4|"D" z4|z4|
+
+
 
 
 %%MIDI chordprog n
@@ -1090,6 +1129,27 @@ block, for example
 Other examples can be seen in the file CHANGES in the
 following the March 25 2005 entry.
 
+Another recent extension is the allowance of drum patterns
+in separate voices. Here is an example:
+
+X:1
+T: drum multivoice extension
+M: 4/4
+L: 1/4
+K: G
+V:1
+%%MIDI drum dddd 45 45 45 45 70 50 60 50
+%%MIDI drumon
+z4|z4|\
+%%MIDI drumoff
+z4|
+V:2
+%%MIDI drum ddddd 54 54 54 54 54 70 50 50 60 50 
+z4|\
+%%MIDI drumon
+z4|z4|
+
+ 
 
 
 %%MIDI temperamentlinear octave_cents fifth_cents

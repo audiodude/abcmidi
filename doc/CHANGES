@@ -6720,4 +6720,26 @@ This is a better fix to the bug addressed on September 20 2009.
 Removed the variable rest_pending and all references in genmidi.c
 
 
+February 07 2010
+
+Abc2midi: segmentation errors when applying abc2midi on a large
+collection of tunes in an abc file.
+
+Analysis: two array index out of bounds problems  were identified in store.c.
+The variable num2add was not reset to 0 in the function scan_for_missing_repeats()
+causing the array add_leftrepeat_at[100] to overrun when a large collection
+of tunes is processed. (Also many spurious BAR_REP's are inserted into
+the feature[] array.) A separate problem caused by insertion of BAR_REPs
+is that the part_start[] array no longer points to the correct location
+of the PART feature in the feature[] array. This causes fillvoice() to
+induce a segmentation error because partlabel contains bad data.
+
+Fix: (1) reset num2add to 0 in scan_for_missing_repeats(), (2) add_missing_repeats()
+also increments the addresses in part_start[] after each insert in the
+feature[] array. As a precaution, fillvoice() in genmidi() reports an
+error if variable partlabel is out of bounds.
+
+As a precaution v1index is also reset to -1 and splitdepth set to 0 in startfile().
+
+ 
 
