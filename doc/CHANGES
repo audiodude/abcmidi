@@ -6742,4 +6742,30 @@ error if variable partlabel is out of bounds.
 As a precaution v1index is also reset to -1 and splitdepth set to 0 in startfile().
 
  
+February 09 2010
+
+Abc2midi bug: drum voice fails to materialize in this tune.
+
+X: 30
+T: Drum fails to materialize
+M: 8/4
+L: 1/8
+Q: 1/4=120
+K: D octave=1
+%%MIDI program 74
+%%MIDI drum dzdzdzdzzzzzzdddd 41 43 41 43 45 45 45 45
+|:z2g2e2c2 gagfe2c2|\
+%%MIDI drumon
+z2g2e2c2 gagfe2c2|
+c2^d2e2ga g2^d2ccg2|\
+c2^d2e2ga g2^d2ccc2:|
+
+Analysis: setup_trackstructure() sets the number of tracks to
+1 if there is no drumvoice, gchordvoice, karaoke, or dronevoice.
+Unfortunately drumvoice was not set when %%MIDI drumon was
+encountered.
+Fix: drumvoice is set to v->indexno when %%MIDI drumon is found.
+
+
+
 

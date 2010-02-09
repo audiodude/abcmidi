@@ -31,7 +31,7 @@
  * Wil Macaulay (wil@syndesis.com)
  */
 
-#define VERSION "2.32 February 07 2010"
+#define VERSION "2.33 February 09 2010"
 /* enables reading V: indication in header */
 #define XTEN1 1
 /*#define INFO_OCTAVE_DISABLED 1*/
@@ -419,6 +419,7 @@ void setup_trackstructure () {
     p = q;
     }
 
+/* does the tune need any gchord, drum, drone or word track */
     if ((voicesused == 0) && (!karaoke) && (gchordvoice == 0) && 
         (drumvoice == 0) && (dronevoice==0)) {
       ntracks = 1;
@@ -1492,6 +1493,7 @@ char *package, *s;
     if (strcmp(command,"drumon") == 0 && dotune) {
       addfeature(DRUMON, 0, 0, 0);
       v->hasdrums = 1;
+      drumvoice = v->indexno; /* [SS] 2010-02-09 */
       done = 1;
       if (v == NULL) event_error("%%MIDI drumon must occur after the first K: header");
     }
@@ -3224,9 +3226,6 @@ if (nofnop == 0) {
 }; /* end nofnop */
   if (strcmp(p, "drum") == 0) {
     addfeature(DRUMON, 0, 0, 0);
-    if ((drumvoice != 0) && (drumvoice != v->indexno)) {
-      event_warning("Implementation limit: drums only supported in one voice");
-    };
     drumvoice = v->indexno;
     done = 1;
   };
