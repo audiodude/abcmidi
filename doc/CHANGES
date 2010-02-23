@@ -6769,3 +6769,55 @@ Fix: drumvoice is set to v->indexno when %%MIDI drumon is found.
 
 
 
+February 23 2010
+
+Abc2midi lyric bug: abc2midi does not treat the double hyphen
+in the w: line. In the following example
+
+X:1
+T: lyric bug
+M: 5/4
+L: 1/4
+K: G
+cdefg
+w:one two--three four
+the word four should be under the g note not f.
+
+Analysis: the problem occurs in the function getword() in genmidi.c.
+After processing a syllable the second 'while loop' skips over
+all following control codes. It should increment syllcount when
+it encounters a hyphen so that another note will be skipped.
+
+
+February 23 2010
+
+Abc2abc does not copy s: and d: (symbols and decoration
+lines)  but instead puts a blank line. In the following example:
+
+X: 2
+T:Aaron's (Rarified) Air
+M:4/4
+L:1/4
+K:G
+D|"G"DG "D7"FA|"G"G2 DD|G3/2A/2 Bc|\
+d3d|"C"e3/2d/2 ce|"G"d3/2c/2 Bd|"Am"cB AG|\
+s: .. .... .... .... 
+"D7"FG AD|
+
+abc2abc example.abc
+
+
+abc2abc aaron.abc -t 2
+X:2
+T:Aaron's (Rarified) Air
+M:4/4
+L:1/4
+K:Amaj
+E|"A"EA "E7"GB|"A"A2 EE|A3/2B/2 cd|\
+e3e|"D"f3/2e/2 df|"A"e3/2d/2 ce|"Bm"dc BA|\
+
+"E7"GA BE|
+
+Fix: added event_field(key, place) to case 'd' and case 's' in
+parsefield(key,field) in parseabc.c.
+

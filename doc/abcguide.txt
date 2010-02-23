@@ -572,6 +572,17 @@ underscore and the beginning of a word/syllable. However, some software
 incorrectly treats a hyphen as a separate word if there is a space between 
 it and the previous syllable, so, for example, you should write go-ing and 
 not go - ing to ensure that your abc is portable between programs.
+Here are some examples taken from
+http://abc.sourceforge.net/standard/abc2-draft.html
+
+w: syll-a-ble    is aligned with three notes
+w: syll-a--ble   is aligned with four notes
+w: syll-a -ble   (equivalent to the previous line)
+w: time__        is aligned with three notes
+w: of~the~day    is treated as one syllable (i.e. aligned with one note)
+                 but appears as three separate words
+
+
 
 The following example illustrates most of these :
 

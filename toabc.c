@@ -21,7 +21,7 @@
 
 /* back-end for outputting (possibly modified) abc */
 
-#define VERSION "1.58 March 17 2009"
+#define VERSION "1.59 February 23 2010"
 
 /* for Microsoft Visual C++ 6.0 or higher */
 #ifdef _MSC_VER

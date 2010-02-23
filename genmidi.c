@@ -848,6 +848,7 @@ int w;
   int syllcount;
   enum {empty, inword, postword, foundnext, failed} syllstatus;
 
+  /*printf("GETWORD: w = %d\n",c);*/
   i = 0;
   syllcount = 0;
   if (w >= wcount) {
@@ -870,6 +871,7 @@ int w;
   c = *(words[w]+(*place));
   while ((syllstatus != postword) && (syllstatus != failed)) {
     syllable[i] = c;
+    /*printf("syllstatus = %d c = %c i = %d place = %d\n",syllstatus,c,i,*place);*/
     switch(c) {
     case '\0':
       if (syllstatus == empty) {
@@ -964,18 +966,21 @@ int w;
     syllcount = 1;
     if (strlen(syllable) > 0) {
       text_data(syllable);
+      /*printf("TEXT DATA %s\n",syllable);*/
     };
   };
   /* now deal with anything after the syllable */
   while ((syllstatus != failed) && (syllstatus != foundnext)) {
     c = *(words[w]+(*place));
+    /*printf("next character = %c\n",c);*/
     switch (c) {
     case ' ':
       *place = *place + 1;
       break;
     case '-':
-      *place = *place + 1;
+      *place = *place + 1; 
       kspace = 0;
+      syllcount = syllcount + 1; /* [SS] 2011-02-23 */
       break;
     case '\t':
       *place = *place + 1;
@@ -996,6 +1001,7 @@ int w;
       syllstatus = foundnext;
       break;
     };  
+     /*printf("now place = %d syllcount = %d syllstatus = %d\n",*place,syllcount,syllstatus);*/
   };
   return(syllcount);
 }

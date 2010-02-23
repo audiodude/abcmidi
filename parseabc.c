@@ -468,11 +468,13 @@ int strict;
   };
   if (strncmp(s, "treble+8", 8) == 0) {
     gotclef= 1;
+    if (fileprogram == ABC2MIDI && *gotoctave != 1 && *octave !=1) event_warning("clef= is overriding octave= setting");
     *gotoctave=1;
     *octave =1;
   };
   if (strncmp(s, "treble-8", 8) == 0) {
     gotclef= 1;
+    if (fileprogram == ABC2MIDI && *gotoctave == 1 && *octave != -1) event_warning("clef= is overriding octave= setting");
     *gotoctave=1;
     *octave = -1;
   };
@@ -484,6 +486,7 @@ int strict;
   };
   if (strncmp(s, "tenor-8", 7) == 0) {
     gotclef= 1;
+    if (fileprogram == ABC2MIDI && *gotoctave == 1 && *octave != -1) event_warning("clef= is overriding octave= setting");
     *gotoctave=1;
     *octave= -1;
   };
@@ -639,7 +642,7 @@ if (casecmp(word, "clef") == 0) {
         *s = readword(clefstr, *s);
         if (isclef(clefstr,gotoctave,octave,0)) {
           *gotclef = 1;
-        };
+        }; 
       };
       successful = 1;
     }
@@ -647,7 +650,7 @@ else if (isclef(word,gotoctave,octave,1)) {
       *gotclef = 1;
       strcpy(clefstr, word);
       successful = 1;
-    };
+     }; 
 return successful;
 } 
 
@@ -1553,11 +1556,13 @@ char* field;
     break;
   case 'd':
     /* decoration line in abcm2ps */
+    event_field(key, place); /* [SS] 2010-02-23 */
     break;
   case 's':
+    event_field(key, place); /* [SS] 2010-02-23 */
     break;
   default:
-    event_field(key, place);
+    event_field(key, place); 
   };
   if (iscomment) {
     parse_precomment(comment);  
