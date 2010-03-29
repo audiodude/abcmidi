@@ -41,6 +41,10 @@ a default value for the unit note length from the M: field. abc2midi
 only uses this rule for choosing a unit note length in the header if
 the L: field has been omitted.
 
+The symbols M:C and M:C| give common time (4/4) and cut time (2/2)
+The symbol M:none omits the meter entirely (free meter).
+It is also possible to specify a complex meter, e.g. M:(2+3+2)/8, to make explicit which beats should be accented. The parentheses around the numerator are optional. 
+
 Other fields may also appear in the header. Common ones are C: composer 
 of the tune, D: discography, H: history of the tune, S: source, N: notes, 
 Z: transcription note, A: area from which the tune comes, B: book

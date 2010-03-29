@@ -817,7 +817,7 @@ int startline;
   return(newwordline);
 }
 
-
+int hyphenstate;
 
 static int getword(place, w)
 /* picks up next syllable out of w: field.
@@ -886,6 +886,7 @@ int w;
       syllstatus = inword;
       *place = *place + 1;
       i = i + 1;
+      hyphenstate = 0;
       break;
     case '\\':
       if (*(words[w]+(*place+1)) == '-') {
@@ -912,13 +913,18 @@ int w;
       };
       break;
     case '-':
-      if (syllstatus == inword) {
+	if (hyphenstate == 1) {
+		i = i + 1; syllstatus = postword; *place = *place + 1;
+		break;
+	  }
+	if (syllstatus == inword) {
         syllstatus = postword;
         *place = *place + 1;
         kspace = 0;
       } else {
         *place = *place + 1;
       };
+      hyphenstate = 1;
       break;
     case '*':
       if (syllstatus == empty) {
@@ -927,6 +933,7 @@ int w;
       } else {
         syllstatus = postword;
       };
+      hyphenstate = 0;
       break;
     case '_':
       if (syllstatus == empty) {
@@ -935,6 +942,7 @@ int w;
       } else {
         syllstatus = postword;
       };
+      hyphenstate = 0;
       break;
     case '|':
       if (syllstatus == empty) {
@@ -946,10 +954,12 @@ int w;
         kspace = 1;
       };
       waitforbar = 1;
+      hyphenstate = 0;
       break;
     default:
       /* copying plain text character across */
       /* first character must be alphabetic */
+      hyphenstate = 0;
       if ((i>0) || isalpha(syllable[0])) {
         syllstatus = inword;
         i = i + 1;

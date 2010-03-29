@@ -6821,3 +6821,28 @@ e3e|"D"f3/2e/2 df|"A"e3/2d/2 ce|"Bm"dc BA|\
 Fix: added event_field(key, place) to case 'd' and case 's' in
 parsefield(key,field) in parseabc.c.
 
+
+
+March 27 2010 - contributed by Bas Schoutsen
+
+abc2midi now reads w: lines starting with hyphens, example:
+
+X:1
+K:C
+A
+w:la-
+BcdA
+w:---la
+
+X:2
+K:C
+A
+w:la--
+BcdA
+w:----
+BcdA
+w:--la 
+
+Fix: introduced new global variable hyphenstate in genmidi.c/getword().
+
+
