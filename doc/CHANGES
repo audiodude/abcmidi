@@ -6846,3 +6846,24 @@ w:--la
 Fix: introduced new global variable hyphenstate in genmidi.c/getword().
 
 
+
+April 08 2010  contribution by Bas Schoutsen
+
+Abc2midi lyric bug: tied notes at the end of the line shifts the lyrics
+one place further ahead in the following example.
+
+
+X:1
+T: tie 2
+M:4/4
+L:1/4
+K:C
+cdef-|
+w:c d e x-
+fgag
+w:-g a g
+
+Fix: in genmidi.c a new global variable onemorenote
+were introduced plus additional code in getword() and checksylables()
+to handle the situation.
+

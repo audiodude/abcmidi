@@ -152,6 +152,7 @@ int wlineno, syllcount;
 int lyricsyllables, musicsyllables;
 /* the following are booleans to select features in current track */
 int wordson, noteson, gchordson, temposon, drumson, droneon;
+int hyphenstate;  /* [Bas Schoutsen] 2010-04-08 */
 
 /* Generating accompaniment */
 int gchords, g_started;
@@ -817,7 +818,7 @@ int startline;
   return(newwordline);
 }
 
-int hyphenstate;
+
 
 static int getword(place, w)
 /* picks up next syllable out of w: field.
@@ -870,8 +871,8 @@ int w;
   syllstatus = empty;
   c = *(words[w]+(*place));
   while ((syllstatus != postword) && (syllstatus != failed)) {
-    syllable[i] = c;
-    /*printf("syllstatus = %d c = %c i = %d place = %d\n",syllstatus,c,i,*place);*/
+  syllable[i] = c;
+    /* printf("syllstatus = %d c = %c i = %d place = %d row= %d \n",syllstatus,c,i,*place,w); */
     switch(c) {
     case '\0':
       if (syllstatus == empty) {
@@ -886,7 +887,7 @@ int w;
       syllstatus = inword;
       *place = *place + 1;
       i = i + 1;
-      hyphenstate = 0;
+	  hyphenstate = 0; /* [Bas Schoutsen] 2010-04-08 */
       break;
     case '\\':
       if (*(words[w]+(*place+1)) == '-') {
@@ -913,9 +914,10 @@ int w;
       };
       break;
     case '-':
-	if (hyphenstate == 1) {
+	if (hyphenstate == 1) {  /* [Bas Schoutsen 2010-04-08 */
 		i = i + 1; syllstatus = postword; *place = *place + 1;
 		break;
+		
 	  }
 	if (syllstatus == inword) {
         syllstatus = postword;
@@ -924,7 +926,7 @@ int w;
       } else {
         *place = *place + 1;
       };
-      hyphenstate = 1;
+	  hyphenstate = 1;
       break;
     case '*':
       if (syllstatus == empty) {
@@ -933,7 +935,7 @@ int w;
       } else {
         syllstatus = postword;
       };
-      hyphenstate = 0;
+	  hyphenstate = 0;
       break;
     case '_':
       if (syllstatus == empty) {
@@ -942,7 +944,7 @@ int w;
       } else {
         syllstatus = postword;
       };
-      hyphenstate = 0;
+	  hyphenstate = 0;
       break;
     case '|':
       if (syllstatus == empty) {
@@ -954,12 +956,12 @@ int w;
         kspace = 1;
       };
       waitforbar = 1;
-      hyphenstate = 0;
+	  hyphenstate = 0;
       break;
     default:
       /* copying plain text character across */
       /* first character must be alphabetic */
-      hyphenstate = 0;
+	  hyphenstate = 0;
       if ((i>0) || isalpha(syllable[0])) {
         syllstatus = inword;
         i = i + 1;
@@ -1011,7 +1013,7 @@ int w;
       syllstatus = foundnext;
       break;
     };  
-     /*printf("now place = %d syllcount = %d syllstatus = %d\n",*place,syllcount,syllstatus);*/
+    /* printf("now place = %d syllcount = %d syllstatus = %d\n",*place,syllcount,syllstatus); */
   };
   return(syllcount);
 }
@@ -1073,6 +1075,8 @@ int place;
   };
 }
 
+int onemorenote; /* [Bas Schoutsen] 2010-04-08 */
+
 static void checksyllables()
 /* check line of lyrics matches line of music. It grabs
  * all remaining syllables in the lyric line counting
@@ -1100,11 +1104,19 @@ static void checksyllables()
       };
     };
   };
+  if (onemorenote == 1){  /* [Bas Schoutsen] 2010-04-08 */
+	lyricsyllables = lyricsyllables + 1;
+  }  
   if (lyricsyllables != musicsyllables) {
     sprintf(msg, "Verse %d mismatch;  %d syllables in music %d in lyrics",
                 partrepno+1, musicsyllables, lyricsyllables);
     event_error(msg);
   };
+  if (onemorenote == 1){  /* [Bas Schoutsen] 2010-04-08 */
+	onemorenote = 0;
+  /*printf("onemorenote please, hyphenstate to zero\n (using lyric- instead of note-hyphen)\n"); //not the most elegant solution.. but it works */
+  hyphenstate = 0;
+  }
   lyricsyllables = 0;
   musicsyllables = 0;
 }
@@ -2225,6 +2237,7 @@ int xtrack;
   while (j < notes) {
     switch(feature[j]) {
     case NOTE:
+	onemorenote = 0;
       if (wordson) {
         write_syllable(j);
       };
@@ -2282,6 +2295,7 @@ int xtrack;
       };
       break;
     case TNOTE:
+	onemorenote = 1;
       if (wordson) {
         /* counts as 2 syllables : note + first tied note.
 	 * We ignore any bar line placed between tied notes
