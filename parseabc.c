@@ -528,6 +528,9 @@ int strict;
 
 char* readword(word, s)
 /* part of parsekey, extracts word from input line */
+/* besides the space, the symbols _, ^, and = are used */
+/* as separators in order to handle key signature modifiers. */
+/* [SS] 2010-05-24 */
 char word[];
 char* s;
 {
@@ -536,7 +539,8 @@ char* s;
 
   p = s;
   i = 0;
-  while ((*p != '\0') && (*p != ' ') && ((i == 0) || (*p != '='))) {
+  while ((*p != '\0') && (*p != ' ') && (*p != '\t')  && ((i == 0) ||
+      ((*p != '=') && (*p != '^') && (*p != '_')))) {
     if (i < 29) {
       word[i] = *p;
       i = i + 1;
@@ -835,6 +839,7 @@ char* str;
   char word[30];
   int parsed;
   int gotclef, gotkey, gotoctave, gottranspose;
+  int explict; /* [SS] 2010-05-08 */
   int foundmode;
   int transpose, octave;
   char clefstr[30];
@@ -861,13 +866,15 @@ char* str;
   cgotoctave=0;
   coctave=0;
   modeindex = 0;
+  explict = 0;
   for (i=0; i<7; i++) {
     modmap[i] = ' ';
     modmul[i] = 1;
   };
   while (*s != '\0') {
     parsed = parseclef(&s,word,&gotclef,clefstr,&cgotoctave,&coctave);
-
+    /* parseclef also scans the s string using readword(), placing */
+    /* the next token  into the char array word[].                   */ 
     if (!parsed) parsed = parsetranspose(&s,word,&gottranspose,&transpose);
 
     if (!parsed) parsed = parseoctave(&s,word,&gotoctave,&octave);
@@ -885,6 +892,11 @@ char* str;
        nokey = 1;
        minor =0;
        sf = 0;
+       }
+
+    if (casecmp(word,"exp") == 0) {
+       explict = 1;
+       parsed = 1;
        }
 
     if ((parsed == 0) && ((word[0] >= 'A') && (word[0] <= 'G'))) {
@@ -955,7 +967,7 @@ char* str;
         modmap[j] = word[0];
         modmul[j] = 1;
         parsed = 1;
-      } else {
+      } else { /*double sharp or double flat */
         if ((strlen(word) == 3) && (word[0] != '=') && (word[0] == word[1]) &&
             (word[2] >= 'a') && (word[2] <= 'g')) {
           j = (int)word[2] - 'a';
@@ -965,14 +977,37 @@ char* str;
         };
       };
     };
+
+/*   if (explict)  for compatibility with abcm2ps 2010-05-08  2010-05-20 */
+    if ((word[0] == '^') || (word[0] == '_') || (word[0] == '=')) {
+      if ((strlen(word) == 2) && (word[1] >= 'A') && (word[1] <= 'G')) {
+        j = (int)word[1] - 'A';
+        modmap[j] = word[0];
+        modmul[j] = 1;
+        parsed = 1;
+      } else { /*double sharp or double flat */
+        if ((strlen(word) == 3) && (word[0] != '=') && (word[0] == word[1]) &&
+            (word[2] >= 'A') && (word[2] <= 'G')) {
+          j = (int)word[2] - 'A';
+          modmap[j] = word[0];
+          modmul[j] = 2;
+          parsed = 1;
+        };
+      };
+    }
+
     if ((parsed == 0) && (strlen(word) > 0)) {
       sprintf(msg, "Ignoring string '%s' in K: field", word);
       event_warning(msg);
     };
   };
   if (cgotoctave) {gotoctave=1; octave=coctave;}
+  if (parsed & !gotkey) { /* [SS] 2010-05-31 for explicit key signature */
+     sf = 0;
+     gotkey = 1;
+     }
   event_key(sf, str, modeindex, modmap, modmul, gotkey, gotclef, clefstr,
-            octave, transpose, gotoctave, gottranspose);
+            octave, transpose, gotoctave, gottranspose, explict);
   return(gotkey);
 }
 

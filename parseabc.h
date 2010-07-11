@@ -96,7 +96,8 @@ extern void event_info(char *s);
 extern void event_key(int sharps, char *s, int modeindex, 
                char modmap[7], int modmul[7],
                int gotkey, int gotclef, char *clefname,
-               int octave, int transpose, int gotoctave, int gottranspose);
+               int octave, int transpose, int gotoctave, int gottranspose,
+               int explict);
 extern void event_microtone(int dir, int a, int b);
 extern void event_graceon(void);
 extern void event_graceoff(void);

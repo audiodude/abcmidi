@@ -31,7 +31,7 @@
  * Wil Macaulay (wil@syndesis.com)
  */
 
-#define VERSION "2.36 April 08 2010"
+#define VERSION "2.48 July 11 2010"
 /* enables reading V: indication in header */
 #define XTEN1 1
 /*#define INFO_OCTAVE_DISABLED 1*/
@@ -1492,7 +1492,7 @@ char *package, *s;
       }
 
 
-    if (strcmp(command,"drumon") == 0 && dotune) {
+    if (strcmp(command,"drumon") == 0 && dotune) {  /* [SS] 2010-05-26 */
       addfeature(DRUMON, 0, 0, 0);
       v->hasdrums = 1;
       drumvoice = v->indexno; /* [SS] 2010-02-09 */
@@ -1504,7 +1504,7 @@ char *package, *s;
        done = 1;
     }
 
-    if (strcmp(command,"droneon") == 0) {
+    if (strcmp(command,"droneon") == 0 && dotune) {
       addfeature(DRONEON, 0, 0, 0);
       v->hasdrone = 1;
       if ((dronevoice != 0) && (dronevoice != v->indexno)) {
@@ -4113,7 +4113,7 @@ static void startfile()
   for (j=0; j<16;j++) {
     channels[j] = 0;
   };
-  set_gchords("z");
+  set_gchords("x"); /* [SS] 2010-07-11 */
   gchordvoice = 0;
   set_drums("z");
   drumvoice = 0;
@@ -4195,7 +4195,7 @@ static void headerprocess()
 }
 
 void event_key(sharps, s, modeindex, modmap, modmul, gotkey, gotclef, clefname,
-          octave, transpose, gotoctave, gottranspose)
+          octave, transpose, gotoctave, gottranspose, explict)
 /* handles a K: field */
 int sharps; /* sharps is number of sharps in key signature */
 int modeindex; /* 0 major, 1,2,3 minor, 4 locrian, etc.  */
@@ -4204,6 +4204,7 @@ char modmap[7]; /* array of accidentals to be applied */
 int  modmul[7]; /* array giving multiplicity of each accent (1 or 2) */
 int gotkey, gotclef;
 int octave, transpose, gotoctave, gottranspose;
+int explict;
 char* clefname;
 {
   int minor;
@@ -4211,7 +4212,7 @@ char* clefname;
   if (modeindex >0 && modeindex <4) minor = 1;
   if ((dotune) && gotkey) {
     if (pastheader) {
-      setmap(sharps, v->basemap, v->basemul);
+      if (!explict) setmap(sharps, v->basemap, v->basemul); /* [SS] 2010-05-08*/
       altermap(v, modmap, modmul);
       copymap(v);
       addfeature(KEY, sharps, 0, minor);
@@ -4222,7 +4223,7 @@ char* clefname;
       if (gottranspose) {
         addfeature(GTRANSPOSE, transpose, 0, 0);
       };
-      setmap(sharps, global.basemap, global.basemul);
+      if (!explict) setmap(sharps, global.basemap, global.basemul); /* [SS] 2010-05-08 */
       altermap(&global, modmap, modmul);
       global.keyset=1;
       copymap(&global);
@@ -4356,6 +4357,8 @@ static void finishfile()
 
     if (check) {
       Mf_putc = nullputc;
+      header_time_num = time_num; /* [SS] 2010-05-21 */
+      header_time_denom = time_denom; /* [SS] 2010-05-21 */
       if (ntracks == 1) {
         writetrack(0);
       } else {

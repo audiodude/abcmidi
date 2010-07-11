@@ -6867,3 +6867,300 @@ Fix: in genmidi.c a new global variable onemorenote
 were introduced plus additional code in getword() and checksylables()
 to handle the situation.
 
+
+April 15 2010
+
+Abc2midi: incompatibility with Melody Player, MidiNotate, NoteWorthy Player
+and other commercial products. In the following example,
+
+X:1
+T:Zijn niet de tien gereinigd
+C:Willem Vogel
+M:C|
+K:C
+z4z2A2|[M:5/4]c4A2A2A2|[M:3/4]c4A2|[M:5/4]d4B2B2B2|[M:C|]e4A4|d4G4|c4B2A2|G6G2|A4E2E2|G4D4|E4F4|D8-|D8-|!fermata!D8|]
+
+the time signature 5/4 is placed at the beginning instead of the second
+measure.
+
+Analysis, the MIDI meta Text event Time signaturea= 5/4 is
+placed at MIDI Time = 1919 instead of MIDI Time = 1920. Apparently, when
+the MIDI Player performs the division 1919/480 (where 480 is the number
+of divisions per beat) the result is truncated instead of rounded.
+
+Fix, in set_meter(n,m) defined in genmidi.c, the last statement
+was changed to
+
+mf_write_meta_event(delta_time, time_signature, data, 4);
+
+(delta_time replaces 0L.)
+
+**Note** this change was retracted on July 07 2010 and a
+different fix was introduced.
+
+April 21 2010
+
+Abc2midi bug: The fix described on April 15 2010 introduced a more
+serious bug. In the following example
+
+X: 15
+T: Accompaniment starts at the wrong time
+M: 2/4
+L: 1/8
+K: Am
+%%MIDI program 57
+| CDEF|CDEF| CDEF|CDEF|
+M:2/4
+%%MIDI drum dddz 35 48 60
+%%MIDI drumon
+%%MIDI gchord fczz
+%%MIDI bassvol 40
+%%MIDI chordvol 40
+|"D" dcBd       |d2B2      |cBAc      |B2A2      |\
+     z2d2-      |d2B2      |c4        |B2A2      |
+
+Both the drum and chordal accompaniment start 4 bars late.
+If the second M:2/4 indication is left out, the accompaniment
+starts at the correct time.
+
+Fix: in set_meter() the change
+if (noteson) /* [SS] 2010-04-21 */
+  mf_write_meta_event(delta_time, time_signature, data, 4); /* [SS] 2010-04-15 */
+else
+  mf_write_meta_event(0L, time_signature, data, 4); /* [SS] 2010-04-15 */
+
+seems to fix the problem.
+
+**Note** this change was retracted on July 07 2010 and a
+different fix was introduced.
+
+May 08 2010
+
+Abc2midi new feature: the abc draft standard 2.0
+ http://abc.sourceforge.net/standard/abc2-draft.html#K:%20-%20key
+allows one to explicitly define all accidentals of a key signature
+using the notation
+K:<tonic> exp  <accidentals>
+Thus K:DPhr ^f could also be notated as K:D exp _b _e ^f
+where exp is an abbreviation for explicit. The standard states
+that the notes should be in lower case; however, as a compatibility
+measure with abcm2ps upper case notes are also allowed with
+this feature.
+
+Fix: in parseabc.c (parsekey) checked for string "exp" and
+set a new variable explict to 1 if the string is present.
+Added the variable explict to the function event_key(..)
+which is defined in store.c, toabc.c, yapstree.c, matchsup.c, and
+parseabc.h. Note the applications abc2abc, yaps, abcmatch do
+not support this feature presently. 
+
+
+May 20 2010
+
+Abc2midi in compatiblity. For the following example
+
+
+X: 1
+T: Araber tants  
+R: Terkish
+M: C
+L: 1/8
+K: Dphr ^F
+D2 "A"\
+| "D"FGA2 A2A2 | "Gm"B6 AG | "D"^FGA2 "Eb"BAGA | "D"GF3 z2D2 |
+
+abc2midi ignores ^F in the K: field command. The draft 2.0 standard
+states that modifiers should be in lower case. Thus the K: field
+should be written as
+K: Dphr ^f
+Since abcm2ps allows upper case modifiers too and distinguishes
+them, I now allow both upper and lower case modifiers.
+Fix: commented out 
+if (expict) in parseabc/parsekey().
+This also maintains compatibility with various Klezmer transcriptions.
+
+
+
+May 21 2010
+
+Abc2midi bug: abc2midi crashes when the -c option (checking only)
+is selected. eg. 
+abc2midi test.abc -c
+Floating point exception
+
+Analysis: division by zero occurs when set_meter(header_time_num,
+header_time_denom) because both input parameters are zero. These
+parameters are not set when the c option is selected.
+
+Fix: in finishfile() (store.c) set header_time_num and header_time_denom
+when check is set.
+
+  if (check) {
+      Mf_putc = nullputc;
+      header_time_num = time_num; /* [SS] 2010-05-21 */
+      header_time_denom = time_denom; /* [SS] 2010-05-21 */
+ 
+
+
+May 24 2010
+
+Abc2midi compatibility bug: the key signature 
+K:C^f^c
+is not parsed correctly. (Such indications occur in many
+Klezmer tunes.) Analysis: parsekey (in parseabc.c) expects
+a space separating the key signature modifiers ^f and ^c.
+Fix: readword() in parseabc.c was changed so that it splits
+a string when it encounters '^' and '_' as well as '='.
+
+
+May 26 2010
+
+Abc2midi crashes with a segmentation error for file demo.abc
+(included with abcMIDI package) when run on any specific tune eg.
+
+[seymour@localhost abc]$ abc2midi demo.abc 2
+writing MIDI file demo2.mid
+Segmentation fault
+
+Analysis: abc2midi scans the entire demo.abc file. When it 
+encounters %%MIDI drumon in tune 7, it attempts to set
+v->drumon = 1. The v structure has not been allocated,
+so a null pointer is encountered.
+
+Fix: also tested the variable dotune in the following test
+ if (strcmp(command,"drumon") == 0 && dotune) {  /* [SS] 2010-05-26 */
+in event_specific, in store.c.
+
+
+May 31 2010
+
+Abc2midi does not process K: field when key is missing but sharps
+and flats are indicated explicitly. This typically occurs in some
+Klezmer tunes. In the following example
+
+X:1
+T:explicit key
+M:2/4
+L:1/8
+K:^c^d^e
+CDEF|DEGA|
+
+abc2midi returns the messages
+
+Error in line 5 : First K: field must specify key signature
+Warning in line 6 : Ignoring text: CDEF|DEGA|
+Error in line 7 : No valid K: field found at start of tune
+
+and does not produce a MIDI file
+
+Analysis: the messages are produced when parsekey returns a zero
+value for the flag gotkey. Fix: if parsekey succeeds in parsing
+some information in the K: field (parse == 1), then gotkey is
+set to 1 and sf is set to 0 (i.e. C scale).
+
+
+June 26 2010
+
+Abc2midi bug. Tempo command (eg Q:60) applied at the wrong place
+in a multivoiced abc file containing a change in dynamics. In
+the following example:
+
+X: 1
+T: Branles
+M: 4/4
+L:1/8
+Q:1/4=110
+K:C
+V:1
+CDEF GABc | CDEF !p!GA[Q:60]Bc |
+V:2
+K:C
+|[C,G,]4 [G,,F,]4 | [C,G,]4 [G,,F,]4 |
+
+the Q:60 is applied after the second note (D).
+
+Analysis: the !p! command resets delta_time to zero in track 1 (where
+the TEMPO command is inserted) because of the line
+if(wordson+noteson+gchordson+drumson+droneon == 0) delta_time = 0L;
+at the conclusion of the function dodeferred (in genmidi.c). As a
+result when TEMPO is encountered, delta_time only reflects the next two
+notes GA after the !p!. Unfortunately, if we do not set delta_time
+to 0L, then another bug comes back (September 20 2009). 
+
+Fix: it is necessary to introduce another global delta_time_track0
+which is shared between genmidi.c and queues.c. delta_time_track0
+is updated by queues.c but is only used by the TEMPO command
+in genmidi.c
+
+
+July 1 2010
+
+Abc2midi does not recognize tabs in field commands K: and V:
+eg.
+
+X: 1
+T:Danse
+M: 4/4
+L:1/8
+Q:1/4=110
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+V:1	nm=Oboe	snm=Ob
+V:2	nm=Basse	snm=Bs
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+V:1	% Oboe
+%%MIDI channel 1
+%%MIDI program 68
+K:Gm
+GABc def2|edcd BcA2 | GABc def2|ec[Q:100]B[Q:90]d[Q:80] A[Q:70]F[Q:60]G2|]
+V:2	% Basse
+%%MIDI channel 2
+%%MIDI program 46
+K:Gm
+[G,,D,]4 [G,,D,]4 |[G,,D,]4 [G,,D,]4 |[G,,D,]4 [G,,D,]4 |[G,,D,]4
+[G,,D,]4 |]
+%%%
+
+Analyses: tabs instead of spaces occur after V:1 and V:2. Abc2midi
+processes 1\tnm=Oboe as a single word etc. As a result abc2midi
+identifies four voices instead of 2.
+
+Fix: in readword() (parseabc.c) added (*p != '\t') in the while
+predicate.
+
+
+July 07 2010
+
+Abc2midi bug occurs when a rest is followed by a time signature.
+In the following example:
+
+X:1
+T: time signature
+M: 2/4
+L: 1/8
+K: C
+V:1
+E2D2|[M:2/4] D2F2|
+V:2
+z4|[M:2/4] f2e2|
+
+the rest z4 is held too long causing a loss of synchrony between the
+two voices. If the following meter change is removed in the two voices,
+the problem disappears. The rest is also held too long in the single
+voiced tune (no V: command).
+
+Analysis: this bug was introduced with the April 15 - April 21 2010
+changes to write_meter() in genmidi.c (see above). Fix, I restored
+write_meter() to its original state reintroducing the incompatibility
+with Melody Player and several other players.
+
+To fix the incompatibility, delta_time was initialized to 1 instead
+of 0 in writetrack() (genmidi.c).
+
+
+July 11 2010
+
+Abc2midi: no feature. Added warning "no default gchord string for this meter".
+The message appears once if no gchord string could be set and a guitar chord
+appears in the music. Implementation: the gchord string is set to 'x' by
+default. If dogchords finds 'x' it outputs the message one time.
+

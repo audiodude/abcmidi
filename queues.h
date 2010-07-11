@@ -16,6 +16,7 @@
 /* queue for notes waiting to end */
 /* allows us to do general polyphony */
 extern long delta_time, tracklen;
+extern long delta_time_track0; /* [SS] 2010-06-27 */
 extern int div_factor;
 
 /* routines to handle note queue */

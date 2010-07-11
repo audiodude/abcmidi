@@ -106,6 +106,7 @@ int div_factor;
 int division = DIV;
 
 long delta_time; /* time since last MIDI event */
+long delta_time_track0; /* [SS] 2010-06-27 */
 long tracklen, tracklen1;
 
 /* output file generation */
@@ -205,6 +206,8 @@ int trim_denom = 5;
 
 /* channel 10 drum handling */
 int drum_map[256];
+
+int gchord_error = 0; /* [SS] 2010-07-11 */
 
 extern struct trackstruct trackdescriptor[40]; /* trackstruct defined in genmidi.h*/
 
@@ -313,7 +316,7 @@ char* s;
   p = s;
   j = 0;
   seq_len = 0;
-    while ((strchr("zcfbghijGHIJ", *p) != NULL) && (j <39)) {
+    while ((strchr("zcfbghijGHIJx", *p) != NULL) && (j <39)) {
     if (*p == 0) break;
     gchord_seq[j] = *p;
     p = p + 1;
@@ -1221,7 +1224,12 @@ int n, m;
     data[2] = (char)(24*n/m);
   };
   data[3] = 8;
-  mf_write_meta_event(0L, time_signature, data, 4);
+/*if (noteson)  [SS] 2010-04-21 2010-07-06
+  mf_write_meta_event(delta_time, time_signature, data, 4); 
+ [SS] 2010-04-15 
+else
+*/
+  mf_write_meta_event(0L, time_signature, data, 4); /* [SS] 2010-04-15 2010-07-06*/
 }
 
 static void write_keysig(sf, mi)
@@ -1819,6 +1827,12 @@ int j;
         save_note(g_num*len, g_denom, gchordnotes[3]-12, 8192, gchord.chan, gchord.vel); 
       break;
 
+    case 'x':
+      if(!gchord_error) {
+         gchord_error++;
+         event_warning("no default gchord string for this meter");
+        }
+      break;
 
      default:
        printf("no such gchord code %c\n",action);
@@ -2107,7 +2121,8 @@ int xtrack;
   /* default is a normal track */
   timekey=1;
   tracklen = 0L;
-  delta_time = 0L;
+  delta_time = 1L; /* [SS] 2010-07-07 */
+  delta_time_track0 = 0L; /* [SS] 2010-06-27 */
   trackvoice = xtrack;
   wordson = 0;
   noteson = 1;
@@ -2612,9 +2627,11 @@ int xtrack;
         data[0] = num[j] & 0xff;
         data[1] = (denom[j]>>8) & 0xff;
         data[2] = denom[j] & 0xff;
-        mf_write_meta_event(delta_time, set_tempo, data, 3);
-        tracklen = tracklen + delta_time;
+/* new [SS] 2010-06-27 delta_time_track0 */
+        mf_write_meta_event(delta_time_track0, set_tempo, data, 3);
+        tracklen = tracklen + delta_time_track0;
         delta_time = 0L;
+        delta_time_track0=0L;
 /*
         if (j > 0) {
           div_factor = pitch[j];

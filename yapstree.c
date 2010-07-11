@@ -2081,7 +2081,7 @@ void event_octave(int num, int local)
 }
 
 void event_key(sharps, s, minor, modmap, modmul, gotkey, gotclef, clefstr,
-          octave, transpose, gotoctave, gottranspose)
+          octave, transpose, gotoctave, gottranspose, explict)
 int sharps;
 char *s;
 int minor;
@@ -2090,6 +2090,7 @@ int modmul[7];
 int gotkey, gotclef;
 char* clefstr;
 int octave, transpose, gotoctave, gottranspose;
+int explict;
 /* A key field (K: ) has been encountered */
 {
   if (xinhead || xinbody) {

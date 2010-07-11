@@ -259,6 +259,8 @@ void Qcheck()
 /* of the Q structure array. The tracklen variable in MIDI time */
 /* units is also maintained here.                               */ 
 
+/* new: delta_time_track0 is declared in queues.h like delta_time */
+
 void timestep(t, atend)
 int t;
 int atend;
@@ -271,6 +273,7 @@ int atend;
   while ((Qhead != -1) && (Q[Qhead].delay < time)) {
     headtime = Q[Qhead].delay;
     delta_time = delta_time + (long) headtime;
+    delta_time_track0 = delta_time_track0 + (long) headtime; /* [SS] 2010-06-27*/
     time = time - headtime;
     advanceQ(headtime);
     if (Q[Qhead].pitch == -1) {
@@ -288,4 +291,5 @@ int atend;
     advanceQ(time);
   };
   delta_time = delta_time + (long)time - totalnotedelay;
+  delta_time_track0 = delta_time_track0 + (long)time - totalnotedelay; /* [SS] 2010-06-27*/
 }

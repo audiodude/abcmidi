@@ -1354,7 +1354,7 @@ strcat(keysignature,mode[modeindex]);
 
 
 void event_key(sharps, s, modeindex, modmap, modmul, gotkey, gotclef, clefname,
-          octave, xtranspose, gotoctave, gottranspose)
+          octave, xtranspose, gotoctave, gottranspose, explict)
 int sharps;
 char *s;
 int modeindex;
@@ -1363,6 +1363,7 @@ int modmul[7];
 int gotkey, gotclef;
 char* clefname;
 int octave, xtranspose, gotoctave, gottranspose;
+int explict;
 {
   static char* keys[12] = {"Db", "Ab", "Eb", "Bb", "F", "C", 
                            "G", "D", "A", "E", "B", "F#"};

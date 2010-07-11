@@ -91,11 +91,22 @@ the benefit of other people who may not be familiar with modes. e.g.
 K: DLoc % 3 flats
 
 The key signature may be followed by modifiers. A modifier consists of ^^, ^
-=, _ or __ followed by a-g. As an example, ^a means every a should be played
-sharp unless otherwise marked in the music. This over-rides whatever has been
-set by the key signature. e.g.
+=, _ or __ followed by a-g. As an example, ^g means every a should be played
+sharp unless otherwise marked in the music. This adds ^g to the existing
+key signature. For example
 
-K: C ^a
+K: G ^c^g
+
+will produce a key signature similar to A major. Following the abc draft
+2.0 standard, inserting the string exp in the key signature will cause
+abc2midi to override the existing key signature. Thus
+
+K: A exp _b
+
+will remove the f,c and g sharps and put a b-flat instead. You may use
+both upper and lower case letters as key modifiers since they are
+distinguished by abcm2ps.
+
 
 Another extension of the K: field is that it can include a clef specifier
 an octave specifier and a transpose specifier e.g.
