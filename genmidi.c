@@ -2061,6 +2061,10 @@ static void starttrack()
     gchord.chan = findchannel();
     if(verbose) printf("assigning channel %d to chordal accompaniment\n",gchord.chan);
   };
+  if (drumson) {  /* [SS] 2010-08-12 */
+       drum_ptr = 0;
+       addtoQ(0, drum_denom, -1, drum_ptr, 0);
+       }
   if (droneon) {
     drone.event =0;
     drone.chan = findchannel();
@@ -2483,12 +2487,6 @@ int xtrack;
           passnum = pass;
         }
 
-    /** else {                    // additivity remnants
-          if (parts != -1) {
-            passnum = partrepno+1;
-          };
-        };
-     ***/
         if (passnum == -1) {
           event_error("multiple endings do not follow |: or ::");
           passnum = 1;
@@ -2525,8 +2523,8 @@ int xtrack;
           };
         } else {
           in_varend = 1;   /* segment matches pass number, we play it */
-         /* printf("playing at %d for pass %d\n",j,passnum); */
-          maxpass = pass+1;
+          /*printf("playing at %d for pass %d\n",j,passnum); */
+          if (maxpass < 4) maxpass = pass+1; /* [SS] 2010-09-28 */
         };
       };
       break;
@@ -2628,10 +2626,15 @@ int xtrack;
         data[1] = (denom[j]>>8) & 0xff;
         data[2] = denom[j] & 0xff;
 /* new [SS] 2010-06-27 delta_time_track0 */
-        mf_write_meta_event(delta_time_track0, set_tempo, data, 3);
-        tracklen = tracklen + delta_time_track0;
-        delta_time = 0L;
-        delta_time_track0=0L;
+        if (ntracks != 1) {  /*  [SS] 2010-08-31 */
+              mf_write_meta_event(delta_time_track0, set_tempo, data, 3);
+              tracklen = tracklen + delta_time_track0;
+              delta_time_track0=0L;
+              } else { /* [SS] 2010-08-31 */
+              mf_write_meta_event(delta_time, set_tempo, data, 3);
+              delta_time=0L;
+              }
+
 /*
         if (j > 0) {
           div_factor = pitch[j];

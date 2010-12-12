@@ -7159,8 +7159,286 @@ of 0 in writetrack() (genmidi.c).
 
 July 11 2010
 
-Abc2midi: no feature. Added warning "no default gchord string for this meter".
+Abc2midi: new feature. Added warning "no default gchord string for this meter".
 The message appears once if no gchord string could be set and a guitar chord
 appears in the music. Implementation: the gchord string is set to 'x' by
 default. If dogchords finds 'x' it outputs the message one time.
+
+
+July 27 2010
+
+Abc2midi: possible bug. No voice command assumed. In the following
+sample:
+
+X:1
+T: voices
+M: 2/4
+L: 1/8
+K: G
+GABc|BAGF|
+V:2
+FGAB|defg|
+
+tht V: field occurs past body; will include this body with this voice.");
+1 voice command is missing after the K: G. abcm2ps understands
+that there are two voices; however, abc2midi appends the second
+voice to the first voice. Analysis: in order to handle named voices
+parsevoice in parseabc.c assigns a sequential number starting from
+1 to the first voice it encounters. This gets confused with the
+body which also has the same voice number. I did not see any clean
+way of fixing this problems; however, there is now a warning
+in event_voice (store.c) when this potential problem occurs.
+
+{event_warning("First V: field occurs past body; will combine this body with this voice.");
+
+In order to detect this problem, it was necessary to introduce
+the flag bodystarted.
+
+
+July 29 2010
+
+Abc2midi bug: in the following tune
+
+
+X:1
+T: K: bug
+M: 4/4
+L: 1/4
+K: E
+V:1
+K: treble
+EFGA|Bcde|
+
+the E major scale was not set up. Analysis: this bug was introduced
+in May 31 2010. In the second K: command, parsekey (in parseabc.c)
+sets sf to 0 and gotkey to 1. This forces event_key to change
+the key signature to the C major scale. Fix: in order to handle
+key signature mods, we introduced a new flag modnotes which is
+set when it encounters a ^, _ or == in the K: command. If gotkey is
+zero and modnotes is set, then explct is set to 1 so that 
+event_key will process the key signature modifications.
+
+
+
+August 12 2010
+
+Abc2midi bug: delayed start of drum pattern for second voice. In the
+following example:
+
+X:1
+T: drumbug
+M:4/4
+L:1/1
+K:C
+%
+V:1
+%%MIDI drumon
+%%MIDI drum d2zd  35 38   120 50 
+%|
+x|x|
+%
+V:2
+%%MIDI drumon
+%%MIDI drum dzdz 67 68  100 80 
+%|
+x|x|
+
+the drum generator for the second voice begins one bar late. If you
+remove the comment before the single bar in second to last line,
+the second voice starts on time.
+
+Analysis: dodrums() in genmidi.c is called by progress_sequence in queues.c
+provided the Q structure is not empty (Qhead not -1). In the case of
+the first voice, the Q structure is setup by checkbar() in genmidi.c
+because it was called by softcheckbar() when the DOUBLE_BAR feature
+was encountered. For the second voice, no DOUBLE_BAR feature was
+encountered, so the Q structure was not set up for the drum track.
+If the voice starts with a single bar, checkbar() is called and
+everything is properly initialized.
+
+Fix: added to starttrack() in genmidi.c
+ if (drumson) {  /* [SS] 2010-08-12 */
+       drum_ptr = 0;
+       addtoQ(0, drum_denom, -1, drum_ptr, 0);
+       }
+
+This seems to fix the problem.
+
+
+
+
+
+August 28 2010
+
+abc2midi bug: voice splits does not work when the unit length
+is not the default value 1/8. In the example
+
+X:1
+T: split voice bug.
+K:C
+L:1/2
+|:cd |1 c2 & e2 :|2 C2 & G2 |]
+
+The split voice was transformed with the wrong unit length. If
+L: is set to 1/8 the MIDI file is correct.
+
+Analysis: 
+v->default_length has the wrong value for the split voice.
+
+Fix: in event_split_voice (store.c) v->default_length is transfered to
+the split voice.
+
+
+
+August 31 2010
+
+abc2midi bug: rests inserts after [Q:1/4=100]. In the following
+example
+
+X:1
+T: Rallentando
+M: 4/4
+L: 1/4
+Q:1/4=120
+K: C
+C C C C | C C C C | C C C C | C C [Q:1/4=100]C  [Q:1/4=80]C | C1 |]
+
+there is a large silent period inserted after the Q:1/4=100 command.
+Inserting a V:1 after K: C fixes this problem.
+
+Analysis: this bug was introduced on June 26 2010 in effort to
+fix a related problem. Unfortunately, for single track MIDI
+files this caused another problem.
+
+Fix: if the MIDI file has only one track, the program reverts
+to the old code.
+
+
+September 28 2010
+
+abc2midi bug: multiple repeats does not work correctly. In the
+following example,
+
+X:1
+T: repeats
+M: 2/4
+L: 1/8
+K: C
+|:G2A2|[1,3 B2f2:|[2,4 B2c2:|
+
+G2A2 is played again after the last repeat. Analysis: in genmidi.c
+maxrepeats was incremented to 5. Fix: limited maxrepeats to 4 or
+less. (Note [1,3,5 does not work because inlist() in genmidi.c
+does not check beyond two numbers.)
+
+
+November 21 2010
+
+abc2midi bug: when the path name to the abc file contains embedded periods,
+eg. 
+"C:\Documents and Settings\midi.stadsmuur.INTERN.018\Local Settings\Temp\temp.abc"
+abc2midi places the output midi file in the wrong folder
+eg.
+"C:\Documents and Settings\midi
+
+Analysis: the problem is in the code
+   *filename = argv[1];
+    outbase = addstring(argv[1]);
+    for (j = 0; j< (int) strlen(outbase); j++) {
+      if (outbase[j] == '.') outbase[j] = '\0';
+    };
+  };
+in the function event_init() in store.c. 
+
+Fix, the loop should go backwards and stop at the first period.
+
+outbase = addstring(argv[1]); /* [RM] 2010-11-20 */
+ for (j = (int) strlen(outbase); j>0 ; j--)  {
+    if (outbase[j] == '.') {
+     outbase[j] = '\0';
+     break;
+    }
+ };
+
+Thank you Reinier Maliepaard for identifying the bug
+and proposing a solution.
+
+
+December 07 2010
+
+abc2midi: New feature: tempo indication compatibility with abc standard 2.0.
+The standard allows the following syntax for the Q: command;
+
+X:1
+T:tempo
+M:2/4
+L:1/4
+K:G
+Q: "Adagio"
+CD|EF|
+Q: "Adagio" 1/4=40
+GA|Bc|
+
+Explanation: "Adagio" translates into 1/4=59. In the second Q: command,
+1/4=40 overrides the default tempo for "Adagio". See abcguide.txt for
+other tempo directives. Please note that the double quotes are
+mandatory.
+
+Implementation: in store.c, translation tables temponame[] and
+temporate[] were added; also the function get_tempo_from_name()
+was introduced.
+
+
+
+December 10 2010
+
+Abc2midi bug: abc2midi crashes if the above tempo descriptor
+is not enclosed in double quotes. See example below.
+
+
+X:1
+T:tempo causes crash
+M:2/4
+L:1/4
+K:G
+Q: Adagio
+CD|EF|
+
+
+Analysis: the segmentation error occurs in the new function
+get_tempo_from_name(s) in store.c. The string s is empty nad
+causes the program to crash when strcasecmp() is called.
+
+Fix: added the test
+
+if (s == NULL) return 0; /* [SS] 2010-12-10 */
+
+in get_tempo_from_name(s). Now the program returns
+Error in line 6 : malformed Q: field ignored
+
+
+December 12 2010
+
+yaps: bug.  The following file crashes yaps.
+
+X:1
+T:yaps segmentation error
+Q:1/4=60
+M:2/4
+L:1/16
+K:Bb
+Q:1/4=60
+"F"F2FF AFAc |"Bb" B2 z2 B2 \
+ z2 | z4 |
+%%printtempo 0
+   "Bb"((3_b2a2g2) f2d2 | B2BB dBdf | "F"F2FF AFAc | "Bb"B2z2 "D"A2z2 |
+P:Accelerando  --------------------------->---------------->-----------------------
+ [Q:1/4=65] "Gm"G2B2 G2B2 |[Q:1/4=70] "D"A2 D4 D2 |[Q:1/4=80] "Gm"G2B2 G2B2 |[Q:1/4=90] "D"d2z2 d4 |
+
+Analysis: yaps does not expect such a long label in the P: field.
+
+Fix: in event_parts(s), in yapstree.c, changed
+char label[20] to char label[200].
+
+
 

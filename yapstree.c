@@ -22,7 +22,7 @@
 /* yapstree.c - back-end for abc parser. */
 /* generates a data structure suitable for typeset music */
 
-#define VERSION "1.51 February 20 2009"
+#define VERSION "1.52 December 12 2010"
 #include <stdio.h>
 #ifdef USE_INDEX
 #define strchr index
@@ -1729,7 +1729,7 @@ void event_part(s)
 char* s;
 /* A part field (P: ) has been encountered in the abc */
 {
-  char label[20];
+  char label[200]; /* [SS] 2010-12-12 */
 
   if (xinhead) {
     if (thetune.parts != NULL) {

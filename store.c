@@ -31,7 +31,7 @@
  * Wil Macaulay (wil@syndesis.com)
  */
 
-#define VERSION "2.48 July 11 2010"
+#define VERSION "2.57 December 10 2010"
 /* enables reading V: indication in header */
 #define XTEN1 1
 /*#define INFO_OCTAVE_DISABLED 1*/
@@ -39,7 +39,9 @@
 /* for Microsoft Visual C++ 6.0 and higher */
 #ifdef _MSC_VER
 #define ANSILIBS
+#define strcasecmp stricmp
 #endif
+
 
 #ifdef WIN32
 #define snprintf _snprintf
@@ -113,7 +115,7 @@ int v1index= -1;
 int ignore_fermata = 0; /* [SS] 2010-01-06 */
 int ignore_gracenotes = 0; /* [SS] 2010-01-08 */
 int separate_tracks_for_words = 0; /* [SS] 2010-02-02 */
-
+int bodystarted =0;
 
 
 struct voicecontext {
@@ -214,6 +216,17 @@ int relative_tempo, Qtempo;
 extern int division;
 extern int div_factor;
 int default_tempo = 120; /* quarter notes per minutes */
+
+/* for get_tempo_from_name  [SS] 2010-12-07 */
+char *temponame[19] = {"larghissimo" , "adagissimo", "lentissimo",
+   "largo", "adagio", "lento", "larghetto", "adagietto", "andante",
+   "andantino", "moderato", "allegretto", "allegro", "vivace",
+   "vivo", "presto", "allegrissimo", "vivacissimo", "prestissimo"};
+int temporate[19] = {40,            44,             48,
+    56,      59,       62,       66,        76,        88,
+    96,          104,       112,          120,       168,
+   180,     192,      208,            220,          240}; 
+
 
 /* output file generation */
 int userfilename = 0;
@@ -356,6 +369,7 @@ void dump_voicecontexts() {
   struct voicecontext *q;
 
   p = head;
+  printf("dump_voicecontexts()\n");
   while (p != NULL) {
     printf("num %d index %d gchords %d words %d drums %d drone %d tosplit %d fromsplit %d\n",
  p->voiceno,p->indexno,p->hasgchords,p->haswords,p->hasdrums,p->hasdrone,p->tosplitno,p->fromsplitno);
@@ -446,6 +460,8 @@ static void clearvoicecontexts()
   };
   head = NULL;
 }
+
+
 
 static int getchordnumber(s)
 /* looks through list of known chords for chord name given in s */
@@ -677,11 +693,21 @@ char **filename;
       xmatch = readnumf(argv[2]);
     };
     *filename = argv[1];
-    outbase = addstring(argv[1]);
+/*    outbase = addstring(argv[1]); [RM] 2010-11-21 
     for (j = 0; j< (int) strlen(outbase); j++) {
       if (outbase[j] == '.') outbase[j] = '\0';
     };
   };
+*/
+outbase = addstring(argv[1]); /* [RM] 2010-11-21 */
+ for (j = (int) strlen(outbase); j>0 ; j--)  {
+    if (outbase[j] == '.') {
+     outbase[j] = '\0';
+     break;
+    }
+  };
+ }
+
   /* look for filename stem limit */
   j = getarg("-n", argc, argv);
   if (j != -1) {
@@ -947,6 +973,7 @@ int voiceno,indexno;
 int topvoiceno,topindexno;
 int program;
 int octaveshift;
+int default_length; /* [SS] 2010-08-28 */
 if (!voicesused) insertfeature(VOICE,1,0,0,v1index+1); /* [SS] 2009-12-21 */
 voicesused = 1; /* multivoice file */
 splitno = v->tosplitno;
@@ -961,6 +988,7 @@ indexno = v->indexno;
 topvoiceno = v->topvoiceno;
 topindexno = v->topindexno;
 octaveshift = v->octaveshift;
+default_length = v->default_length; 
 if (topvoiceno == voiceno) sync_to = search_backwards_for_last_bar_line(notes-1);
 addfeature(SINGLE_BAR,0,0,0);
 
@@ -975,6 +1003,7 @@ if (v->fromsplitno == -1) {
   v->topvoiceno = topvoiceno;
   v->topindexno = topindexno;
   v->octaveshift = octaveshift;
+  v->default_length = default_length; /* [SS] 2010-08-28 */
  }
 dependent_voice[v->indexno] = 1;
 /* when syncing the split voice we want to be sure that
@@ -2046,6 +2075,9 @@ int n;
 char *s;
 struct voice_params *vp;
 {
+  if (!voicesused && bodystarted) {event_warning("First V: field occurs past body; will combine this body with this voice.");
+     bodystarted = 0;
+     }
   if (pastheader || XTEN1) {
     voicesused = 1;
     if (pastheader)  checkbreak();
@@ -2096,6 +2128,21 @@ int *t_num, *t_denom;
   };
 }
 
+int get_tempo_from_name (s) /* [SS] 2010-12-07 */
+char *s;
+{
+int i,n;
+if (s == NULL) return 0; /* [SS] 2010-12-10 */
+for (i=0;i<19;i++) {
+   if (strcasecmp(s,temponame[i]) == 0)
+      {n = temporate[i];
+       return n;
+      }
+  }
+return 0;
+}
+
+
 void event_tempo(n, a, b, rel, pre, post)
 /* handles a Q: field e.g. Q: a/b = n  or  Q: Ca/b = n */
 /* strings before and after are ignored */
@@ -2109,9 +2156,11 @@ char *post;
   long new_tempo;
   int tempo_l, tempo_h;
 
+
+  if (n == 0) n = get_tempo_from_name(pre); /* [SS] 2010-12-07 */
   if ((n == 0) || ((a!=0) && (b == 0))) {
-    event_error("malformed Q: field ignored");
-  } else {
+       event_error("malformed Q: field ignored");
+    } else {
     if (dotune) {
       if (pastheader) {
         tempo_num = a;
@@ -2932,6 +2981,7 @@ int xoctave, n, m;
   int pitch_noacc;
   int dummy;
 
+  if (voicesused == 0) bodystarted=1;
   if (v == NULL) {
     event_fatal_error("Internal error - no voice allocated");
   };
@@ -4324,7 +4374,7 @@ static void finishfile()
   extern int nullputc();
 
   complete_all_split_voices ();
-  /*dump_voicecontexts(); for debugging*/
+  /* dump_voicecontexts(); for debugging*/
   setup_trackstructure();
   clearvoicecontexts();
   init_drum_map();

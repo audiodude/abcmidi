@@ -34,12 +34,56 @@ must be the first field and K: must be the last field in the header.
 
 It is advisable to write the fields M:, L: and Q: in that order. The
 reason for this is that M: can set up a unit note length which L:
-over-rides and the tempo field Q: can be written in other forms that
+overrides and the tempo field Q: can be written in other forms that
 depend on unit note length. This order makes the meaning clear and
 unambiguous. The original abc specification gives a rule for computing
 a default value for the unit note length from the M: field. abc2midi
 only uses this rule for choosing a unit note length in the header if
 the L: field has been omitted.
+
+
+The tempo is usually indicated with the Q: field command,
+eg. Q:1/4=180 which is interpreted as 180 quarter beats per minute.
+In compliance with the abc standard 2.0, you may also
+indicate the tempo using directives such as "lento",
+"allegro", "vivace" etc.
+
+The following table based on
+http://www.music.vt.edu/musicdictionary/appendix/tempo/tempo1.html
+was used to translate the indications:
+
+Larghissimo  1/4=40         Moderato       1/4=104
+Adagissimo   1/4=44         Allegretto     1/4=112
+Lentissimo   1/4=48         Allegro        1/4=120
+Largo        1/4=56         Vivace         1/4=168
+Adagio       1/4=59         Vivo           1/4=180
+Lento        1/4=62         Presto         1/4=192
+Larghetto    1/4=66         Allegrissimo   1/4=208
+Adagietto    1/4=76         Vivacissimo    1/4=220
+Andante      1/4=88         Prestissimo    1/4=240
+Andantino    1/4=96
+
+Note: case is ignored (eg. ALLEGRO Allegro or allegro are treated
+the same). The directive must be enclosed in double quotes.
+
+Reference: http://abc.sourceforge.net/standard/abc2-draft.html#Q:%20-%20tempo
+
+Examples:
+
+X:1
+T:tempo
+M:2/4
+L:1/4
+K:G
+Q: "Adagio"
+CD|EF|
+Q: "Adagio" 1/4=40
+GA|Bc|
+
+(In the second tempo command, the 1/4=40 overrides the default
+1/4=59.)
+
+
 
 The symbols M:C and M:C| give common time (4/4) and cut time (2/2)
 The symbol M:none omits the meter entirely (free meter).

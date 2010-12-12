@@ -840,6 +840,7 @@ char* str;
   int parsed;
   int gotclef, gotkey, gotoctave, gottranspose;
   int explict; /* [SS] 2010-05-08 */
+  int modnotes; /* [SS] 2010-07-29 */
   int foundmode;
   int transpose, octave;
   char clefstr[30];
@@ -867,6 +868,7 @@ char* str;
   coctave=0;
   modeindex = 0;
   explict = 0;
+  modnotes = 0;
   for (i=0; i<7; i++) {
     modmap[i] = ' ';
     modmul[i] = 1;
@@ -962,6 +964,7 @@ char* str;
       };
     };
     if ((word[0] == '^') || (word[0] == '_') || (word[0] == '=')) {
+      modnotes = 1;
       if ((strlen(word) == 2) && (word[1] >= 'a') && (word[1] <= 'g')) {
         j = (int)word[1] - 'a';
         modmap[j] = word[0];
@@ -980,6 +983,7 @@ char* str;
 
 /*   if (explict)  for compatibility with abcm2ps 2010-05-08  2010-05-20 */
     if ((word[0] == '^') || (word[0] == '_') || (word[0] == '=')) {
+      modnotes = 1;
       if ((strlen(word) == 2) && (word[1] >= 'A') && (word[1] <= 'G')) {
         j = (int)word[1] - 'A';
         modmap[j] = word[0];
@@ -1002,9 +1006,11 @@ char* str;
     };
   };
   if (cgotoctave) {gotoctave=1; octave=coctave;}
-  if (parsed & !gotkey) { /* [SS] 2010-05-31 for explicit key signature */
+/*  if (parsed & !gotkey) {  [SS] 2010-05-31 for explicit key signature */
+    if (modnotes & !gotkey) {  /*[SS] 2010-07-29 for explicit key signature */
      sf = 0;
-     gotkey = 1;
+     /*gotkey = 1; [SS] 2010-07-29 */
+     explict = 1; /* [SS] 2010-07-29 */
      }
   event_key(sf, str, modeindex, modmap, modmul, gotkey, gotclef, clefstr,
             octave, transpose, gotoctave, gottranspose, explict);
