@@ -7442,3 +7442,16 @@ char label[20] to char label[200].
 
 
 
+January 1 2011
+
+abc2midi irrelevant messages when running on a collection of tunes
+in a file. (eg. "voice mapping ..." and "First V: field occurs past body...").
+
+Analysis: the variable voicecode in parseabc.c was not reset to 0 when the
+next tune was processed. Also the variable bodystarted in store.c 
+was not reset to 0 when the next tune was processed.
+
+Fix: in parseabc.c, call init_voicecode() after event_ref() called;
+in store.c, set bodystarted to 0 in event_ref().
+
+

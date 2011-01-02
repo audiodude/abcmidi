@@ -1461,6 +1461,7 @@ char* field;
         event_error("second X: field in header");
       };
       event_refno(x);
+      init_voicecode(); /* [SS] 2011-01-01 */
       inhead = 1;
       inbody = 0;
       parserinchord = 0;

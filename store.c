@@ -31,7 +31,7 @@
  * Wil Macaulay (wil@syndesis.com)
  */
 
-#define VERSION "2.57 December 10 2010"
+#define VERSION "2.58 January 01 2011"
 /* enables reading V: indication in header */
 #define XTEN1 1
 /*#define INFO_OCTAVE_DISABLED 1*/
@@ -4465,6 +4465,7 @@ int n;
   char newname[256];
 
   started_parsing = 1;
+  bodystarted =0; /* [SS] 2011-01-01 */
   if (dotune) {
     finishfile();
     parseroff();
