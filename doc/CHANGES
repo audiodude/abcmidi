@@ -7455,3 +7455,14 @@ Fix: in parseabc.c, call init_voicecode() after event_ref() called;
 in store.c, set bodystarted to 0 in event_ref().
 
 
+February 21 2011
+
+abc2abc : the program now attempts to transpose the key modifications
+in the key signature. For example: K: Dphr^F will be transposed to
+EPhr^G (for abc2abc -t 2). Explicit key modifications are also supported.
+These key signatures are used a lot in Klezmer music.  Unfortunately,
+the algorithm does not always work correctly.  Perhaps someone can help me.
+All the new code is in toabc.c before the function event_key(). I
+have given up in treating double sharps and double flat modifications.
+
+
