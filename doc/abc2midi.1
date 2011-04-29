@@ -2,7 +2,7 @@
 .SH NAME
 \fBabc2midi\fP \- converts abc file to MIDI file(s)
 .SH SYNOPSIS
-abc2midi \fIinfile\fP [\fIrefnum\fP] [-c] [-v] [-ver] [-t] [-n limit] [-RS] [-quiet] [-Q tempo] [-NFNP] [-NFER] [-NGRA] [-STFW] [-OCC] [-NCOM] [-o outfile]
+abc2midi \fIinfile\fP [\fIrefnum\fP] [-c] [-v] [-ver] [-t] [-n limit] [-RS] [-quiet] [-Q tempo] [-NFNP] [-NFER] [-NGRA] [-STFW] [-OCC] [-NCOM] [-HARP] [-o outfile]
 .SH DESCRIPTION
  The default action is to write a MIDI file for each abc tune
  with the filename <stem>N.mid, where <stem> is the filestem
@@ -57,6 +57,9 @@ Suppress some comments in the output MIDI file.
 .TP
 .B -OCC
 Accept old chord convention (eg +D2G2+ instead of [DG]2).
+.TP
+.B -HARP
+Roll ornaments=roll are generated for the harpist (same pitch)
 .TP
 .B -o \fIoutfile\fP
 write output to \fIoutfile\fP

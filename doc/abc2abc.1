@@ -6,6 +6,7 @@ abc2abc \- a simple abc checker/re-formatter/transposer
 [ \fB-r\fP ] [ \fB-e\fP ] [ \fB-t \fP\fIsemitones\fP ] [ \fB-nda\fP ]
 [ \fB-u\fP ] [ \fB-d\fP ] [ \fB-v\fP ] [ \fB-v\fP] [\fB-nokeys\fP]
 [ \fB-nokeyf\fP] [ \fB-usekey\fP\fI(sharps/flats)\fP] [ \fB-OCC\fP ]
+[ \fB-noplus\fP ]
 .SH "DESCRIPTION"
 .PP
 .B abc2abc
@@ -64,6 +65,10 @@ Update notation; the older notation \fB+ +\fP for chords is replaced by
 Accept the old notation for chord. Normally this is turned off,
 since it conflicts with abc draft standard version 2.0 for
 decorations (eg. +crescendo(+).
+.TP
+.B \-noplus
+!...! notation is used instead of +...+ for instructions and
+decorations.
 .TP
 .B \-d
 Re-notate the tune with all note lengths doubled. The unit length specified by the L: field

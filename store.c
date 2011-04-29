@@ -31,7 +31,7 @@
  * Wil Macaulay (wil@syndesis.com)
  */
 
-#define VERSION "2.58 January 01 2011"
+#define VERSION "2.60 April 29 2011"
 /* enables reading V: indication in header */
 #define XTEN1 1
 /*#define INFO_OCTAVE_DISABLED 1*/
@@ -116,7 +116,7 @@ int ignore_fermata = 0; /* [SS] 2010-01-06 */
 int ignore_gracenotes = 0; /* [SS] 2010-01-08 */
 int separate_tracks_for_words = 0; /* [SS] 2010-02-02 */
 int bodystarted =0;
-
+int harpmode=0;  /* [JS] 2011-04-29 */
 
 struct voicecontext {
   /* maps of accidentals for each stave line */
@@ -643,6 +643,12 @@ char **filename;
     separate_tracks_for_words = 0;
     }
 
+  if (getarg("-HARP",argc,argv) != -1) {  /* [JS] 2011-04-29 */
+    harpmode = 1;
+  } else {
+    harpmode = 0;
+    }
+
 
   if (getarg("-OCC",argc,argv) != -1) oldchordconvention=1;
 
@@ -663,7 +669,7 @@ char **filename;
     printf("abc2midi version %s\n",VERSION);
     printf("Usage : abc2midi <abc file> [reference number] [-c] [-v] ");
     printf("[-o filename]\n");
-    printf("        [-t] [-n <value>] [-RS] [-NFNP] [-NCOM] [-NFER] [-NGRA]\n");
+    printf("        [-t] [-n <value>] [-RS] [-NFNP] [-NCOM] [-NFER] [-NGRA] [-HARP]\n");
     printf("        [reference number] selects a tune\n");
     printf("        -c  selects checking only\n");
     printf("        -v  selects verbose option\n");
@@ -679,6 +685,7 @@ char **filename;
     printf("        -NFER ignore all fermata markings\n");
     printf("        -NGRA ignore grace notes\n");
     printf("        -STFW separate tracks for words (lyrics)\n");
+    printf("        -HARP ornaments=roll for harpist (same pitch)\n"); /* [JS] 2011-04-29 */
     printf("        -OCC old chord convention (eg. +CE+)\n");
     printf(" The default action is to write a MIDI file for each abc tune\n");
     printf(" with the filename <stem>N.mid, where <stem> is the filestem\n");
@@ -1556,6 +1563,12 @@ char *package, *s;
       done = 1;
       }
 
+	if (strcmp(command, "harpmode") == 0) {  /* [JS] 2011-04-29 */
+      skipspace(&p);
+      harpmode = readnump(&p);
+      done = 1;
+    };
+
 
     if (done == 0) {
       /* add as a command to be interpreted later */
@@ -1726,6 +1739,11 @@ char *package, *s;
     };
     if (strcmp(command, "fermataproportional") == 0) {
       default_fermata_fixed = 0;
+      done = 1;
+    };
+    if (strcmp(command, "harpmode") == 0) {  /* [JS] 2011-04-29 */
+      skipspace(&p);
+      harpmode = readnump(&p);
       done = 1;
     };
     if (strcmp(command, "ratio") == 0) {
@@ -2903,6 +2921,29 @@ bentpitch[notes] = mainbend;
 addfeature(NOTE, mainpitch, 4*n,m*v->default_length);
 }
 
+void makeharproll (pitch, bend,n,m)   /* [JS] 2011-04-29 */
+int pitch,bend,n,m;
+{
+bentpitch[notes] = bend;
+addfeature(NOTE, pitch, 4*n/2,m*2*v->default_length);
+bentpitch[notes] = bend;
+addfeature(NOTE, pitch, 4*n/2,m*2*v->default_length);
+bentpitch[notes] = bend;
+addfeature(NOTE, pitch, 4*n/2,m*v->default_length);
+}
+
+void makeharproll3 (pitch, bend,n,m) /* [JS] 2011-04-29 */
+int pitch,bend,n,m;
+{
+int a=n-1;
+bentpitch[notes] = bend;
+addfeature(NOTE, pitch, 4*(a)/2,m*2*v->default_length);
+bentpitch[notes] = bend;
+addfeature(NOTE, pitch, 4*(a)/2,m*2*v->default_length);
+bentpitch[notes] = bend;
+addfeature(NOTE, pitch, 4*(n/2+1),m*v->default_length);
+}
+
 
 static void doornament(note, octave, n, m, pitch)
 /* applies a roll to a note */
@@ -2924,8 +2965,18 @@ int pitch;
   down = *(anoctave + ((t+6) % 7));
   if (up == 'c') upoct = upoct + 1;
   if (down == 'b') downoct = downoct - 1;
-  pitchup = pitchof_b(up, v->basemap[(int)up - 'a'], 1, upoct, 0,&bend_up);
-  pitchdown = pitchof_b(down, v->basemap[(int)down - 'a'], 1, downoct, 0,&bend_down);
+  if (harpmode)	/* [JS] 2011-04-29 */
+  {
+	  pitchup=pitch;
+	  pitchdown=pitch;
+	  bend_up=8192;
+	  bend_down=8192;
+  }
+  else
+  {
+	pitchup = pitchof_b(up, v->basemap[(int)up - 'a'], 1, upoct, 0,&bend_up);
+	pitchdown = pitchof_b(down, v->basemap[(int)down - 'a'], 1, downoct, 0,&bend_down);
+  }
   marknotestart();
   /* normalize notelength to L:1/8 */
   /*  nnorm =n*8; [SS] 2008-06-14 */
@@ -2933,15 +2984,32 @@ int pitch;
   mnorm =m*(v->default_length);
   reduce(&nnorm,&mnorm);
   if (nnorm == 3 && mnorm == 1) /* dotted quarter note treated differently */
-     {
-     nn = n/3; /* in case L:1/16 or smaller */
-     if(nn < 1) nn=1;
-     bentpitch[notes] = active_pitchbend; /* [SS] 2006-11-3 */
-     addfeature(NOTE, pitch, 4*nn,v->default_length);
-     makecut(pitch,pitchup,active_pitchbend,bend_up,nn,m);
-     makecut(pitch,pitchdown,active_pitchbend,bend_down,nn,m);
-     }
-  else makecut(pitch,pitchup,active_pitchbend,bend_up,n,m);
+  {
+	 if (harpmode)  /* [JS] 2011-04-29 */
+	 {
+	   makeharproll3(pitch,active_pitchbend,n,m);
+	 }
+	 else
+	 {
+		 nn = n/3; /* in case L:1/16 or smaller */
+		 if(nn < 1) nn=1;
+		 bentpitch[notes] = active_pitchbend; /* [SS] 2006-11-3 */
+		 addfeature(NOTE, pitch, 4*nn,v->default_length);
+		 makecut(pitch,pitchup,active_pitchbend,bend_up,nn,m);
+		 makecut(pitch,pitchdown,active_pitchbend,bend_down,nn,m);
+	 }
+  }
+  else 
+  {
+	   if (harpmode) /* [JS] 2011-04-29 */
+	   {
+		   makeharproll(pitch,active_pitchbend,n,m);
+	   }
+	   else
+	   {
+		   makecut(pitch,pitchup,active_pitchbend,bend_up,n,m);
+	   }
+  }
   marknoteend();
 }
 
@@ -4342,7 +4410,7 @@ for (i=0;i<notes;i++) {
         }
   if (j == BAR_REP) bar_rep_found[voicenum] = 1;
   if ((j == REP_BAR || j == DOUBLE_REP) && (!bar_rep_found[voicenum])) {
-     printf("missing BAR_REP for voice inserted for voice %d part %c\n",voicenum,part);
+    /* printf("missing BAR_REP for voice inserted for voice %d part %c\n",voicenum,part); [SS] 2011-04-19 */
      /*** add_leftrepeat_at[num2add] = voicestart[voicenum]+3; [SS] 2009-12-20*/
      add_leftrepeat_at[num2add] = voicestart[voicenum]+2; /* [SS] 2009-12-20*/
      num2add++;

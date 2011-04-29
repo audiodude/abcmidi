@@ -1,8 +1,8 @@
 abcMIDI :   abc <-> MIDI conversion utilities
 
 midi2abc version 2.92 Aug 04 2008
-abc2midi version 2.58 Jan 01 2010
-abc2abc  version 1.60 Feb 21  2011
+abc2midi version 2.60 April 29 2011
+abc2abc  version 1.63 April 19 2011
 yaps     version 1.52 Dec 12  2009
 abcmatch version 1.42 Dec   21 2006
 midicopy version 1.10 Sep   22 2006
@@ -222,7 +222,15 @@ in MIDI pulses.  The output is designed to eventually go into a
 graphical user interface (runabc) which will display these events 
 in piano roll format.
 
+Note: midi2abc does not work correctly if the lyrics are embedded
+in the same track as the notes. If you intend to run midi2abc on
+the MIDI file produced by abc2midi, you need to use the -STFW
+option if the tune contains lyrics. 
 
+eg. abc2midi lyric_tune.abc -STFW
+
+Since February 01 2010, abc2midi by default places the lyrics in
+the same track as the notes. See doc/CHANGES.
 
 
 -------------------------------------------------------------------------
@@ -338,6 +346,7 @@ Usage: abc2abc <filename> [-s] [-n X] [-b] [-r] [-e] [-t X]
   -X n renumber the all X: fields as n, n+1, ..
   -usekey sf Use key signature sf (flats/sharps)
   -OCC old chord convention (eg. +CE+)
+  -noplus use !...! instead of +...+ for instructions
 
 A simple abc checker/re-formatter/transposer. If the -n option is selected, 
 error checking is turned off. 

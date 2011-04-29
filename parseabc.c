@@ -517,6 +517,9 @@ int strict;
   if (strncmp(s, "G",1) == 0 && strict==0) {
     gotclef = 1;
   }
+  if (strncmp(s, "perc",1) == 0 && strict==0) {
+    gotclef = 1;
+  }   /* [SS] 2011-04-17 */
 
   if (!strict && !gotclef) {
 	  gotclef = 1;
@@ -827,7 +830,27 @@ characters */
    return 1;
 }
 
-
+int parseother(s,word,gotother,other,maxsize)   /* [SS] 2011-04-18 */
+/* parses any left overs in V: command (eg. stafflines=1) */
+char** s;
+char* word;
+int *gotother;
+char other[];
+{
+if (word[0] != '\0') {
+  if (strlen(other) < maxsize)
+      strncat(other,word,maxsize);
+  if (**s == '=') {   /* [SS] 2011-04-19 */
+     *s = readword(word, *s);
+     if (strlen(other) < maxsize)
+        strncat(other,word,maxsize);
+        }
+     strncat(other," ",maxsize); /* in case other codes follow */
+    *gotother = 1;
+    return 1;
+   }
+return 0;
+}
 
 int parsekey(str)
 /* parse contents of K: field */
@@ -1037,6 +1060,8 @@ coctave=0;
 vparams.gotname = 0;
 vparams.gotsname = 0;
 vparams.gotmiddle = 0;
+vparams.gotother = 0; /* [SS] 2011-04-18 */
+vparams.other[0] = '\0'; /* [SS] 2011-04-18 */
 
 skipspace(&s);
 if (isnumberp(&s) == 1) {
@@ -1056,6 +1081,7 @@ while (*s != '\0') {
   if (!parsed) parsed = parsename(&s, word, &vparams.gotname, vparams.namestring, V_STRLEN);
   if (!parsed) parsed = parsesname(&s, word, &vparams.gotsname, vparams.snamestring, V_STRLEN);
   if (!parsed) parsed = parsemiddle(&s, word, &vparams.gotmiddle, vparams.middlestring, V_STRLEN);
+  if (!parsed) parsed = parseother(&s, word, &vparams.gotother, vparams.other, V_STRLEN); /* [SS] 2011-04-18 */
   }
 if (cgotoctave) {vparams.gotoctave=1; vparams.octave=coctave;}
 event_voice(num, s, &vparams);

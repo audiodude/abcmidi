@@ -7466,3 +7466,187 @@ All the new code is in toabc.c before the function event_key(). I
 have given up in treating double sharps and double flat modifications.
 
 
+April 14 2011
+
+abc2abc bug: when using the voice extraction feature -V n, the program
+still reports errors occurring in other voices causing some confusion.
+In the following example, voice 1 has 5 beats instead of 4 in bar 1
+(we count from zero).
+
+X:1
+T: confusing error message
+M: 4/4
+L: 1/4
+K: C
+V:1
+ABcg|dcABE|
+V:2
+Acde|feFE|
+
+When extracting voice 2:
+
+abc2abc xabc.abc -V 2
+X:1
+T:invisible note problem
+M:4/4
+L:1/4
+K:C
+
+%Error : Bar 1 is 5/4 not 4/4
+V:2
+Acde|feFE|
+
+The error message applies to a problem in voice 1 even though the
+program is extracting voice 2.
+
+Analysis, abc2abc processes the entire file but merely suppresses
+all voices except the one requested. Error messages in other voices
+are not suppressed.
+
+Fix: the flag output_on in toabc.c is used to suppress output of
+the unwanted voices.  The functions event_error(s) and
+event_warning(s) now check both flags echeck and output_on
+before printing.
+
+
+April 14 2011
+
+abc2abc bug: when extracting a particular voice, abc2abc fails to
+print the part field command P:. In the following example,
+
+
+X:1
+T: abc2abc missing part
+M: 2/4
+L: 1/8
+K: G
+P: Intro
+V:1
+V:2
+V:3
+P:A
+V:1
+V:2
+V:3
+
+abc2abc pabc.abc -V 1
+X:1
+T:abc2abc missing part
+M:2/4
+L:1/8
+K:G
+P:Intro
+V:1
+V:1
+
+P:A is missing in the output, however
+
+abc2abc pabc.abc -V 3
+X:1
+T:abc2abc missing part
+M:2/4
+L:1/8
+K:G
+P:Intro
+V:3
+P:A
+V:3
+
+P:A is present when the last voice is requested.
+
+Analysis: P:A is considered to be part of voice 3, so it was
+suppressed when any other voice was extracted.
+
+Fix: the P: command should be treated as the start of a new
+section so that the control flag output_on should be set to
+1 whenenver this command is encountered. This occurs in the
+function event_part() in toabc.c.
+
+
+April 17 2011
+
+abc2abc new feature: normally abc2abc converts all instructions
+(decorations) like !ppp! to +ppp+ in order to comply with the
+abc standard 2.0 which has deprecated the former convention.
+A new option -noplus, causes abc2abc to use the deprecated convention
+to represent all instructions and decorations.
+
+Implementation: a new global integer noplus was introduced in
+toabc.c code.
+
+
+April 17 2011
+
+abc2abc bug: abc2abc fails to recognize clef=perc, eg.
+
+X:1
+T: clef= error
+M: 2/4
+L: 1/8
+K: G
+V:drum clef=perc 
+!f! CDEF|
+
+causes abc2abc to issue a warning
+
+%Warning : cannot recognize clef indication
+
+
+Fix: added to isclef() in parseabc.c
+
+if (strncmp(s, "perc",1) == 0 && strict==0) {
+    gotclef = 1;
+  }   /* [SS] 2011-04-17 */
+
+
+
+April 18 2011
+
+abc2abc bug: fails to transfer all voice parameters. In the
+following example
+
+
+X:1
+T: missing stafflines parameter
+M: 2/4
+L: 1/8
+K: G
+V:drum clef=perc stafflines=1
+ CDEF|
+
+abc2abc fails to copy 'stafflines=1' to stdout.
+
+Analysis: parsevoice in parseabc.c ignores anything it does not
+recognize. stafflines=1 is a parameter used by abcm2ps.
+
+Fix: 
+added to voice_params in parseabc.h
+  int gotother;
+  char other[V_STRLEN];
+
+added to parsevoice(s) in parseabc.c
+  vparams.gotother = 0;
+  vparams.other[0] = '\0';
+  if (!parsed) parsed = parseother()...
+
+introduced a new function in parseabc.c
+  parseother();
+
+added to event_voice() in toabc.c 
+if( vp->gotother ) { sprintf(output, " %s", vp->other);
+            emit_string(output);} 
+
+April 19 2011
+
+parseother() in parseabc.c added check for break caused
+by '='.
+
+
+April 19 2011
+
+Abc2midi: By popular demand the message
+"missing BAR_REP for voice inserted for voice ... "
+has been suppressed. The BAR_REP |: is still inserted 
+back when it is expected. (It could be inserted in the wrong place.)
+
+

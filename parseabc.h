@@ -22,12 +22,14 @@ struct voice_params {
 	int gotname;
 	int gotsname;
 	int gotmiddle;
+        int gotother;  /* [SS] 2011-04-18 */
         int octave;
 	int transpose;
 	char clefname[V_STRLEN+1];
 	char namestring[V_STRLEN+1];
 	char snamestring[V_STRLEN+1];
 	char middlestring[V_STRLEN+1];
+        char other[V_STRLEN+1]; /* [SS] 2011-04-18 */
 	};
 
 

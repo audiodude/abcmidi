@@ -21,7 +21,7 @@
 
 /* back-end for outputting (possibly modified) abc */
 
-#define VERSION "1.60 February 21 2011"
+#define VERSION "1.63 April 19 2011"
 
 /* for Microsoft Visual C++ 6.0 or higher */
 #ifdef _MSC_VER
@@ -96,6 +96,7 @@ int useflats=0; /* flag associated with nokey.*/
 int adapt_useflats_to_gchords = 1; /* experimental flag */
 int usekey = 0;
 int drumchan=0; /* flag to suppress transposition */
+int noplus; /* flag for outputting !..! instructions instead of +...+ */
 
 extern int nokey; /* signals no key signature assumed */
 extern int voicecodes ;  /* from parseabc.c */
@@ -493,6 +494,7 @@ char** filename;
     printf("  -ver  prints version number and exits\n");
     printf("  -X n renumber the all X: fields as n, n+1, ..\n");
     printf("  -OCC old chord convention (eg. +CE+)\n");
+    printf("  -noplus use !...! instead of +...+ for instructions\n");
 
     exit(0);
   } else {
@@ -607,6 +609,7 @@ char** filename;
      setup_sharps_flats (usekey);
      }
   if (getarg("-OCC",argc,argv) != -1) oldchordconvention=1;
+  if (getarg("-noplus",argc,argv) != -1) noplus = 1;
 
   /* printf("%% output from abc2abc\n"); */
   startline = 1;
@@ -772,7 +775,7 @@ char endchar;
 void event_error(s)
 char *s;
 {
-  if (echeck) {
+  if (echeck && output_on) {     /* [SS] 2011-04-14 */
    printf("\n%%Error : %s\n", s);
   };
 }
@@ -780,7 +783,7 @@ char *s;
 void event_warning(s)
 char *s;
 {
-  if (echeck) {
+  if (echeck && output_on) {    /* [SS] 2011-04-14 */
    printf("\n%%Warning : %s\n", s);
   };
 }
@@ -1079,6 +1082,7 @@ char* s;
   if (xinbody) {
     complete_bars(&voice[this_voice]);
   };
+  output_on = 1;  /* [SS] 2011-04-14 */
   emit_string_sprintf("P:%s", s);
   inmusic = 0;
 }
@@ -1152,6 +1156,8 @@ struct voice_params *vp;
             emit_string(output);}
      if( vp->gotmiddle ) { sprintf(output, " middle=%s", vp->middlestring);
             emit_string(output);}
+     if( vp->gotother ) { sprintf(output, " %s", vp->other);
+            emit_string(output);}  /* [SS] 2011-04-18 */
   } else {
     if(voicecodes >= n) emit_string_sprintf("V:%s",voicecode[n-1]);
     emit_int_sprintf("V:%d ", n);
@@ -1165,6 +1171,8 @@ struct voice_params *vp;
             emit_string(output);}
      if( vp->gotmiddle ) { sprintf(output, " middle=%s", vp->middlestring);
             emit_string(output);}
+     if( vp->gotother ) { sprintf(output, " %s", vp->other);
+            emit_string(output);} /* [SS] 2011-04-18 */
     emit_string(s);
   };
   inmusic = 0;
@@ -2074,7 +2082,7 @@ char* s;
 void event_instruction(s)
 char* s;
 {
-  if (oldchordconvention) emit_string_sprintf("!%s!", s);
+  if (oldchordconvention || noplus) emit_string_sprintf("!%s!", s);
   else emit_string_sprintf("+%s+", s);
 }
 
@@ -2519,6 +2527,7 @@ char *argv[];
   char *filename;
 
   oldchordconvention = 0; /* for handling +..+ chords */
+  noplus = 0;
 
   /*for (i=0;i<DECSIZE;i++) decorators_passback[i]=0; */
 

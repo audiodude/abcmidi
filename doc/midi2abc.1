@@ -230,6 +230,11 @@ This man page describes midi2abc version 2.91 from March 09 2008.
 .SH COPYRIGHT
 Copyright 1999 James Allwright
 .PP
+midi2abc does not work correctly if lyrics are embedded in
+the same track as the notes. If you are producing the MIDI
+file using abc2midi, use the -STFW option to ensure that the
+lyrics are put in a separate track.
+.PP
 midi2abc is supplied "as is" without any warranty. It
 is free software and can be used, copied, modified and
 distributed without fee under the terms of the GNU General 
