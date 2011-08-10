@@ -7650,3 +7650,469 @@ has been suppressed. The BAR_REP |: is still inserted
 back when it is expected. (It could be inserted in the wrong place.)
 
 
+April 29 2011
+
+Abc2midi: Jurgen Schwietering has contributed the roll ornament for
+the harp described here.
+
+The operation is quite simple, instead of generating a grace the ~ ornament on
+harp is a roll with the same 3 notes (always) which can be quite accurately
+transcribed as
+~n2 := n/n/n (BTW played always with fingers 4 3 2 [a m i])
+~n3 := n/n/n2 (for dotted, execution same as previous)
+It is NOT a movement done before the beat like graces.
+It is very common among folk harpists.
+
+A new MIDI command
+%%MIDI harpmode 1
+changes the ornament to harp mode. To switch back to regular mode, use
+%%MIDI harpmode 0
+
+Alternatively, you can specify the harp mode in the command line to
+abc2midi, eg.
+
+abc2midi inputfile.abc -HARP
+
+Implementation: a new global variable harpmode was introduced which
+is modified by the MIDI command or set in event_init() in store.c.
+The function doornament() checks the harpmode flag and calls the
+new functions makeharproll3() or makeharproll() in store.c.
+
+Here is a sample file to test this feature.
+
+
+X:61
+T:The Glass of Beer
+C:Reel, Trad. Irish
+C:Arr. Gráinne Hambly
+M:4/4
+L:1/8
+K:D
+Q:1/4=130
+%%MIDI program 1 46
+%%MIDI harpmode 1
+~B3 ~B4 B|
+~B2 B/B/B ~B4|
+%%MIDI harpmode 0
+~B2 B/B/B ~B3 B|
+~B2 B/B/B ~B4|
+
+
+June 6 2011
+
+Abc2midi bug: For the following file,
+
+X:1
+T:part not found
+M:3/8
+L:1/16
+P:B
+K:Dphr^f
+%MIDI gchord fzz
+P:A
+"G"cdefga:|
+P:B
+M:2/4
+|:d4e4:|
+
+(Comment: a common trick in transcribing music to abc is
+to temporary split it into parts so that you do not have
+listen to the beginning each time you are checking it out.
+The following problem occurs when you attempt to skip the
+beginning.)
+
+abc2midi returns the error message
+genmidi.c:fillvoice partlabel -55 out of range
+genmidi.c:fillvoice partlabel -55 out of range
+and the resulting MIDI file does not contain any music.
+
+Analysis:
+The function findpart (in genmidi.c) looks for P:B in the
+feature[24] which was its original location, unfortunately it
+has been moved to feature[25] by add_missing_repeats() (store.c)
+but part_start was not updated correctly. The problem is with the loop,
+for (j=0;j<parts;j++). parts is 1 and not 2 since it starts
+from -1. There part_start[1] was not incremented to 25 by
+missing_repeats. The fix was to add an = after < in the
+for loop. for(j=0;j<=parts;j++)
+
+
+June  7 2011
+Abc2abc: a new feature has been added to abc2abc to support
+multivoiced tunes. Using the -P X option, where X is the voice
+number, abc2abc will act on only voice X and leave all the other
+voices untouched. For example, if the input file t.abc is
+
+X:1
+T: Example 1
+T:Solo instrument plays the same as the upper voice of the piano
+M:3/4
+L:1/8
+V:1 clef=treble sname="violin"
+V:2 clef=treble sname="piano"
+V:3 clef=treble
+V:4 clef=bass
+%%staves 1 {(2 3) 4}
+K:G
+V:1
+K:G
+G2 D2 GA | B6 |]
+V:2
+G2 D2 GA | B6 |]
+V:3
+B,2 C2 B,C | D6 |]
+V:4
+G,2 F,2 E,D, | G,,6 |]
+
+and we wish to transpose voice 1 up a tone for a Bb clarinet. We run
+abc2abc t.abc -P 1 -t 2. The output will now look like.
+
+X:1
+T:Example 1
+T:Solo instrument plays the same as the upper voice of the piano
+M:3/4
+L:1/8
+V:1 clef=treble sname="violin" " 
+V:2 clef=treble sname="piano"
+V:3 clef=treble
+V:4 clef=bass
+%%staves 1 {(2 3) 4}
+K:G
+V:1
+K:Amaj
+A2 E2 AB | c6 |]
+V:2
+G2 D2 GA | B6 |]
+V:3
+B,2 C2 B,C | D6 |]
+V:4
+G,2 F,2 E,D, | G,,6 |]
+
+Please note in order for the key signature K:Amaj to appear in voice V:1,
+it was necessary to place K:G after V:1 in the input file. I have not
+tested this feature with other options. It is important that you
+know how this feature is implemented as discussed below.
+
+The implementation introduces a new command which is a
+slight variation of the -V X command that is used to
+extract a particular voice from the abc tune. The -V command
+merely suppresses output when the particular voice does
+not match the requested voice. The program still continues
+to process the voices so hence error messages from
+other voices can be present).  The -P command acts
+in a similar fashion, however instead of just suppressing
+the output for the other voices it replaces it with the
+the unprocessed input lines.
+
+Here is how the feature was implemented.
+
+In parseabc.c, a new function print_inputline() was introduced. This
+function prints a line in the input file verbatim. A new flag,
+passthru was added in toabc.c and initialized to 0. If the -P X
+option appears in the runtime sequence, then the selected_voice
+(the same variable used by -V X) is set to the voice number X
+and the flag passthru is set to 1. The flag output_on is automatically
+set when ever the voice number is selected_voice (X). (This is
+part of the -V X code.) One more addition in toabc.c, completes
+the implementation. In the beginning of the function
+event_linebreak() (in toabc.), I added.
+
+if (!output_on && passthru) print_inputline(); /* [SS] 2011-06-07*/
+
+
+As a final comment: The toabc.c code is quite difficult to understand
+-- in particular the function newabctext(). The trick used here,
+was least invasive.
+
+
+
+June 10 2011
+
+Abc2abc bug. The -V option sometimes suppresses vital field command
+information.
+
+For the following file voicehead.abc.
+
+
+%%barnumbers 1
+X:1
+V:1 clef=treble
+V:2 clef=bass
+%%staves [1 2]
+T: Lost field commands
+M:6/4
+L:1/16
+K:E
+V:1
+[K:E]
+e8 e4- e4 d4 e2d2| c8 c4- c4 B4 c2B2| A8 B4 F8 G4-|-G8 A4B12 |]
+V:2
+[K:E]
+G,4 B,2A,2 G,4 F,12 | E,4 G,2F,2 E,4 D,12 | C,12 A,,12| B,,8 F,,4 B,,12|]
+
+abc2abc ../Desktop/voicehead.abc -V 1
+
+produces
+
+%%barnumbers 1
+X:1
+V:1 clef=treble
+V:1
+[K:E]
+e8 e4- e4 d4 e2d2| c8 c4- c4 B4 c2B2| A8 B4 F8 G4-|-G8 A4B12 |]
+
+The field commands, T:, L:, M: and K: are lost.
+
+Analysis: This bug was probably around for a long time.
+Since voice 1 was requested, the V:2 command in the header
+suppresses output by setting output_on = 0 when it is first encountered.
+The resulting output is no longer a correct abc file.
+
+Fix: in event_voice, output_on is set to 0 only if xinbody is nonzero.
+
+June 10 2011, abc2abc bug -P option.
+
+For the voicehead.abc file (immediately above)
+
+abc2abc ../Desktop/voicehead.abc -P 2 -t 2
+
+%%barnumbers 1
+X:1
+V:1 clef=treble
+V:2 clef=bass
+%%staves [1 2]
+M:6/4
+L:1/16
+K:F#maj
+V:1
+[K:E]
+e8 e4- e4 d4 e2d2| c8 c4- c4 B4 c2B2| A8 B4 F8 G4-|-G8 A4B12 |]
+V:2
+[K:F#maj]
+A,4 C2B,2 A,4 G,12 | F,4 A,2G,2 F,4 E,12 | D,12 B,,12| C,8 G,,4 C,12|]
+
+The program should not change the key signature of the first K: field
+declaration since it applies to all voices. Fortunately, the key
+signature to voice 1 was already declared; otherwise F#maj would have
+been assumed.
+
+Analysis: if we are extracting a single voice and transposing it using
+the -V 2 -t 2 command, this behaviour would be desirable. (If the
+key signatures were not declared in the individual voices, we would
+require that the K: field be changed to F#maj.) However, for the
+-P option this could lead to a problem.
+
+Fix: this is not an elegant fix since it could cause problems elsewhere.
+The passthru flag is used to indicate that the -P option was used.
+Normally the source of the output is controlled by the event_linebreak()
+function. However, it was not easy to figure out how to intercept
+the K: output so it was necessary to try a different approach.
+The event_key function was modified to do nothing except print
+the original K: command if this K: command does not occur in the
+body. A new function print_inputline_nolinefeed() was needed
+in parseabc.c.
+
+
+July 4 2011
+
+Abc2midi new feature. The Phil Taylor stress algorithm has been
+implemented in abc2midi on an experimental basis. This algorithm
+stresses notes by varying their loudness and duration based on their
+position in the bar. Note durations are shortened by lengthening
+the inter-note silences so that there is no affect on the 
+tempo. This model runs in opposition to the standard model in
+abc2midi, so that regular commands for affecting dynamics such as
+!p!, %%MIDI beat, %%MIDI beatstring, are ineffective.
+Also the %%MIDI trim x/y command is also turned off by the stress model.
+
+To turn on Phil Taylor's stress model, load one of his stress models
+using the MIDI command
+%%MIDI ptstress hornpipe.txt
+
+where hornpipe.txt is some file resembling
+
+
+8
+110 1.4
+90 0.6
+110 1.4
+90 0.6
+110 1.4
+90 0.6
+110 1.4
+90 0.6
+
+To switch back to the regular or standard beat model use:
+%%MIDI beataccents
+
+The stress model file is formatted as follows.
+The first value in the file is the number of segments -- here it is 8. 
+This is followed by eight lines specifying the velocity
+(volume) and duration associated with each segment.
+
+The model adjusts the loudness and duration of the note
+based on which segment it falls into.  Its duration is
+scaled by the second factor. Since we can only shorten notes, the
+duration is actually scaled by the ratio of the specified
+duration over the maximum duration which is here
+1.4. When a note overlaps several segments the parameters
+are averaged over those segments.
+
+There is no constraint on the number of segments other
+than it should be less that 31, the amount of allocated
+space in the program. For some irregular rhythms, such
+as 7/8 time, one may use an odd number of segments.
+A few sample stress files can be found in the pt folder.
+
+Here is a sample tune you can test.
+
+
+X:1
+T: stress test
+M: 4/4
+L: 1/8
+K: G
+Q:1/4=160
+%%MIDI program 73  flute
+%%MIDI ptstress pt/hornpipe.txt
+"G"dd2d d2d2|"Em"dd2d d2d2|"D7"dd2d d2d2|"G"G2A2 B2c2|
+
+
+
+Implementation:
+
+New global variables were introduced in genmidi.c
+
+int beatmodel = 0; /* a flag selecting either the standard model
+                      or Phil Taylor's model */
+int nseg;  /* the number of segments in Phil Taylor's model */
+int ngain[32]; /* gain factors for each possible segment */
+float fdur[32];/* duration modifiers for each possible segment */
+float maxdur; /* maximum duration modifier */
+int segnum,segden; /* segnum/segden is the size of the segment.
+                   It is computed from nseg and the time signature */
+
+The function noteon(n) was split into two functions, noteon()
+and note_beat(n,&vel). A new function stress_factors(n,&vel) implements
+Phil Taylor's model. The function noteon(n) either calls note_beat()
+for the standard model or stress_factors() depending on the state
+of the variable beatmodel. The function note_beat() contains the
+original contents of noteon(). The function stress_factors() affects
+the note duration in an indirect manner by modifying the trim_num/
+trim_denom variables which are already used for articulating the
+notes using %%MIDI trim x/y command.
+
+Another function, readstressfile() was written to load one of the
+Phil Taylor's stress models.
+
+The beatmodel flag is reset to 0 when a MIDI beat or trim command is
+encountered.
+
+In dodeferred(), a new command, ptstress is introduced which loads
+the selected model.
+
+
+July 18 2011
+
+Abc2midi: support for EasyABC (http://www.nilsliberg.se/ksp/easyabc/)
+To allow EasyABC to follow the score while the MIDI file is playing
+additional positional information needs to be embedded into the MIDI
+file. This is done by placing the line and character position of each
+note in the MIDI file. If abc2midi is started with the -EA run time
+parameter, this information is included.
+
+Implementation: this is a joint effort with Nils Liberg.
+parseabc.c -- added two new global variables char *linestart and
+int lineposition. lineposition stores the position of the current
+token (usually a note) in the music line being parsed. The variable
+lineposition is passed to store.c as an external.
+abc.h -- a new featuretype META is added
+store.c -- a new flag int easyabcmode is introduced. It is set to
+1 when the -EA run time parameter is included.  addfeature(META,...
+inserts the line number and line position into the feature, num, denom,...
+structure whenever a chord or note is started. (Seach for easyabcmode
+in the source code store.c).
+genmidi.c -- in the switch control structure in writetrack() a new
+branch case META: was added. Presently, it merely prints the line
+number and character position. Nils Liberg will replace this print
+statement with the appropriate MIDI output statements.
+
+
+August 3 2011
+
+Abc2midi bug. Abc2midi does not play part C in the following example.
+
+X:1
+T: part bug
+M: 2/4
+L: 1/8
+P:C
+K: C
+P:A
+EDBc|B2 C2:|
+P:B
+DEFG|ABc2|
+P:C
+GABc|c4|
+
+This is another instance of the bug reported in June 6 2011. Unfortunately,
+the variable parts refers to the number of parts to be played. For
+example if the header specifies
+P: (AB)2
+then readspec() expands this to
+P: ABAB
+and parts is set to 3 (since it starts from -1) indicating that
+there are 4 parts to be played.
+
+There is no variable indicating the number of parts occurring in the
+body, but we do not need it.
+
+In add_missing_repeats we change 
+   for (j=0;j<=parts;j++) {  /* [SS] 2011-06-06 */
+to 
+for (j=0;j<26;j++) {  /* [SS] 2011-08-03 */
+
+part_start[i] is initialized to -1 so it will be
+less than add_leftrepeat_at[i] if the part was not defined.
+The index of part_start[i] is set to [(int)*p - (int)'A']]
+where *p is the part code between A and Z.
+
+
+
+August 07 2011 new build system
+
+Note if everything has been working fine, you can continue using
+the usual method for compiling the code. 
+
+Nils Liberg has introduced an autoconf build system similar to what
+is used in abcm2ps. The files config.h.in, configure, configure.ac,
+install-sh, and Makefile.in were added to the distribution. To
+use this system, delete or rename the current makefile called
+'makefile'. Make the file configure executable, (on linux or unix,
+chmod 764 configure). Run the script configure and then make. Thus,
+
+mv makefile makefile.bak
+chmod 764 configure
+./configure
+./make
+
+Note the script configure has various options. To see them, 
+
+./configure --help
+
+For example, ./configure --enable-debug will compile the code with
+the -g flag.
+
+
+
+August 09 2011
+
+The address of the Free Software Foundation was changed from
+59 Temple Place, Suite 330, Boston, MA 02111-1307
+         to
+51 Franklin Street, Fifth Floor, Boston, MA  02110-1301
+
+in the sources drawtune.c, genmidi.c, matchsup.c, midi2abc.c
+parseabc.c, position.c, pslib.c, queues.c, store.c, toabc.c
+and yapstree.c
+

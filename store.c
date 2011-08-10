@@ -15,7 +15,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA
  *
  */
 
@@ -31,7 +31,7 @@
  * Wil Macaulay (wil@syndesis.com)
  */
 
-#define VERSION "2.60 April 29 2011"
+#define VERSION "2.65 August 3 2011"
 /* enables reading V: indication in header */
 #define XTEN1 1
 /*#define INFO_OCTAVE_DISABLED 1*/
@@ -117,6 +117,7 @@ int ignore_gracenotes = 0; /* [SS] 2010-01-08 */
 int separate_tracks_for_words = 0; /* [SS] 2010-02-02 */
 int bodystarted =0;
 int harpmode=0;  /* [JS] 2011-04-29 */
+int easyabcmode = 1; /* [SS] 2011-07-18 */
 
 struct voicecontext {
   /* maps of accidentals for each stave line */
@@ -274,6 +275,7 @@ static void fix_enclosed_note_lengths(int from, int end);
 static int patchup_chordtie(int chordstart,int chordend);
 static void copymap(struct voicecontext* v);
 extern int inbody; /* from parseabc.c [SS] 2009-12-18 */
+extern int lineposition; /* from parseabc.c [SS] 2011-07-18 */
 
 
 static struct voicecontext* newvoice(n)
@@ -533,6 +535,7 @@ static void setup_chordnames()
   static int list_m[3] = {0, 3, 7};
   static int list_7[4] = {0, 4, 7, 10};
   static int list_m7[4] = {0, 3, 7, 10};
+  static int list_m7b5[4] = {0, 3, 6, 10};
   static int list_maj7[4] = {0, 4, 7, 11};
   static int list_M7[4] = {0, 4, 7, 11};
   static int list_6[4] = {0, 4, 7, 9};
@@ -558,6 +561,7 @@ static void setup_chordnames()
   addchordname("m", 3, list_m);
   addchordname("7", 4, list_7);
   addchordname("m7", 4, list_m7);
+  addchordname("m7b5", 4, list_m7b5);
   addchordname("maj7", 4, list_maj7);
   addchordname("M7", 4, list_M7);
   addchordname("6", 4, list_6);
@@ -648,6 +652,12 @@ char **filename;
   } else {
     harpmode = 0;
     }
+
+  if (getarg("-EA",argc,argv) != -1) { /* [SS] 2011-07-18 */
+    easyabcmode = 1;
+  } else {
+    easyabcmode = 0;
+  }
 
 
   if (getarg("-OCC",argc,argv) != -1) oldchordconvention=1;
@@ -2449,7 +2459,7 @@ int n, q, r;
 }
 
 void event_chord()
-/* a + has been encountered in the abc */
+/* a + or [ or ]  has been encountered in the abc */
 {
   if (v->inchord) {
     event_chordoff(1,1);
@@ -2641,6 +2651,8 @@ void event_chordon(int chorddecorators[])
     event_error("Attempt to nest chords");
   } else {
     chordstart = notes;
+    if (easyabcmode) 
+         addfeature(META,0,lineno,lineposition); /* [SS] 2011-07-18 */
     addfeature(CHORDON, 0, 0, 0);
     v->inchord = 1;
     v->chordcount = 0;
@@ -3105,6 +3117,8 @@ int xoctave, n, m;
     if (v->inchord) {
       event_error("Rolls and trills not supported in chords");
     } else {
+      if (easyabcmode) /* [SS] 2011-07-18 */ 
+         addfeature(META,0,lineno,lineposition); /* [SS] 2011-07-18 */
       if (decorators[TRILL]) {
         dotrill(note, octave, num, denom, pitch);
       }
@@ -3128,6 +3142,8 @@ int xoctave, n, m;
       } else {
 	pitchline[notes] = pitch_noacc;
         bentpitch[notes] = active_pitchbend;
+        if (easyabcmode) /* [SS] 2011-07-18 */ 
+         addfeature(META,0,lineno,lineposition); /* [SS] 2011-07-18 */
         addfeature(NOTE, pitch, num*4, denom*2*(v->default_length));
         marknotestart();
         addfeature(REST, pitch, num*4, denom*2*(v->default_length));
@@ -3136,6 +3152,8 @@ int xoctave, n, m;
     } else {
       pitchline[notes] = pitch_noacc;
       bentpitch[notes] = active_pitchbend;
+    if (easyabcmode && !v->inchord) /* [SS] 2011-07-18 */ 
+         addfeature(META,0,lineno,lineposition); /* [SS] 2011-07-18 */
       addfeature(NOTE, pitch, num*4, denom*(v->default_length));
       if (!v->inchord) {
         marknote();
@@ -4427,7 +4445,9 @@ void add_missing_repeats () {
 int i,j;
 for (i = num2add-1; i >= 0; i--) {
  insertfeature(BAR_REP,0,0,0,add_leftrepeat_at[i]); 
- for (j=0;j<parts;j++) {
+ /*for (j=0;j<parts;j++) {*/
+ /* for (j=0;j<=parts;j++) {   [SS] 2011-06-06 */
+ for (j=0;j<26;j++) {  /* [SS] 2011-08-03 */
    if (part_start[j] > add_leftrepeat_at[i])
      part_start[j]++;
      }

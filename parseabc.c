@@ -19,7 +19,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA
  *
  */
 
@@ -87,6 +87,9 @@ int decorators_passback[DECSIZE];
  * from event_instruction to parsenote.
 */
  
+char inputline[256]; /* [SS] 2011-06-07 */
+char * linestart; /* [SS] 2011-07-18 */
+int lineposition; /* [SS] 2011-07-18 */
 
 int nokey=0;  /* K: none was encountered */
 int chord_n,chord_m ; /* for event_chordoff */
@@ -1123,6 +1126,7 @@ char **s;
   };
   /*check for decorated chord */
   if (**s == '[') {
+    lineposition = *s - linestart;  /* [SS] 2011-07-18 */
     if (fileprogram == YAPS) event_warning("decorations applied to chord");
     for (i = 0; i<DECSIZE; i++) chorddecorators[i] = decorators[i];
     event_chordon(chorddecorators);
@@ -1660,6 +1664,18 @@ char* p;
   return(q);
 }
 
+/* this function is used by toabc.c [SS] 2011-06-07 */
+void print_inputline ()
+{
+printf("%s\n",inputline);
+}
+
+/* this function is used by toabc.c [SS] 2011-06-10 */
+void print_inputline_nolinefeed ()
+{
+printf("%s",inputline);
+}
+
 void parsemusic(field)
 char* field;
 /* parse a line of abc notes */
@@ -1689,6 +1705,7 @@ char* field;
   p = field;
   skipspace(&p);
   while(*p != '\0') {
+    lineposition = p - linestart;  /* [SS] 2011-07-18 */
     if (((*p >= 'a') && (*p <= 'g')) || ((*p >= 'A') && (*p <= 'G')) ||
         (strchr("_^=", *p) != NULL) || (strchr(decorations, *p) != NULL)) {
       parsenote(&p);
@@ -1821,6 +1838,7 @@ char* field;
             if (isalpha(*p) && (*(p+1) == ':')) {
               p = parseinlinefield(p);
             } else {
+              lineposition = p - linestart;  /* [SS] 2011-07-18 */
               event_chordon(chorddecorators);
               parserinchord = 1;
             };
@@ -1951,6 +1969,7 @@ char* field;
         break;
       case '+':
         if (oldchordconvention) {
+          lineposition = p - linestart;  /* [SS] 2011-07-18 */
           event_chord();
           parserinchord = 1 - parserinchord;
           if (parserinchord == 0) {
@@ -2040,7 +2059,10 @@ char* line;
   char *p, *q;
 
 /*  printf("%d parsing : %s\n", lineno, line);  */
+  strncpy(inputline,line,256); /* [SS] 2011-06-07 */
+
   p = line;
+  linestart = p;  /* [SS] 2011-07-18 */
   ingrace=0;
   skipspace(&p);
   if (strlen(p) == 0) {

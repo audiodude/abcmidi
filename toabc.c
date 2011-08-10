@@ -15,13 +15,13 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA
  *
  */
 
 /* back-end for outputting (possibly modified) abc */
 
-#define VERSION "1.63 April 19 2011"
+#define VERSION "1.65 June 10 2011"
 
 /* for Microsoft Visual C++ 6.0 or higher */
 #ifdef _MSC_VER
@@ -89,6 +89,7 @@ int inlinefield; /* boolean - are we in [<field>: ] ? */
 int cleanup; /* boolean to indicate -u option (update notation) */
 char tmp[2000]; /* buffer to hold abc output being assembled */
 int output_on = 1;  /* if 0 suppress output */
+int passthru = 0; /* output original abc file [SS] 2011-06-07 */
 int selected_voice = -1; /* no voice was selected */
 int newrefnos; /* boolean for -X option (renumber X: fields) */
 int newref; /* next new number for X: field */
@@ -398,7 +399,7 @@ enum abctype t;
       voice[this_voice].currentline = p;
     };
   } else {
-    printf("%s", tmp);
+    printf("%s", tmp);  /* output to stdout is here */
     tmp[0] = '\0';
     p = NULL;
   };
@@ -491,6 +492,7 @@ char** filename;
     printf("  -d to notate with doubled note lengths\n");
     printf("  -v to notate with halved note lengths\n");
     printf("  -V X to output only voice X\n");
+    printf("  -P X restricts action to voice X, leaving other voices intact\n");
     printf("  -ver  prints version number and exits\n");
     printf("  -X n renumber the all X: fields as n, n+1, ..\n");
     printf("  -OCC old chord convention (eg. +CE+)\n");
@@ -598,6 +600,12 @@ char** filename;
   if (targ != -1) {
     selected_voice  = readnumf(argv[targ]);
   };
+
+  targ = getarg("-P", argc, argv);   /* [SS] 2011-06-07 */
+  if (targ != -1) {
+    selected_voice = readnumf(argv[targ]);
+    passthru = 1;
+    }
 
   targ = getarg("-usekey",argc,argv);
   if (targ != -1) {
@@ -739,18 +747,19 @@ char *s;
 
 void event_linebreak()
 {
+  if (!output_on && passthru) print_inputline(); /* [SS] 2011-06-07*/
   if (newbreaks) {
     if (!purgespace(tmp)) {
       if (inmusic) {
         newabctext(bar);
       } else {
-        newabctext(field);
+        newabctext(field); 
       };
     };
   } else {
     newabctext(bar);
     if (output_on) {
-      printf("\n");
+      printf("\n"); /* linefeed to stdout is here */
     };
     /* don't output new line if voice is already suppressed
        otherwise we will get lots of blank lines where we
@@ -1132,7 +1141,8 @@ struct voice_params *vp;
     if ((inlinefield) && (output_on == 1)) { 
       unemit_inline();
     }; 
-    output_on = 0;
+    /*output_on = 0; [SS] 2011-06-10 */
+    if (xinbody) output_on = 0; /* [SS] 2011-06-10 */
   } else { 
     if (output_on == 0) { 
       output_on = 1; 
@@ -1532,7 +1542,15 @@ int explict;
   static char* keys[12] = {"Db", "Ab", "Eb", "Bb", "F", "C", 
                            "G", "D", "A", "E", "B", "F#"};
   char signature[10];
- 
+
+  if (!xinbody && passthru) {print_inputline_nolinefeed(); /* [SS] 2011-06-10 */
+                            if ((xinhead) && (!xinbody)) {
+                                xinbody = 1;
+                                start_tune();
+                                };
+                            inmusic = 0;
+                            return;
+                            }
   if (gotkey) {
     setmap(sharps, basemap); /* required by copymap and pitchof */
     setmap(sharps, oldtable);

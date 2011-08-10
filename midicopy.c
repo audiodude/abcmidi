@@ -1590,7 +1590,7 @@ int main(int argc, char *argv[])
 
     repflag = getarg("-replace", argc, argv);
     if (repflag >= 0)
-	sscanf(argv[repflag], "%d,%d,%d", &trknum, &byteloc, &val);
+	sscanf(argv[repflag], "%d,%d,%c", &trknum, &byteloc, &val);
 
     F_in = fopen(argv[argc - 2], "rb");
     if (F_in == NULL) {

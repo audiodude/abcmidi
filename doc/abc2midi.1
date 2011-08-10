@@ -447,6 +447,42 @@ of a tune or voice command.
 %%MIDI drummap note midipitch
 .PP
 Please see abcguide.txt.
+.PP
+%%MIDI ptstress filename
+.PP
+This command loads file filename into abc2midi which contains
+the Phil Taylor stress parameters and puts abc2midi in the mode
+where it applies these stress parameters on every note. This
+model runs in opposition to the standard beat model, so the
+MIDI beat, beatstring, beatmod commands become ineffectual.
+This also means that the dynamic indications !f! !pp! etc.
+do not work any more. Furthermore, the stress model takes
+control of the MIDI trim parameters too. To revert back to
+the standard model, put the command %%MIDI beataccents.
+.PP
+The model divides a bar into equal segments. For each segment,
+a loudness or MIDI velocity is specified and a duration multiplier
+is specified. If a note falls into a specific segment, it assumes
+the velocity of that segment and its duration is modified
+accordingly. If the note overlaps more than one segment, then
+the note assumes the average of those segment values.
+.PP
+The input file specifies the number of segments and the loudness
+and duration multipliers for each segment. The file has the
+following format. The first value is the number of segments and each line
+specifies the velocity and duration multiplier of the specific
+segment. The velocity is limited to 127 and the duration is a
+decimal number. The note durations is modified by varying the
+gap between notes, so it is not possible to extend a note. This
+preserves the regular tempo of the music. The program scales,
+the note duration indications by dividing it by the maximum
+value which here is 1.4.
+
+
+
+
+
+
 
 
 .SH "COMPATIBILITY WITH DRAFT STANDARD 2.0"

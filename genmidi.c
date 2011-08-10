@@ -15,7 +15,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA
  *
  */
 
@@ -48,6 +48,7 @@
 #define strchr index
 #endif
 #include <stdlib.h>
+#define MAX(A, B) ((A) > (B) ? (A) : (B))
 
 void   single_note_tuning_change(int midikey, float midipitch);
 void addfract(int *xnum, int *xdenom, int a, int b);
@@ -212,6 +213,15 @@ int gchord_error = 0; /* [SS] 2010-07-11 */
 extern struct trackstruct trackdescriptor[40]; /* trackstruct defined in genmidi.h*/
 
 
+/* [SS] 2011-07-04 */
+int beatmodel = 0; /* flag selecting standard or Phil's model */
+
+/* for handling Phil Taylor's stress models */
+int nseg;       /* number of segments */
+int ngain[32];  /* gain factor for each segment */
+float fdur[32]; /* duration modifier for each segment */
+float maxdur;   /* maximum duration */
+int segnum,segden; /* segment width computed from M: and L: parameters*/
 
 void reduce(a, b)
 /* elimate common factors in fraction a/b */
@@ -1302,50 +1312,130 @@ int pitch, pitchbend, channel, vel;
   delta_time = 0L;
 }
 
-static void noteon(n)
-/* compute note data and call noteon_data to write MIDI note event */
-int n;
-{
-  int i, vel;
 
+
+/* [SS] 2011-07-04 */
+static void note_beat(int n, int *vel) {
   /* set velocity */
+  int i;
   if(beataccents == 0) 
-    vel = mednote;
+    *vel = mednote;
   else if (nbeats > 0) {
       if ((bar_num*nbeats)%(bar_denom*barsize) != 0) {
         /* not at a defined beat boundary */
-        vel = softnote;
+        *vel = softnote;
       } else {
         /* find place in beatstring */
         i = ((bar_num*nbeats)/(bar_denom*barsize))%nbeats;
         switch(beatstring[i]) {
         case 'f':
         case 'F':
-          vel = loudnote;
+          *vel = loudnote;
           break;
         case 'm':
         case 'M':
-          vel = mednote;
+          *vel = mednote;
           break;
         default:
         case 'p':
         case 'P':
-          vel = softnote;
+          *vel = softnote;
           break;
         };
       };
      } else {
       /* no beatstring - use beat algorithm */
       if (bar_num == 0) {
-          vel = loudnote;
+          *vel = loudnote;
      } else {
         if ((bar_denom == 1) && ((bar_num % beat) == 0)) {
-          vel = mednote;
+          *vel = mednote;
      } else {
-          vel = softnote;
+          *vel = softnote;
         };
       };
     }
+  }
+
+
+/* [SS] 2011-07-04 */
+void stress_factors (int n,  int *vel)
+/* computes the Phil Taylor stress factors for a note
+   positioned between begnum/begden and endnum/endden.
+   The segment size is resnum/resden.
+   Method compute the segments that are overlapped by
+   the note and average the segments parameters.
+*/
+{ int begnum,begden;
+  int stepnum, stepden;
+  int firstseg,lastseg;
+  int endnum,endden;
+  int i;
+  int gain;
+  float dur;
+  int tnotenum,tnotedenom;
+
+  stepnum = num[n];
+  stepden = denom[n]*4;
+/* we need to divide by 4 because store.c scales all note lengths by
+   a factor of 4. (search for num*4).
+*/
+  begnum = bar_num;
+  begden = bar_denom*4;
+
+  endnum =  begnum*stepden + begden*stepnum;
+  endden =  stepden*begden;
+  reduce (&endnum,&endden);
+  /* determine the segment number by dividing by the segment size
+   * and truncating the result.
+   * firstseg = integer (begnum/begden divided by segnum/segden) */
+  begnum = begnum*segden;
+  begden = begden*segnum;
+  firstseg = begnum/begden;
+  /* lastseg = integer (endnum/endden divided by resnum/resden) */
+  endnum = endnum*segden;
+  endden = endden*segnum;
+  /* scale down the fraction endnum/endden so that we do avoid the
+     next segment unless endnum/endden is large enough */
+  endnum  = (int) ((float) endnum * 0.98);
+  lastseg = endnum/endden;
+  /*printf("segnum,segden = %d/%d\n",segnum,segden); */
+  /*printf ("firstseg %d/%d = %d lastseg = %d/%d %d\n",begnum,begden,firstseg,endnum,endden,lastseg);*/
+  dur=0.0;
+  gain = 0;
+/* now that we know the segment span of the notes average fdur and ngain
+ * over those segments.
+*/
+  for (i=firstseg;i <= lastseg;i++) {
+    dur  += fdur[i];
+    gain  += ngain[i];
+    }
+  dur = dur/(double) (lastseg-firstseg +1);
+  gain = gain/(lastseg-firstseg +1);
+
+/* since we can't lengthen notes we shorten them based on the maximum*/
+  dur = dur/maxdur;
+/* tnotenum and tnotedenom is used for debugging only.*/
+  tnotenum = (int) (0.5 +dur*100.0);
+  tnotedenom = 100;
+  *vel = gain;
+/* compute the trim values that are applied and the end of the NOTE:
+ * block in the writetrack() switch complex.*/
+  trim_num = (int) ((float) num[n]*100.0*(1.0 - dur));
+  trim_denom = (int) (float) denom[n]*100.0;
+  /*printf("dur = %f %d/%d %d/%d gain = %d\n",dur,tnotenum,tnotedenom,trim_num,trim_denom,gain);*/
+ }
+
+
+/* [SS] 2011-07-04 */
+static void noteon(n)
+/* compute note data and call noteon_data to write MIDI note event */
+int n;
+{
+  int  vel;
+  if (beatmodel == 1) 
+     stress_factors (n,   &vel);
+  else note_beat(n,&vel);
   if (channel == 9) noteon_data(pitch[n],bentpitch[n],channel,vel);
   else noteon_data(pitch[n] + transpose + global_transpose, bentpitch[n], channel, vel);
 }
@@ -1429,6 +1519,69 @@ return n;
 }
 
 
+/* [SS] 2011-07-04 this function is no longer used */
+void readstressfile (char * filename)
+{
+FILE *inputhandle;
+char  dummy[80];
+int n;
+int mnum,mden; /* time signature  (not used)*/
+beatmodel = 1; /* for Phil Taylor's stress model */
+maxdur = 0;
+inputhandle = fopen(filename,"r");
+if (inputhandle == NULL) {
+    printf("Failed to open file %s\n", filename);
+    return;
+    }
+
+fscanf(inputhandle,"%s %d",dummy,&n);
+/*printf("%s %d\n",dummy,n);*/
+fscanf(inputhandle,"%s",dummy);
+/*printf("%s\n",dummy);*/
+fscanf(inputhandle,"%d/%d",&mnum,&mden);
+/*printf("%d/%d\n",mnum,mden);*/
+fscanf(inputhandle,"%s",dummy);
+/*printf("%s\n",dummy);*/
+fscanf(inputhandle,"%d",&nseg);
+/*printf("%d\n",nseg);*/
+if (nseg > 31) nseg=31;
+for (n=0;n < nseg;n++) {
+  fscanf(inputhandle,"%d %f",&ngain[n],&fdur[n]);
+/*  printf("%d %f\n",ngain[n],fdur[n]);*/
+  maxdur = MAX(maxdur,fdur[n]);
+  }
+fclose(inputhandle);
+/*printf("maxdur = %f\n",maxdur);*/
+segnum = time_num;
+segden = time_denom*nseg;
+}
+
+/* [SS] 2011-07-04 */
+void readstressfile_simple (char * filename)
+{
+FILE *inputhandle;
+int n;
+maxdur = 0;
+inputhandle = fopen(filename,"r");
+if (inputhandle == NULL) {
+    printf("Failed to open file %s\n", filename);
+    return;
+    }
+beatmodel = 1; /* for Phil Taylor's stress model */
+fscanf(inputhandle,"%d",&nseg);
+/*printf("%d\n",nseg);*/
+if (nseg > 31) nseg=31;
+for (n=0;n < nseg;n++) {
+  fscanf(inputhandle,"%d %f",&ngain[n],&fdur[n]);
+/*  printf("%d %f\n",ngain[n],fdur[n]);*/
+  maxdur = MAX(maxdur,fdur[n]);
+  }
+fclose(inputhandle);
+/*printf("maxdur = %f\n",maxdur);*/
+segnum = time_num;
+segden = time_denom*nseg;
+}
+
 static void dodeferred(s,noteson)
 /* handle package-specific command which has been held over to be */
 /* interpreted as MIDI is being generated */
@@ -1437,6 +1590,7 @@ int noteson;
 {
   char* p;
   char command[40];
+  char inputfile[64]; /* [SS] 2011-07-04 */
   int done;
   int val;
 
@@ -1612,6 +1766,7 @@ int noteson;
 
   if( strcmp(command, "beataccents") == 0) {
     beataccents = 1;
+    beatmodel = 0; /* [SS] 2011-07-04 */
     done = 1;
   }
   if( strcmp(command, "nobeataccents") == 0) {
@@ -1700,7 +1855,13 @@ int noteson;
     parse_drummap(&p);
     done = 1;
   };
-
+  if (strcmp(command,"ptstress") == 0) {  /* [SS] 2011-07-04 */
+     skipspace(&p);
+     strncpy(inputfile,p,60);
+     printf("ptstress file = %s\n",inputfile);
+     readstressfile_simple (inputfile);
+     done = 1;
+    }
 
   if (done == 0) {
     char errmsg[80];
@@ -2101,6 +2262,40 @@ abc.sourceforge.net/standard/abc2-draft.html
 }
 
 
+/* [NL] 2011-07-22  Nils Liberg EasyABC interface */
+void easyabc_interface (int j) {
+            char data[4];
+            unsigned int row = num[j];
+            unsigned int col = denom[j] + 1;           
+
+/* This code produces a faulty MIDI file so we ignore it presently */
+/* 2011-08-03 [SS] */
+             return;
+
+
+           
+            /* the row number is encoded as three 7-bit numbers: CC#110 (least significant) CC#111, and CC#112 (most significant) */                       
+            data[0] = 110;
+            data[1] = (row >> 14) & 0x7F;
+            write_event(control_change, 0, data, 2);
+           
+            data[0] = 111;
+            data[1] = (row >> 7) & 0x7F;
+            write_event(control_change, 0, data, 2);
+           
+            data[0] = 112;
+            data[1] = row & 0x7F;
+            write_event(control_change, 0, data, 2);
+           
+            /* the col number is encoded as two 7-bit numbers: CC#113 (least significant) and CC#114 (most significant) */           
+            data[0] = 113;
+            data[1] = (col >> 7) & 0x7F;
+            write_event(control_change, 0, data, 2);
+           
+            data[0] = 114;
+            data[1] = col & 0x7F;
+            write_event(control_change, 0, data, 2);
+        }
 
 long writetrack(xtrack)
 /* this routine writes a MIDI track  */
@@ -2236,7 +2431,7 @@ int xtrack;
     }
   }
   if (verbose)
-     printf("trackvoice=%d xtrack=%d noteson=%d wordson=%d gchordson = %d drumson = %d droneon=%d\n",trackvoice,xtrack,noteson,wordson,gchordson,drumson,droneon);
+     printf("trackvoice=%d xtrack=%d noteson=%d wordson=%d gchordson =%d drumson =%d droneon=%d temposon=%d\n",trackvoice,xtrack,noteson,wordson,gchordson,drumson,droneon,temposon);
   starttrack();
   inchord = 0;
   /* write notes */
@@ -2677,6 +2872,11 @@ int xtrack;
        if (trim_num > 0) trim = 1;
        else trim = 0;
        break;
+    case META:    /* [SS] 2011-07-2011 */
+       if (pitch[j] == 0 && noteson==1)  {
+            /*printf("linenum = %d charpos = %d\n",num[j],denom[j]);*/
+            easyabc_interface(j);
+          }
     default:
       break;
     };
@@ -2720,7 +2920,7 @@ char *featname[] = {
 "INSTRUCTION", "NOBEAM", "CHORDNOTE", "CLEF",
 "PRINTLINE", "NEWPAGE", "LEFT_TEXT", "CENTRE_TEXT",
 "VSKIP", "COPYRIGHT", "COMPOSER", "ARPEGGIO",
-"SPLITVOICE"
+"SPLITVOICE", "META"
 }; 
 
 void dumpfeat (int from, int to)

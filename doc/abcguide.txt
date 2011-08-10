@@ -1272,6 +1272,48 @@ find out the channel numbers that were assigned by running
 abc2midi in verbose mode using the -v command. 
 
 
+%%MIDI ptstress filename
+
+This command loads file filename into abc2midi which contains
+the Phil Taylor stress parameters and puts abc2midi in the mode
+where it applies these stress parameters on every note. This
+model runs in opposition to the standard beat model, so the
+MIDI beat, beatstring, beatmod commands become ineffectual.
+This also means that the dynamic indications !f! !pp! etc.
+do not work any more. Furthermore, the stress model takes
+control of the MIDI trim parameters too. To revert back to
+the standard model, put the command %%MIDI beataccents.
+
+The model divides a bar into equal segments. For each segment,
+a loudness or MIDI velocity is specified and a duration multiplier
+is specified. If a note falls into a specific segment, it assumes
+the velocity of that segment and its duration is modified
+accordingly. If the note overlaps more than one segment, then
+the note assumes the average of those segment values.
+
+The input file specifies the number of segments and the loudness
+and duration multipliers for each segment. The file has the
+following format:
+
+8
+110 1.4
+90 0.6
+110 1.4
+90 0.6
+110 1.4
+90 0.6
+110 1.4
+90 0.6
+
+where the first value is the number of segments and each line
+specifies the velocity and duration multiplier of the specific
+segment. The velocity is limited to 127 and the duration is a
+decimal number. The note durations is modified by varying the
+gap between notes, so it is not possible to extend a note. This
+preserves the regular tempo of the music. The program scales,
+the note duration indications by dividing it by the maximum
+value which here is 1.4.
+
 
 
 Global settings for abc2midi

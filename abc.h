@@ -85,7 +85,8 @@ VSKIP,
 COPYRIGHT,
 COMPOSER,
 ARPEGGIO,
-SPLITVOICE
+SPLITVOICE,
+META
 } featuretype;
 
 /* note decorations */

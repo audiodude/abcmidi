@@ -46,6 +46,8 @@ extern char *addstring(char *s);
 extern char *lookup_abbreviation(char symbol);
 extern int ismicrotone(char **p, int dir);
 extern void event_normal_tone(void);
+extern void print_inputline(void);
+extern void print_inputline_nolinefeed(void);
 #else
 extern int readnump();
 extern int readsnump();
@@ -59,6 +61,7 @@ extern char *addstring();
 extern char *lookup_abbreviation();
 extern int ismicrotone();
 extern void event_normal_tone();
+extern void print_inputline_nolinefeed();
 #endif
 extern void parseron();
 extern void parseroff();

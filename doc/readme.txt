@@ -1,11 +1,11 @@
 abcMIDI :   abc <-> MIDI conversion utilities
 
-midi2abc version 2.92 Aug 04 2008
-abc2midi version 2.60 April 29 2011
-abc2abc  version 1.63 April 19 2011
-yaps     version 1.52 Dec 12  2009
-abcmatch version 1.42 Dec   21 2006
-midicopy version 1.10 Sep   22 2006
+midi2abc version 2.92 Aug  04 2008
+abc2midi version 2.65 August 03 2011
+abc2abc  version 1.65 June 10 2011
+yaps     version 1.52 Dec  12 2010
+abcmatch version 1.42 Dec  21 2006
+midicopy version 1.10 Sep  22 2006
 
 24th January 2002
 
@@ -14,7 +14,7 @@ J.R.Allwright@westminster.ac.uk
 University of Westminster,
 London, UK
 
-March 2009
+July 2011
 
 Seymour Shlien
 seymour.shlien@crc.ca
@@ -342,6 +342,7 @@ Usage: abc2abc <filename> [-s] [-n X] [-b] [-r] [-e] [-t X]
   -d to notate with doubled note lengths
   -v to notate with halved note lengths
   -V X to output only voice X
+  -P X restricts action to voice X, leaving other voices intact
   -ver prints version number and exits
   -X n renumber the all X: fields as n, n+1, ..
   -usekey sf Use key signature sf (flats/sharps)
@@ -371,6 +372,10 @@ use K:none.
 
 If you want to check an abc tune, it is recommended that you use abc2midi 
 with the -c option as this performs extra checks that abc2abc does not do.
+
+When using the -P X option, it may be necessary to insert some
+field commands such as K: or L: following the voice X declaration,
+so that they will be converted and appear in the output.
 
 The output of abc2abc is printed to the screen. To save it to a file, use
 the redirection operator.
