@@ -24,8 +24,8 @@ LNK=pccl
 
 all : abc2midi.exe midi2abc.exe abc2abc.exe mftext.exe yaps.exe midicopy.exe abcmatch.exe
 
-abc2midi.exe : parseabc.o store.o genmidi.o queues.o midifile.o parser2.o
-	$(LNK) -Lc:\bin\pcc\ -Oabc2midi parseabc.o store.o genmidi.o queues.o midifile.o parser2.o
+abc2midi.exe : parseabc.o store.o genmidi.o queues.o midifile.o parser2.o stresspat.o
+	$(LNK) -Lc:\bin\pcc\ -Oabc2midi parseabc.o store.o genmidi.o queues.o midifile.o parser2.o stresspat.o
 
 abc2abc.exe : parseabc.o toabc.o
 	$(LNK) -Lc:\bin\pcc\ -Oabc2abc parseabc.o toabc.o
@@ -50,6 +50,9 @@ toabc.o : toabc.c abc.h parseabc.h
 
 genmidi.o : genmidi.c abc.h midifile.h parseabc.h genmidi.h
 	$(CC) genmidi.c $(CFLAGS)
+
+stresspat.o : stresspat.c
+	$(CC) stresspat.c $(CFLAGS)
 
 store.o : store.c abc.h midifile.h parseabc.h
 	$(CC) store.c $(CFLAGS)

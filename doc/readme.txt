@@ -1,7 +1,7 @@
 abcMIDI :   abc <-> MIDI conversion utilities
 
 midi2abc version 2.92 Aug  04 2008
-abc2midi version 2.65 August 03 2011
+abc2midi version 2.70 September 07 2011
 abc2abc  version 1.65 June 10 2011
 yaps     version 1.52 Dec  12 2010
 abcmatch version 1.42 Dec  21 2006
@@ -240,7 +240,7 @@ Usage : abc2midi <abc file> [reference number] [-c] [-v] [-o filename]
         [-t] [-n <value>] [-ver] [-NFNP] [-NFER] [-NGRA] [-STFW] [-NCOM] [-OCC]
         [reference number] selects a tune
         -c  selects checking only
-        -v  selects verbose option
+        -v <level> selects verbose option
         -o <filename>  selects output filename
         -t selects filenames derived from tune titles
         -n <limit> set limit for length of filename stem
@@ -253,6 +253,7 @@ Usage : abc2midi <abc file> [reference number] [-c] [-v] [-o filename]
         -STFW separate tracks for words (lyrics)
         -NCOM suppress comments
         -ver prints version number and exits
+        -BF Barfly mode: invokes a stress model if possible
         -OCC old chord convention (eg. +CE+)
 
  The default action is to write a MIDI file for each abc tune

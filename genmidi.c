@@ -52,6 +52,9 @@
 
 void   single_note_tuning_change(int midikey, float midipitch);
 void addfract(int *xnum, int *xdenom, int a, int b);
+/* [SS] 2011-08-17 */
+void fdursum_at_segment(int segposnum, int segposden, int *val_num, int *val_den);
+void articulated_stress_factors (int n,  int *vel); 
 
 
 float ranfrac ()
@@ -77,7 +80,10 @@ extern int chordlen[MAXCHORDNAMES];
 extern int *pitch, *num, *denom;
 extern int *bentpitch;
 extern featuretype *feature;
+extern int *stressvelocity; /* [SS] 2011-08-17 */
 extern int notes;
+extern int barflymode; /* [SS] 2011-08-24 */
+extern int stressmodel; /* [SS] 2011-08-26 */
 
 extern int verbose;
 extern int quiet;
@@ -216,12 +222,13 @@ extern struct trackstruct trackdescriptor[40]; /* trackstruct defined in genmidi
 /* [SS] 2011-07-04 */
 int beatmodel = 0; /* flag selecting standard or Phil's model */
 
-/* for handling Phil Taylor's stress models */
+/* for handling stress models */
 int nseg;       /* number of segments */
 int ngain[32];  /* gain factor for each segment */
-float fdur[32]; /* duration modifier for each segment */
 float maxdur;   /* maximum duration */
 int segnum,segden; /* segment width computed from M: and L: parameters*/
+float fdur[32]; /* duration modifier for each segment */
+float fdursum[32]; /* for mapping segment address into a position */
 
 void reduce(a, b)
 /* elimate common factors in fraction a/b */
@@ -273,6 +280,7 @@ int a, b;
   bar_num = bar_num*(b*b_denom) + (a*b_num)*bar_denom;
   bar_denom = bar_denom * (b*b_denom);
   reduce(&bar_num, &bar_denom);
+  /*printf("position = %d/%d\n",bar_num,bar_denom);*/
 }
 
 void configure_gchord()
@@ -1358,8 +1366,17 @@ static void note_beat(int n, int *vel) {
   }
 
 
-/* [SS] 2011-07-04 */
-void stress_factors (int n,  int *vel)
+/* [SS] 2011-07-04  2011-08-17*/
+
+void stress_factors (int n, int *vel) {
+  if (beatmodel == 2) {
+       *vel = stressvelocity[n];
+       } else
+  articulated_stress_factors (n, vel);
+  }  
+
+
+void articulated_stress_factors (int n,  int *vel)
 /* computes the Phil Taylor stress factors for a note
    positioned between begnum/begden and endnum/endden.
    The segment size is resnum/resden.
@@ -1368,20 +1385,24 @@ void stress_factors (int n,  int *vel)
 */
 { int begnum,begden;
   int stepnum, stepden;
+  int firstsegnum,firstsegden;
+  int lastsegnum,lastsegden;
   int firstseg,lastseg;
+  int firstsegrem,lastsegrem; /* remainders */
   int endnum,endden;
   int i;
   int gain;
   float dur;
+  float segsize,segrange;
   int tnotenum,tnotedenom;
 
   stepnum = num[n];
-  stepden = denom[n]*4;
-/* we need to divide by 4 because store.c scales all note lengths by
-   a factor of 4. (search for num*4).
-*/
-  begnum = bar_num;
-  begden = bar_denom*4;
+  stepden = denom[n];
+/* undo the b_num/b_denom application in addunits() */
+/* note b_num/b_denom defined in set_meter() has nothing to do
+   with L: unit length */
+  begnum = bar_num*b_denom;
+  begden = bar_denom*b_num;
 
   endnum =  begnum*stepden + begden*stepnum;
   endden =  stepden*begden;
@@ -1389,32 +1410,66 @@ void stress_factors (int n,  int *vel)
   /* determine the segment number by dividing by the segment size
    * and truncating the result.
    * firstseg = integer (begnum/begden divided by segnum/segden) */
-  begnum = begnum*segden;
-  begden = begden*segnum;
-  firstseg = begnum/begden;
+  begnum = begnum;
+  begden = begden;
+  firstsegnum = begnum*segden;
+  firstsegden = begden*segnum*4;
+  reduce (&firstsegnum,&firstsegden);
+/* note coordinates are in quarter note units so divide by 4 */
+  firstseg = firstsegnum/firstsegden;
+  firstsegrem = firstsegnum % firstsegden;
   /* lastseg = integer (endnum/endden divided by resnum/resden) */
-  endnum = endnum*segden;
-  endden = endden*segnum;
+  endnum = endnum;
+  endden = endden;
+  lastsegnum = endnum*segden;
+  lastsegden = endden*segnum*4;
+  reduce(&lastsegnum,&lastsegden);
   /* scale down the fraction endnum/endden so that we do avoid the
      next segment unless endnum/endden is large enough */
-  endnum  = (int) ((float) endnum * 0.98);
-  lastseg = endnum/endden;
-  /*printf("segnum,segden = %d/%d\n",segnum,segden); */
-  /*printf ("firstseg %d/%d = %d lastseg = %d/%d %d\n",begnum,begden,firstseg,endnum,endden,lastseg);*/
+  lastseg = lastsegnum/lastsegden;
+  lastsegrem = lastsegnum%lastsegden;
+  if (lastseg > nseg) return; /* do nothing if note extends beyond bar */
+  if (lastseg - firstseg > 2) return; /* do nothing if note extends over 3 segments */ 
   dur=0.0;
-  gain = 0;
-/* now that we know the segment span of the notes average fdur and ngain
- * over those segments.
-*/
-  for (i=firstseg;i <= lastseg;i++) {
-    dur  += fdur[i];
-    gain  += ngain[i];
-    }
-  dur = dur/(double) (lastseg-firstseg +1);
-  gain = gain/(lastseg-firstseg +1);
+  segrange=0.0;
+/* now that we know the segment span of the notes average fdur 
+ * over those segments. [SS] 2011-08-25 */
+  if (lastseg == firstseg) { 
+    dur = fdur[firstseg];} /*note is included is entirely included in segment*/
+  else {  /* note may overlap more than one segment */
+    for (i=firstseg;i < lastseg;i++) {
+      if (i == firstseg) { /* for the first segment */
+        if (firstsegrem == 0) {dur  = fdur[i];
+                               segsize = (float) 1.0;
+                               segrange = segsize;
+                              } /* note starts at beginning of segment*/
+        else { /* note starts in the middle of segment */
+              segsize = (float) (firstsegden - firstsegrem) / (float) firstsegden;
+              segrange = segsize; 
+              dur = fdur[i]*segsize;
+              }
+     } else {
+        dur = dur + fdur[i]; /* for other segments that note overlaps */
+        segrange += (float) 1.0;  
+       }
+     }
 
-/* since we can't lengthen notes we shorten them based on the maximum*/
+    if (lastsegrem != 0) {
+             segsize = (float)  lastsegrem / (float) lastsegden;
+             dur = dur +  fdur[lastsegrem] *  segsize;
+             segrange = segrange + segsize;
+             }
+  dur = dur/segrange;
+  } /* end of note may overlap more than one segment */
+
+ /* gain is set to the value of ngain[] in the first segment.*/
+  gain = ngain[firstseg]; /* [SS] 2011-08-17 */
   dur = dur/maxdur;
+/* since we can't lengthen notes we shorten them based on the maximum*/
+
+  if (verbose > 1) {
+    printf ("%d %d/%d = %d/%d to  %d/%d = %d/%d",pitch[n],begnum,begden,firstsegnum,firstsegden,endnum,endden,lastsegnum,lastsegden);
+  printf(" dur gain = %f %d\n",dur,gain);}
 /* tnotenum and tnotedenom is used for debugging only.*/
   tnotenum = (int) (0.5 +dur*100.0);
   tnotedenom = 100;
@@ -1422,7 +1477,7 @@ void stress_factors (int n,  int *vel)
 /* compute the trim values that are applied and the end of the NOTE:
  * block in the writetrack() switch complex.*/
   trim_num = (int) ((float) num[n]*100.0*(1.0 - dur));
-  trim_denom = (int) (float) denom[n]*100.0;
+  trim_denom = (int) (float) denom[n]* (float) 100.0;
   /*printf("dur = %f %d/%d %d/%d gain = %d\n",dur,tnotenum,tnotedenom,trim_num,trim_denom,gain);*/
  }
 
@@ -1433,9 +1488,10 @@ static void noteon(n)
 int n;
 {
   int  vel;
-  if (beatmodel == 1) 
+  if (beatmodel != 0)  /* [SS] 2011-08-17 */
      stress_factors (n,   &vel);
   else note_beat(n,&vel);
+  if (vel == 0) note_beat(n,&vel); /* [SS] 2011-09-06 */
   if (channel == 9) noteon_data(pitch[n],bentpitch[n],channel,vel);
   else noteon_data(pitch[n] + transpose + global_transpose, bentpitch[n], channel, vel);
 }
@@ -1518,69 +1574,140 @@ nchordchannels = n;
 return n;
 }
 
+int parse_stress_params (char *input) {
+  char *next;
+  float f;
+  int n;
+  int success;
+  success = 0;
+  f =(float) strtod (input,&next);
+  input = next;
+  if (*input == '\0') {return -1;} /* no data, probably file name */
+  if (f == 0.0) {return -1;} /* no data, probably file name */
+  nseg = (int) f +0.0001;
+  for (n=0;n<32;n++) {fdur[n]= 0.0; ngain[n] = 0;}
+  if (nseg > 31) {return -1;} 
+  n = 0;
+  while (*input != '\0' && n < nseg) {
+    f = (float) strtod (input,&next);
+    ngain[n] = (int) f + 0.0001;
+    if (ngain[n] > 127 || ngain[n] <0) {
+        printf("**error** bad velocity value ngain[%d] = %d in ptstress command\n",n,ngain[n]);
+        }
+    input = next;
+    f = (float) strtod (input,&next);
+    fdur[n] = f;
+    if (fdur[n] > (float) nseg || fdur[n] < 0.0) {
+       printf("**error** bad expansion factor fdur[%d] = %f in ptstress command\n",n,fdur[n]);
+       }
+    input = next;
+    n++;
+    }
+if (n != nseg) return -1;
+else return 0;
+} 
 
-/* [SS] 2011-07-04 this function is no longer used */
+/* [SS] 2011-07-04 */
 void readstressfile (char * filename)
 {
 FILE *inputhandle;
-char  dummy[80];
 int n;
-int mnum,mden; /* time signature  (not used)*/
-beatmodel = 1; /* for Phil Taylor's stress model */
+int idummy;
 maxdur = 0;
 inputhandle = fopen(filename,"r");
 if (inputhandle == NULL) {
     printf("Failed to open file %s\n", filename);
     return;
     }
-
-fscanf(inputhandle,"%s %d",dummy,&n);
-/*printf("%s %d\n",dummy,n);*/
-fscanf(inputhandle,"%s",dummy);
-/*printf("%s\n",dummy);*/
-fscanf(inputhandle,"%d/%d",&mnum,&mden);
-/*printf("%d/%d\n",mnum,mden);*/
-fscanf(inputhandle,"%s",dummy);
-/*printf("%s\n",dummy);*/
-fscanf(inputhandle,"%d",&nseg);
+for (n=0;n<32;n++) {fdur[n]= 0.0; ngain[n] = 0;}
+fdursum[0]=fdur[0];
+beatmodel = 2; /* for Phil Taylor's stress model */
+idummy = fscanf(inputhandle,"%d",&nseg);
 /*printf("%d\n",nseg);*/
 if (nseg > 31) nseg=31;
-for (n=0;n < nseg;n++) {
-  fscanf(inputhandle,"%d %f",&ngain[n],&fdur[n]);
-/*  printf("%d %f\n",ngain[n],fdur[n]);*/
-  maxdur = MAX(maxdur,fdur[n]);
+
+for (n=0;n < nseg+1;n++) {
+  idummy =  fscanf(inputhandle,"%d %f",&ngain[n],&fdur[n]);
+  if (verbose) printf("%d %f\n",ngain[n],fdur[n]);
   }
 fclose(inputhandle);
-/*printf("maxdur = %f\n",maxdur);*/
-segnum = time_num;
-segden = time_denom*nseg;
 }
 
-/* [SS] 2011-07-04 */
-void readstressfile_simple (char * filename)
+/* [SS] 2011-09-07 */
+void calculate_stress_parameters () {
+int qnotenum,qnoteden;
+int n;
+float lastsegvalue;
+segnum = time_num;
+segden = time_denom*nseg;
+reduce(&segnum,&segden);
+/* compute number of segments in quarter note */
+qnotenum = segden;
+qnoteden = segnum*4;
+reduce(&qnotenum,&qnoteden);
+if (verbose > 1) printf("segment size set to %d/%d\n",segnum,segden);
+for (n=0;n<nseg+1;n++) {
+  maxdur = MAX(maxdur,fdur[n]);
+  if (n > 0) fdursum[n] = fdursum[n-1]+fdur[n-1]*(float) qnoteden /(float) qnotenum;
+  if (fdursum[n] > (float) nseg + 0.05) {
+     printf("**error** bad stress file: sum of the expansion factors exceeds number of segments\nAborting stress model\n");
+     beatmodel = 0;
+     return;
+     }
+  if (ngain[n] > 127 || ngain[n] < 0) {  
+     printf("**error** bad stress file: note velocity not between 0 and 127\n Aborting the stress model\n");
+     beatmodel = 0;
+     return;
+     }
+/* num[],denom[] use quarter note units = 1/1, segment units are usually
+   half that size, so we divide by 2.0
+*/
+  if (verbose > 1) printf ("%f  ",fdursum[n]);
+  }
+  if (verbose > 1) printf(" == fdursum\n");
+/*printf("maxdur = %f\n",maxdur);*/
+if (stressmodel) beatmodel=stressmodel;
+else
+beatmodel = 2;
+/*if (fdursum[nseg] != (float) nseg) fdursum[nseg] = (float) nseg; [SS] 2011-09-06 */
+lastsegvalue = (float) nseg * (float) qnoteden / (float) qnotenum;
+/* ensure fdursum[nseg] = lastsegvalue [SS] 2011-09-06 */
+if (fdursum[nseg] != lastsegvalue)
+  {printf("**warning** the sum of the expansion factors is not %d\n some adjustments are made.\n",nseg);
+  fdursum[nseg] = lastsegvalue;
+  }
+}
+
+
+/* [SS] 2011-08-17 */
+void fdursum_at_segment(int segposnum, int segposden, int *val_num, int *val_den)
 {
-FILE *inputhandle;
-int n;
-maxdur = 0;
-inputhandle = fopen(filename,"r");
-if (inputhandle == NULL) {
-    printf("Failed to open file %s\n", filename);
-    return;
+int inx0,inx1,remainder;
+float val,a0,a1;
+*val_num = 0;
+inx0 = segposnum/segposden;
+if (inx0 > nseg) {
+   *val_num = *val_num + (int) (float) 1000.0*fdursum[nseg];
+    inx0 = inx0 - nseg;
+   }
+inx1 = inx0+1;
+remainder = segposnum % segposden;
+if (remainder == 0) {
+    val = fdursum[inx0];
+   } else {
+    if (inx1 > nseg) {
+       printf("***fdursum_at_segment: inx1 = %d too large\n",inx1);
+       }
+       
+    a0 = (float) remainder / (float) segposden;
+    a1 =(float) 1.0 - a0; 
+    val = a1*fdursum[inx0] + a0*fdursum[inx1];
     }
-beatmodel = 1; /* for Phil Taylor's stress model */
-fscanf(inputhandle,"%d",&nseg);
-/*printf("%d\n",nseg);*/
-if (nseg > 31) nseg=31;
-for (n=0;n < nseg;n++) {
-  fscanf(inputhandle,"%d %f",&ngain[n],&fdur[n]);
-/*  printf("%d %f\n",ngain[n],fdur[n]);*/
-  maxdur = MAX(maxdur,fdur[n]);
-  }
-fclose(inputhandle);
-/*printf("maxdur = %f\n",maxdur);*/
-segnum = time_num;
-segden = time_denom*nseg;
+ *val_num  += (int) (1000.0 * val +0.5);
+ *val_den = 1000; 
+ reduce(val_num,val_den);
 }
+
 
 static void dodeferred(s,noteson)
 /* handle package-specific command which has been held over to be */
@@ -1590,7 +1717,7 @@ int noteson;
 {
   char* p;
   char command[40];
-  char inputfile[64]; /* [SS] 2011-07-04 */
+  char inputfile[256]; /* [SS] 2011-07-04 */
   int done;
   int val;
 
@@ -1857,10 +1984,17 @@ int noteson;
   };
   if (strcmp(command,"ptstress") == 0) {  /* [SS] 2011-07-04 */
      skipspace(&p);
-     strncpy(inputfile,p,60);
-     printf("ptstress file = %s\n",inputfile);
-     readstressfile_simple (inputfile);
+     strncpy(inputfile,p,250);
+     if (verbose) printf("ptstress file = %s\n",inputfile);
+     if (parse_stress_params (inputfile) == -1) readstressfile (inputfile);
+     calculate_stress_parameters(); 
      done = 1;
+    }
+
+  if (strcmp(command,"stressmodel") == 0) { /* [SS] 2011-08-19 */
+    if (barflymode == 0) 
+        printf("**warning stressmodel is ignored without -BF runtime option\n");
+    done = 1;
     }
 
   if (done == 0) {

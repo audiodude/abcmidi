@@ -31,7 +31,7 @@
  * Wil Macaulay (wil@syndesis.com)
  */
 
-#define VERSION "2.65 August 3 2011"
+#define VERSION "2.70 September 07 2011"
 /* enables reading V: indication in header */
 #define XTEN1 1
 /*#define INFO_OCTAVE_DISABLED 1*/
@@ -76,6 +76,7 @@ extern char* strchr();
 extern void reduce();
 #endif
 /*int snprintf(char *str, size_t size, const char *format, ...);*/
+void load_stress_parameters(char *);
 
 
 #define MAXLINE 500
@@ -118,6 +119,8 @@ int separate_tracks_for_words = 0; /* [SS] 2010-02-02 */
 int bodystarted =0;
 int harpmode=0;  /* [JS] 2011-04-29 */
 int easyabcmode = 1; /* [SS] 2011-07-18 */
+int barflymode = 1; /* [SS] 2011-08-19 */
+char rhythmdesignator[32]; /* [SS] 2011-08-19 */
 
 struct voicecontext {
   /* maps of accidentals for each stave line */
@@ -185,6 +188,7 @@ int maxnotes;
 int *pitch, *num, *denom;
 int *bentpitch; /* needed for handling microtones */
 featuretype *feature;
+int *stressvelocity;  /* [SS] 2011-08-17 for Phil's stress model*/
 int *pitchline; /* introduced for handling ties */
 int notes;
 
@@ -274,8 +278,15 @@ void init_drum_map();
 static void fix_enclosed_note_lengths(int from, int end);
 static int patchup_chordtie(int chordstart,int chordend);
 static void copymap(struct voicecontext* v);
+void init_stresspat();
+void beat_modifier(int);
+void readstressfile (char * filename);
+int parse_stress_params();
+void calculate_stress_parameters();
 extern int inbody; /* from parseabc.c [SS] 2009-12-18 */
 extern int lineposition; /* from parseabc.c [SS] 2011-07-18 */
+extern int beatmodel; /* from genmidi.c [SS] 2011-08-26 */
+int stressmodel;
 
 
 static struct voicecontext* newvoice(n)
@@ -586,11 +597,11 @@ static void setup_chordnames()
 
 void event_init(argc, argv, filename)
 /* this routine is called first by parseabc.c */
-int argc;
 char* argv[];
 char **filename;
 {
   int j;
+  int arg,m,n;
 
   /* look for code checking option */
   if (getarg("-c", argc, argv) != -1) {
@@ -606,9 +617,13 @@ char **filename;
     namelimit = 8;
   };
   /* look for verbose option */
-  if (getarg("-v", argc, argv) != -1) {
-    verbose = 1;
-  } else {
+  arg = getarg("-v", argc, argv);
+  if (arg != -1) {  /* [SS] 2011-08-26 */
+    if (argc > arg) {
+      n = sscanf(argv[arg],"%d",&m);
+      if (n > 0) verbose = m; }
+      else verbose = 1; /* arg != -1 but arg == argc */
+    } else {  /* arg =  -1 */
     verbose = 0;
   };
   if (getarg("-ver",argc, argv) != -1) {
@@ -659,6 +674,19 @@ char **filename;
     easyabcmode = 0;
   }
 
+  arg = getarg("-BF",argc,argv);
+  if (arg != -1)  {  /* [SS] 2011-08-26 */
+    barflymode = 1;
+    if (argc > arg) {
+      n = sscanf(argv[arg],"%d",&m);
+      if (n > 0) stressmodel = m;
+      } else stressmodel = 2;
+    } else {
+    barflymode = 0;
+    stressmodel = 0;
+  }
+
+
 
   if (getarg("-OCC",argc,argv) != -1) oldchordconvention=1;
 
@@ -667,6 +695,7 @@ char **filename;
   pitch = checkmalloc(maxnotes*sizeof(int));
   num = checkmalloc(maxnotes*sizeof(int));
   denom = checkmalloc(maxnotes*sizeof(int));
+  stressvelocity = checkmalloc(maxnotes*sizeof(int)); /* [SS] 2011-08-17 */
   bentpitch = checkmalloc(maxnotes*sizeof(int));
   feature = (featuretype*) checkmalloc(maxnotes*sizeof(featuretype));
   pitchline = checkmalloc(maxnotes*sizeof(int));
@@ -696,6 +725,7 @@ char **filename;
     printf("        -NGRA ignore grace notes\n");
     printf("        -STFW separate tracks for words (lyrics)\n");
     printf("        -HARP ornaments=roll for harpist (same pitch)\n"); /* [JS] 2011-04-29 */
+    printf("        -BF Barfly mode: invokes a stress model if possible\n");
     printf("        -OCC old chord convention (eg. +CE+)\n");
     printf(" The default action is to write a MIDI file for each abc tune\n");
     printf(" with the filename <stem>N.mid, where <stem> is the filestem\n");
@@ -773,6 +803,8 @@ outbase = addstring(argv[1]); /* [RM] 2010-11-21 */
   dotune = 0;
   parseroff();
   setup_chordnames();
+  
+  if (barflymode) init_stresspat();  /* [SS] 2011-08-18 */
 }
 
 void event_text(s)
@@ -1140,7 +1172,7 @@ int maxnotes;
   featuretype *fptr;
   int i;
 
-  if (verbose) {
+  if (verbose > 2) {
     event_warning("Extending note capacity");
   };
   newlimit = maxnotes*2;
@@ -1170,12 +1202,21 @@ int maxnotes;
   };
   free(num);
   num = ptr;
+
   ptr = checkmalloc(newlimit*sizeof(int));
   for(i=0;i<maxnotes;i++){
     ptr[i] = denom[i];
   };
   free(denom);
   denom = ptr;
+
+/* [SS] 2011-08-17 */
+  ptr = checkmalloc(newlimit*sizeof(int));
+  for(i=0;i<maxnotes;i++){
+    ptr[i] = stressvelocity[i];
+  };
+  free(stressvelocity);
+  stressvelocity = ptr;
   return(newlimit);
 }
 
@@ -1189,7 +1230,7 @@ char*** stringarray;
   char** ptr;
 
   newlimit = maxstrings*2;
-  if (verbose) {
+  if (verbose > 2) {
     event_warning("Extending text capacity");
   };
   ptr = (char**) checkmalloc(newlimit*sizeof(char*));
@@ -1879,12 +1920,13 @@ char *f;
       break;
     case 'R':
       {
-        char* p;
-
+        char* p; 
         p = f;
+        strncpy(rhythmdesignator,f,32); /* [SS] 2011-08-19 */
         skipspace(&p);
-        if ((strncmp(p, "Hornpipe", 8) == 0) ||
-            (strncmp(p, "hornpipe", 8) == 0)) {
+        if (((strncmp(p, "Hornpipe", 8) == 0) ||
+            (strncmp(p, "hornpipe", 8) == 0)) &&
+             barflymode ==0) {   /* [SS] 2011-08-19 */
           hornpipe = 1;
         };
       };
@@ -4190,6 +4232,163 @@ static void fixreps()
 }
 
 
+/* Barfly stress model support functions */
+
+extern int segnum,segden; /* from genmidi.c */
+extern int ngain[32];
+extern int beatmodel;
+/* [SS] 2011-08-17 */
+void fdursum_at_segment(int segposnum, int segposden, int *val_num, int *val_den);
+
+/* [SS] 2011-08-17 */
+void beat_modifier (int i)
+/* modifies the note durations inside a beat using Phil Taylor's model */
+{
+  int start_num,start_denom,startseg_num,startseg_denom;
+  int segnumber;
+  int end_num,end_denom,endseg_num,endseg_denom;
+  int mstart_num,mstart_denom,mend_num,mend_denom;
+  int delta_num,delta_denom;
+/* start_num/start_denom is the original position of the note onset
+ * end_num/end_denom is the original position of the end of the note
+ * mstart_num/mstart_denom is the modified position of the note onset
+ * mend_num/mend_denom is the modified position of the note end
+ * startseg_num/startseg_denom is the position of the note onset in
+ * segment units. eg. if a note starts in the middle of segment 1,
+ * its value would be 3/2 (assuming we are counting from 0).
+ */
+  int inchord,notecount;
+  notecount=0;
+  inchord = 0;
+  start_num=0;
+  start_denom = 1;
+  end_num=start_num;
+  end_denom = start_denom;
+  i++;
+  while (feature[i] != SINGLE_BAR) {
+    if (feature[i] == DOUBLE_BAR ||
+        feature[i] == BAR_REP ||
+        feature[i] == DOUBLE_REP ||
+        feature[i] == REP_BAR) break;
+    if (feature[i] == CHORDON) {
+                               inchord = 1;
+                               notecount = 0;
+                               i++;
+                               continue;
+                               }
+    if (feature[i] == CHORDOFF ||
+        feature[i] == CHORDOFFEX) {
+                               inchord = 0;
+                               notecount = 0;
+                               start_num = end_num;
+                               start_denom = end_denom;
+                               i++;
+                               continue;
+                               }
+    if (feature[i] == NOTE || feature[i] == TNOTE ||
+        (feature[i] == REST && pitch[i] ==0)) {
+/* Care is needed for tied notes; they appear as TNOTE followed by*/
+/* two REST. We want to ignore those two rests.*/
+/* if REST and pitch[i] != 0 it is a tied note converted to a rest */
+/* Hopefully we do not encounter tied rests. */
+       if (notecount == 0) {
+         addfract(&end_num,&end_denom,num[i],denom[i]);
+         reduce(&end_num, &end_denom);
+   /* Convert note positions to where they would map to after applying
+      the duration modifiers. We map the positions to segment units and then
+      transform them back to note units using the modified space fdursum.
+      Since all units of time are represented as fractions, the operations
+      are less transparent.
+   */
+   /* divide start_num/start_denom by segnum/segden */
+   /* (divide note duration by 4 because they are 4 times larger in num/denom*/
+         startseg_num = start_num*segden;
+         startseg_denom = start_denom*segnum*4;
+         reduce(&startseg_num,&startseg_denom);
+   /* repeat for end_num and end_denom; */
+         endseg_num = end_num*segden;
+         endseg_denom = end_denom*segnum*4;
+         reduce(&endseg_num,&endseg_denom);
+         fdursum_at_segment(startseg_num,startseg_denom, &mstart_num, &mstart_denom);
+         fdursum_at_segment(endseg_num,endseg_denom, &mend_num, &mend_denom);
+   /*  now compute the new note length */
+         delta_num = mend_num;
+         delta_denom = mend_denom;
+         addfract(&delta_num,&delta_denom,-mstart_num,mstart_denom);
+         reduce(&delta_num,&delta_denom);
+         if (inchord) notecount++;
+         }
+       if (verbose > 1) {
+       printf("pitch %d from = %d/%d (%d/%d) to %d/%d (%d/%d) becomes %d/%d %d/%d",pitch[i],
+start_num,start_denom,startseg_num,startseg_denom,end_num,end_denom,
+endseg_num,endseg_denom,mstart_num,mstart_denom,mend_num,mend_denom);
+       printf(" - %d/%d\n",delta_num,delta_denom);
+       }
+       num[i] = delta_num; 
+       denom[i] = delta_denom;
+       segnumber = startseg_num/startseg_denom; /* [SS] 2011-08-17 */
+       stressvelocity[i] = ngain[segnumber];
+         
+       if (notecount == 0) {start_num = end_num;
+                            start_denom = end_denom;}
+       if (feature[i] == TNOTE) i++; /*skip following rest */
+       }
+    i++;
+    }
+}
+
+/* [SS] 2011-08-24 */
+static void apply_bf_stress_factors () {
+  int j;
+  char command[40];
+  char inputfile[64];
+  char *p;
+  int barnumber;
+  load_stress_parameters(rhythmdesignator);
+  if (verbose)
+  printf("beat_modifer using segment size %d/%d\n",segnum,segden);
+  j = 0;
+  barnumber = 0;
+  while (j < notes) {
+   switch(feature[j]) {
+    case SINGLE_BAR:           /*  |  */
+    case DOUBLE_BAR:           /*  || */
+    case BAR_REP:              /*  |: */
+    case REP_BAR:              /*  :| */
+    case DOUBLE_REP:           /*  :: */
+      barnumber++;
+      if (verbose>1) printf("bar %d\n",barnumber);
+      if (beatmodel == 2) beat_modifier(j);
+    break;
+    case DYNAMIC:
+       p = atext[pitch[j]];
+       skipspace(&p);
+       readstr(command, &p, 40);
+       if (strcmp(command, "stressmodel") == 0) {
+          skipspace(&p);
+          beatmodel = readnump(&p); /* [SS] 2011-08-23 */
+          stressmodel=beatmodel;
+          if (verbose) printf("%s %d\n",command,beatmodel);
+          if (beatmodel == 1)
+             return; /* do not apply beat_modifier */
+         }
+       if (strcmp(command, "ptstress") == 0) {
+          skipspace(&p);
+          strncpy(inputfile,p,60);
+          if (verbose) printf("ptstress file = %s\n",inputfile);
+          if (parse_stress_params (inputfile) == -1) readstressfile (inputfile);
+          calculate_stress_parameters();
+         }
+       break;
+    default:
+      break;
+    }
+  j = j+1;
+  }
+}
+
+
+
 static void startfile()
 /* called at the beginning of an abc tune by event_refno */
 /* This sets up all the default values */
@@ -4479,19 +4678,20 @@ static void finishfile()
     if (headerpartlabel == 1) {
       event_error("P: field in header should go after K: field");
     };
-    if (verbose) {
+    if (verbose > 1) {
       printf("handling grace notes\n");
     };
     dograce();
     tiefix();
     if ((parts == -1) && (voicecount == 1)) {
-      if (verbose) {
+      if (verbose > 1) {
         printf("fixing repeats\n");
       };
       fixreps();
     };
 
-
+    if (barflymode) apply_bf_stress_factors (); /* [SS] 2011-08-24 */ 
+ 
 
     if (check) {
       Mf_putc = nullputc;

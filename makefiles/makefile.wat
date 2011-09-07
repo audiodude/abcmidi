@@ -29,9 +29,9 @@ LNK=wlink
 
 all : abc2midi.exe midi2abc.exe abc2abc.exe mftext.exe yaps.exe midicopy.exe abcmatch.exe
 
-abc2midi.exe : parseabc.obj store.obj genmidi.obj queues.obj midifile.obj parser2.obj
+abc2midi.exe : parseabc.obj store.obj genmidi.obj queues.obj midifile.obj parser2.obj stresspat.obj
 	$(LNK) $(LDFLAGS) abc2midi.exe $(LDFLAGS2) FILE parseabc.obj FILE genmidi.obj FILE store.obj \
-	FILE queues.obj FILE midifile.obj FILE parser2.obj 
+	FILE queues.obj FILE midifile.obj FILE parser2.obj FILE stresspat.obj
 
 abc2abc.exe : parseabc.obj toabc.obj
 	$(LNK) $(LDFLAGS) abc2abc.exe $(LDFLAGS2) FILE parseabc.obj FILE toabc.obj 
@@ -73,6 +73,9 @@ store.obj : store.c abc.h parseabc.h parser2.h genmidi.h
 
 genmidi.obj : genmidi.c abc.h midifile.h genmidi.h
 	$(CC) $(CFLAGS) genmidi.c 
+
+stresspat.obj : stresspat.c
+	$(CC) $(CFLAGS) stresspat.c
 
 # could use -DNOFTELL here
 tomidi.obj : tomidi.c abc.h midifile.h

@@ -90,6 +90,7 @@ int decorators_passback[DECSIZE];
 char inputline[256]; /* [SS] 2011-06-07 */
 char * linestart; /* [SS] 2011-07-18 */
 int lineposition; /* [SS] 2011-07-18 */
+char timesigstring[16]; /* [SS] 2011-08-19 links with stresspat.c */
 
 int nokey=0;  /* K: none was encountered */
 int chord_n,chord_m ; /* for event_chordoff */
@@ -1535,6 +1536,7 @@ char* field;
     {
       int num, denom;
 
+      strncpy(timesigstring,place,16); /* [SS] 2011-08-19 */
       if (strncmp(place, "none", 4) == 0) {
         event_timesig(4, 4, 0);
       } else {

@@ -46,9 +46,9 @@ mandir=share/man/man1
 
 all : abc2midi midi2abc abc2abc mftext yaps midicopy abcmatch
 
-abc2midi : parseabc.o store.o genmidi.o midifile.o queues.o parser2.o
+abc2midi : parseabc.o store.o genmidi.o midifile.o queues.o parser2.o stresspat.o
 	$(LNK) -o abc2midi parseabc.o store.o genmidi.o queues.o \
-	parser2.o midifile.o
+	parser2.o midifile.o stresspat.o
 
 abc2abc : parseabc.o toabc.o
 	$(LNK) -o abc2abc parseabc.o toabc.o

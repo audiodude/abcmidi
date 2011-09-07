@@ -7913,7 +7913,7 @@ body. A new function print_inputline_nolinefeed() was needed
 in parseabc.c.
 
 
-July 4 2011
+July 4 2011  -- also see August 17 2011
 
 Abc2midi new feature. The Phil Taylor stress algorithm has been
 implemented in abc2midi on an experimental basis. This algorithm
@@ -7930,7 +7930,6 @@ using the MIDI command
 %%MIDI ptstress hornpipe.txt
 
 where hornpipe.txt is some file resembling
-
 
 8
 110 1.4
@@ -8115,4 +8114,214 @@ The address of the Free Software Foundation was changed from
 in the sources drawtune.c, genmidi.c, matchsup.c, midi2abc.c
 parseabc.c, position.c, pslib.c, queues.c, store.c, toabc.c
 and yapstree.c
+
+
+August 17 2011 to August 27 2011
+
+More work was done on the Phil Taylor stress models during
+this period of time and there are now two versions of the
+model. To use these models you must include the -BF runtime
+parameter in the execution string. For example,
+
+abc2midi myfile.abc -BF
+
+You may follow -BF with either the numerals 1 or 2 which specifies
+the stress model version to use. Model 2 is more similar to the
+one used in Barfly and is the current default. Alternatively
+you may include the MIDI directive.
+
+%%MIDI stressmodel 1
+
+Nevertheless, you must still include the -BF runtime parameter
+in the execution string for either model to be effective.
+
+The stress model descriptors corresponding to the different rhythm designators,
+(eg. Reel, jig, hornpipe, and etc.) are built into the code, so
+there is no need to reference an external file; however, this is
+still permitted using the %%MIDI ptstress directive described
+in July 4 2011. 
+
+Implementation:
+
+More code was added in the files store.c, genmidi.c and a
+new file stresspat.c. The implementations of the two models
+are very different. Model 2, requires a separate pass to be
+performed through the internal abc representation (feature, num,
+denom,...) prior to writing the MIDI file. This pass is 
+is performed by a new function called apply_bf_stress_factors()
+in store.c which is called after other passes such as
+scan_for_missing_repeats(), tiefix(), and dograce(). During
+this pass, the note durations in the num[] and denom[] arrays
+are modified by means of a new function in genmidi.c called
+beat_modifier(). The functions changes these values for NOTE,
+TNOTE and REST features.  Beat_modifier() is called
+whenever a bar line is encountered. It scans all the notes and
+rests up to the next bar line and changes their durations.
+
+A new global array fdursum[] derived from fdur[] was introduced in
+order to modify the note durations. The functions readstressfile_simple()
+and readstressfile() were modified to initialize fdursum as well
+as other new globals segnum/segden which specifies the size of a
+segment. (The function readstressfile() was based on original
+format of Phil Taylor's stress file and is not used. It may be
+removed in future versions of the software.)
+
+Conversions of the note durations is done in beat_modifier() by
+first computing the actual positions of the notes in the bar based
+on all the offsets stored in the num[],denom[] arrays.
+The positions are remapped into the new space and the note offsets
+in the num[] and denom arrays are replaced. Special care was
+required to handle chords (notes enclosed by CHORDON, CHORDOFF,
+and CHORDOFFEX features) and tied notes (TNOTES). (Note that
+it is possible for a tied note to extend across a bar line.)
+
+(For reference tied notes are initially represented as 
+NOTE TIE NOTE etc. The function tiefix() changes this representation,
+to TNOTE REST REST. (It was desirable not to change the durations
+of the two following REST features for some reason.) (I do not
+know what will happen when tied notes occur inside chords and
+I do not want to have to find out.)
+
+The implementation was also complicated by the fact that all
+durations are represented by fractions rather than decimal numbers.
+Thus all arithmetic was done using fractions.
+
+Note velocities are recorded at the time that the notes are written
+to the MIDI file (see noteon()) through the intermediary function
+stress_factors() in genmidi.c. In order to pass the stress modulated
+note velocity it was necessary to introduce another global array
+handled like feature[], pitch[], etc. which is called stressvelocity[].
+The function beat_modifier puts the segment number based velocity,
+into stressvelocity[] which is pulled out at a later time by
+stress_factors() for beatmodel == 2. The original function
+stress_factors() was renamed to articulated_stress_factors()
+which now handles beatmodel == 1. 
+
+If you run the abc2midi with runtime parameter -v (for verbosity),
+you can see how the program operates.
+
+ 
+Implementation: to avoid any problems with finding and opening files
+in different operating systems, the BarFly stress model descriptors
+for the different rhythms are stored internally
+in array structs stresspat[]. These arrays are defined in a new
+C file called stresspat.c which is now linked with abc2midi.
+The file defines two functions, init_stresspat() and 
+load_stress_parameters(). Init_stresspat() initializes the stresspat[]
+arrays. Load_stress_parameters() identifies the appropriate stress
+pattern from the rhythm designator and meter, and places the required
+information in the external variables segnum, segden, nseg, ngain,
+maxdur, fdursum and beatmodel.
+
+Parseabc.c was modified to save the contents of the M: command
+as a char timesigstring[] which is passed to stresspat.c as an
+external. This allows handling time signatures such as C|.
+
+A new flag, barflymode which is set by the -BF runtime parameter
+was introduced in store.c. A new global char rhythmdesignator[32]
+was added in store.c which is set in event_field when the R: field
+is processed.
+
+If barflymode is set, event_field() in store.c will not set
+the hornpipe flag which converts sequences of eighth notes into
+broken notes.
+
+The Makefile.in and makefile were modified to include stresspat.c.
+
+i.e.
+
+OBJECTS_ABC2MIDI=parseabc.o store.o genmidi.o midifile.o queues.o parser2.o stresspat.o
+
+and
+
+stresspat.o :   stresspat.c
+
+August 26 2011
+Abc2midi: the -v option (verbose) accepts a number indicating the
+level of verbosity. If a number does not follow, the verbosity is set to 1.
+
+Abc2midi: the -BF option (barflymode) accepts a number which indicates
+the stress model to use. If none is supplied, it uses model 2.
+
+
+September 06 2011
+
+Abc2midi bug: for the following tune,
+
+X: 2
+T:test2
+M:4/4
+L:1/4
+%R:hornpipe
+K:G
+%%MIDI ptstress hornpipe.txt
+V:1
+c B A G| c/B/A/B/ A G|
+V:2
+z/C,/ z/C,/ z/C,/ z/C,/ | z/C,/ z/C,/ z/C,/ z/C,/ |
+
+when the file is run without the -BF run time parameter the
+MIDI file created is silent. All the notes are
+assigned a velocity (loudness) of 0.
+
+Analysis: the %%MIDI ptstress directive sets the beatmodel control
+variable to 2 indicating that stress adjustments should be made.
+Because the -BF was not present, the %%MIDI ptstress directive
+is processed too late and the function apply_bf_stress_factors()
+was not run prior to writetrack. However, stress_factors () is
+still called to adjust the note velocities using the information
+in stressvelocity array. But the stressvelocity array contains only
+zero's. 
+
+Fix: in the function noteon in genmidi.c, we call note_beat()
+in case stress_factors() returns a zero velocity.
+
+Note: that if the file is executed with the -BF flag, the notes
+in the first bar still have a zero loudness because the first bar
+does not begin with a bar line and beat_modifier was never called
+for that bar. However, the above file exposes another bug.
+
+
+Abc2midi bug: for the preceding tune, when abc2midi is called with
+the -BF parameter, the first G in voice 1 is held too long causing
+a loss of synchronization with the second voice.
+
+Analysis: the function fdursum_at_segment returns the wrong values
+for val_num/val_den because the value of fdursum[nseg] was incorrect.
+
+Fix: in readstressfile_simple() I replaced the lines
+if (fdursum[nseg] != (float) nseg) fdursum[nseg] = (float) nseg;
+
+with
+
+lastsegvalue = (float) nseg * (float) qnoteden / (float) qnotenum;
+/* ensure fdursum[nseg] = lastsegvalue [SS] 2011-09-06 */
+if (fdursum[nseg] != lastsegvalue) fdursum[nseg] = lastsegvalue;
+ 
+
+
+September 07 2011
+
+Abc2midi no feature:
+
+The %%MIDI ptstress directive now also accepts the ptstress directly. For example,
+
+%%MIDI ptstress 4 100 1.3 60 0.7 100 1.3 60 0.7
+
+instead of 
+
+%%MIDI ptstress test.txt
+
+where test.txt is
+
+4
+100 1.3
+60 0.7
+100 1.3
+60 0.7
+
+You can still, pass a path to a file. If it cannot parse the MIDI
+command as stress parameters then it will assume a file name is
+being passed.
+
 

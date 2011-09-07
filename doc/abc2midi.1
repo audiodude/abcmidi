@@ -1,8 +1,8 @@
-.TH ABC2MIDI 1 "3 February 2010"
+.TH ABC2MIDI 1 "27 August 2011"
 .SH NAME
 \fBabc2midi\fP \- converts abc file to MIDI file(s)
 .SH SYNOPSIS
-abc2midi \fIinfile\fP [\fIrefnum\fP] [-c] [-v] [-ver] [-t] [-n limit] [-RS] [-quiet] [-Q tempo] [-NFNP] [-NFER] [-NGRA] [-STFW] [-OCC] [-NCOM] [-HARP] [-o outfile]
+abc2midi \fIinfile\fP [\fIrefnum\fP] [-c] [-v] [-ver] [-t] [-n limit] [-RS] [-quiet] [-Q tempo] [-NFNP] [-NFER] [-NGRA] [-STFW] [-OCC] [-NCOM] [-HARP] [-BF] [-o outfile]
 .SH DESCRIPTION
  The default action is to write a MIDI file for each abc tune
  with the filename <stem>N.mid, where <stem> is the filestem
@@ -18,8 +18,8 @@ process the tune with reference number \fIrefnum\fP
 .B -c
 selects checking only
 .TP
-.B -v
-selects verbose option
+.B -v n
+selects verbose option where n is the level (optional)
 .TP
 .B -ver
 prints version number and exits
@@ -58,6 +58,9 @@ Suppress some comments in the output MIDI file.
 .B -OCC
 Accept old chord convention (eg +D2G2+ instead of [DG]2).
 .TP
+.B -BF
+BarFly mode: invokes a stress model if possible.
+.TP
 .B -HARP
 Roll ornaments=roll are generated for the harpist (same pitch)
 .TP
@@ -65,7 +68,7 @@ Roll ornaments=roll are generated for the harpist (same pitch)
 write output to \fIoutfile\fP
 .SH FEATURES
 .PP
-* Broken rythms (>, <), chords, n-tuples, slurring, ties, staccatto notes,
+* Broken rhythms (>, <), chords, n-tuples, slurring, ties, staccatto notes,
 repeats, in-tune tempo/length/time signature changes are all supported.
 .PP
 * R:hornpipe or r:hornpipe is recognized and note timings are adjusted to
@@ -456,9 +459,17 @@ where it applies these stress parameters on every note. This
 model runs in opposition to the standard beat model, so the
 MIDI beat, beatstring, beatmod commands become ineffectual.
 This also means that the dynamic indications !f! !pp! etc.
-do not work any more. Furthermore, the stress model takes
+do not work any more.
+.PP
+There are two different implementations of the stress model.
+Model 1 modifies the note articulation and takes
 control of the MIDI trim parameters too. To revert back to
 the standard model, put the command %%MIDI beataccents.
+Model 2 modifies both the onset and ending of each note
+allowing a musical beat to expand or contract in time. However,
+the length of a musical measure should be preserved. Note
+if you using model 2, which the current default, you must
+include -BF as one of the runtime parameters of abc2midi.
 .PP
 The model divides a bar into equal segments. For each segment,
 a loudness or MIDI velocity is specified and a duration multiplier
@@ -478,10 +489,10 @@ preserves the regular tempo of the music. The program scales,
 the note duration indications by dividing it by the maximum
 value which here is 1.4.
 
+.PP
+%%MIDI stressmodel n
 
-
-
-
+where n is either 1 or 2, selects the stress model implementation.
 
 
 

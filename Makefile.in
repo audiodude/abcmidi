@@ -57,7 +57,7 @@ binaries=abc2midi midi2abc abc2abc mftext yaps midicopy abcmatch
 
 all : abc2midi midi2abc abc2abc mftext yaps midicopy abcmatch
 
-OBJECTS_ABC2MIDI=parseabc.o store.o genmidi.o midifile.o queues.o parser2.o
+OBJECTS_ABC2MIDI=parseabc.o store.o genmidi.o midifile.o queues.o parser2.o stresspat.o
 abc2midi : $(OBJECTS_ABC2MIDI)
 	$(CC) $(CFLAGS) -o abc2midi $(OBJECTS_ABC2MIDI) $(LDFLAGS)
 $(OBJECTS_ABC2MIDI): abc.h parseabc.h config.h Makefile
@@ -100,6 +100,8 @@ toabc.o : toabc.c abc.h parseabc.h
 
 # could use -DNOFTELL here
 genmidi.o : genmidi.c abc.h midifile.h genmidi.h
+
+stresspat.o :	stresspat.c
 
 store.o : store.c abc.h parseabc.h midifile.h genmidi.h
 

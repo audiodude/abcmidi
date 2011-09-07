@@ -677,6 +677,18 @@ C4 E4 | C4 B,4 | C8  |]
 w: 11 12 13 14 15
 
 
+BarFly stress models
+--------------------
+
+If you include the run time parameter -BF in execution string, abc2midi
+will attempt to apply the BarFly stress model on the tune if it
+recognizes the rhythm designator (eg. R: jig) and if the time signature
+also matches the associated meter. There are two different implementations
+of the stress model which have different effects. (See %%MIDI ptstress
+below for more details.) You can specify the implementation to use by
+following the -BF flag with either the numeral 1 or 2. If you do not
+specify a model, the program will use model 2. More details can
+be found on http://ifdo.ca/~seymour/runabc/abcguide/abc2midi_guide.html
 
 
 abc2midi-specific commands (%%MIDI)
@@ -1269,7 +1281,8 @@ assignment (musical instrument) to the other chordchannels,
 so be sure you set the program before using this command.
 If you need to change the program assignments, you can
 find out the channel numbers that were assigned by running
-abc2midi in verbose mode using the -v command. 
+abc2midi in verbose mode using the -v command in the
+execution string. 
 
 
 %%MIDI ptstress filename
@@ -1280,9 +1293,17 @@ where it applies these stress parameters on every note. This
 model runs in opposition to the standard beat model, so the
 MIDI beat, beatstring, beatmod commands become ineffectual.
 This also means that the dynamic indications !f! !pp! etc.
-do not work any more. Furthermore, the stress model takes
+do not work any more.
+
+There are two different implementations of the stress model.
+Model 1 modifies the note articulation and takes
 control of the MIDI trim parameters too. To revert back to
 the standard model, put the command %%MIDI beataccents.
+Model 2 modifies both the onset and ending of each note
+allowing a musical beat to expand or contract in time. However,
+the length of a musical measure should be preserved. Note
+if you using model 2, which the current default, you must
+include -BF as one of the runtime parameters of abc2midi.
 
 The model divides a bar into equal segments. For each segment,
 a loudness or MIDI velocity is specified and a duration multiplier
@@ -1314,6 +1335,10 @@ preserves the regular tempo of the music. The program scales,
 the note duration indications by dividing it by the maximum
 value which here is 1.4.
 
+
+%%MIDI stressmodel n
+
+where n is either 1 or 2, selects the stress model implementation.
 
 
 Global settings for abc2midi
