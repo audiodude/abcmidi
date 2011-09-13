@@ -31,7 +31,7 @@
  * Wil Macaulay (wil@syndesis.com)
  */
 
-#define VERSION "2.70 September 07 2011"
+#define VERSION "2.73 September 13 2011"
 /* enables reading V: indication in header */
 #define XTEN1 1
 /*#define INFO_OCTAVE_DISABLED 1*/
@@ -3603,6 +3603,7 @@ int j, xinchord,voiceno;
         case SINGLE_BAR:
         case BAR_REP:
         case REP_BAR:
+        case DOUBLE_BAR: /* [SS] 2011-09-13 */
           if (tietodo) newbar = 1;
           else newbar=0;
           break; 
@@ -4378,6 +4379,8 @@ static void apply_bf_stress_factors () {
           if (verbose) printf("ptstress file = %s\n",inputfile);
           if (parse_stress_params (inputfile) == -1) readstressfile (inputfile);
           calculate_stress_parameters();
+          beatmodel = 2;
+          if (stressmodel !=0 && beatmodel != stressmodel) beatmodel = stressmodel;
          }
        break;
     default:

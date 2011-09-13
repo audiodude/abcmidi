@@ -1666,9 +1666,6 @@ for (n=0;n<nseg+1;n++) {
   }
   if (verbose > 1) printf(" == fdursum\n");
 /*printf("maxdur = %f\n",maxdur);*/
-if (stressmodel) beatmodel=stressmodel;
-else
-beatmodel = 2;
 /*if (fdursum[nseg] != (float) nseg) fdursum[nseg] = (float) nseg; [SS] 2011-09-06 */
 lastsegvalue = (float) nseg * (float) qnoteden / (float) qnotenum;
 /* ensure fdursum[nseg] = lastsegvalue [SS] 2011-09-06 */
@@ -1989,6 +1986,8 @@ int noteson;
      if (parse_stress_params (inputfile) == -1) readstressfile (inputfile);
      calculate_stress_parameters(); 
      done = 1;
+     beatmodel = 1;
+     if (stressmodel && beatmodel != stressmodel) beatmodel=stressmodel;
     }
 
   if (strcmp(command,"stressmodel") == 0) { /* [SS] 2011-08-19 */

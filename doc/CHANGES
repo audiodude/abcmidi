@@ -8325,3 +8325,31 @@ command as stress parameters then it will assume a file name is
 being passed.
 
 
+September 13 2011
+
+Abc2midi fails to tie notes separated by a double bar line.
+For example:
+
+X:1
+T: tie test
+M: 2/4
+L: 1/8
+K: G
+d2 g[_c_e]/-||[c2e2] g2|
+
+the message was returned
+
+Error in line 6 : Could not find note to be tied
+Error in line 6 : Could not find note to be tied
+
+Fix:
+
+In dotie() in store.c a new condition was added to the switch structure,
+
+ switch (feature[place]) {
+        case SINGLE_BAR:
+        case BAR_REP:
+        case REP_BAR:
+        case DOUBLE_BAR: /* [SS] 2011-09-13 */
+
+      
