@@ -86,7 +86,9 @@ COPYRIGHT,
 COMPOSER,
 ARPEGGIO,
 SPLITVOICE,
-META
+META,
+PEDAL_ON,
+PEDAL_OFF,
 } featuretype;
 
 /* note decorations */

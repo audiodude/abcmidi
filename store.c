@@ -31,7 +31,7 @@
  * Wil Macaulay (wil@syndesis.com)
  */
 
-#define VERSION "2.73 September 13 2011"
+#define VERSION "2.74 October 12 2011"
 /* enables reading V: indication in header */
 #define XTEN1 1
 /*#define INFO_OCTAVE_DISABLED 1*/
@@ -3427,6 +3427,18 @@ if (nofnop == 0) {
 
   if (strcmp(p, "arpeggio") == 0) {
     addfeature(ARPEGGIO, 0, 0, 0);
+    done = 1;
+  };
+
+/* [SS] 2011-10-19 */
+  if (strcmp(p, "ped") == 0) {
+    addfeature(PEDAL_ON, 0, 0, 0);
+    done = 1;
+  };
+
+/* [SS] 2011-10-19 */
+  if (strcmp(p, "ped-end") == 0) {
+    addfeature(PEDAL_OFF, 0, 0, 0);
     done = 1;
   };
 

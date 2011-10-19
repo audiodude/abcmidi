@@ -8353,3 +8353,36 @@ In dotie() in store.c a new condition was added to the switch structure,
         case DOUBLE_BAR: /* [SS] 2011-09-13 */
 
       
+
+October 19 2011
+
+Abc2midi new feature: sustain pedal. One of the pedals on the piano sustains
+a note after the piano key is released. Two new instructions +ped+ and
++ped-end+ or !ped! and !ped-end! using the old instruction notation were
+introduced. In the following example,
+
+X:1
+T:Ped in pianomusic
+M:C
+L:1/8
+K:C treble
+K: clef=bass
+Q:1/4=60
+%%MIDI program 70
++ped+G,A,B,C+ped-end+DE|
+
+the notes, G,A,B,C were sustained. Though the bassoon does not
+have a sustain pedal, the scale is played on that instrument to
+make the effect more obvious.
+
+Implementation: the sustain is accomplished using the MIDI controller
+64. The ped and ped-end instructions are detected in
+event_handle_instructions() in store.c. They in insert PEDAL_ON and
+PEDAL_OFF in the feature() array. Two new functions pedal_on() and
+pedal_off() which handle the PEDAL_ON and PEDAL_OFF features are
+introduced in genmidi.c. abc.h was updated to included the PEDAL_ON
+and PEDAL_OFF features.
+
+
+
+

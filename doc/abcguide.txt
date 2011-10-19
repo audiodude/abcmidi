@@ -422,7 +422,9 @@ Rhythm field and Broken Rhythm Notation
 ---------------------------------------
 
 R:hornpipe causes notes written in straight time to be played in dotted 
-time. The symbol > can be used to achieve a similar effect.
+time. The symbol > can be used to achieve a similar effect. For 4/4
+time this is applied to the 1/8 notes. For 2/4 time this is applied
+to the 1/16 notes.
 
 a>b is notated as a3/2b/2 but played as a4/3b2/3.
 
@@ -515,6 +517,10 @@ and %%MIDI deltaloudness for more information.)
 The !diminuendo(! and !diminuendo)! behave similarly but
 reduce the loudness. These instructions have not been
 implemented in yaps.
+
+!ped! and !ped-end! press and release the sustain pedal on
+the piano. (The notes following !ped! and preceding !ped-end! are
+held. This effect applies to all instruments besides the piano.)
 
 A line of music may contain any number of notes, barlines and guitar
 chords. Spaces may be used to separate these.

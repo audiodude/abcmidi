@@ -2430,6 +2430,24 @@ void easyabc_interface (int j) {
             write_event(control_change, 0, data, 2);
         }
 
+
+/* [SS] 2011-10-19 */
+void pedal_on() {
+char data[4];
+data[0] = 64;
+data[1] = 127;
+write_event(control_change, channel, data, 2);
+}
+
+/* [SS] 2011-10-19 */
+void pedal_off() {
+char data[4];
+data[0] = 64;
+data[1] = 0;
+write_event(control_change, channel, data, 2);
+}
+
+
 long writetrack(xtrack)
 /* this routine writes a MIDI track  */
 int xtrack;
@@ -3005,11 +3023,19 @@ int xtrack;
        if (trim_num > 0) trim = 1;
        else trim = 0;
        break;
-    case META:    /* [SS] 2011-07-2011 */
+    case META:    /* [SS] 2011-07-18 */
        if (pitch[j] == 0 && noteson==1)  {
             /*printf("linenum = %d charpos = %d\n",num[j],denom[j]);*/
             easyabc_interface(j);
           }
+    case PEDAL_ON: /* [SS] 2011-10-19 */
+       pedal_on();
+       break;
+
+    case PEDAL_OFF: /* [SS] 2011-10-19 */
+       pedal_off();
+       break;
+    
     default:
       break;
     };
@@ -3053,7 +3079,7 @@ char *featname[] = {
 "INSTRUCTION", "NOBEAM", "CHORDNOTE", "CLEF",
 "PRINTLINE", "NEWPAGE", "LEFT_TEXT", "CENTRE_TEXT",
 "VSKIP", "COPYRIGHT", "COMPOSER", "ARPEGGIO",
-"SPLITVOICE", "META"
+"SPLITVOICE", "META", "PEDAL_ON", "PEDAL_OFF"
 }; 
 
 void dumpfeat (int from, int to)
