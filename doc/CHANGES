@@ -8385,4 +8385,43 @@ and PEDAL_OFF features.
 
 
 
+October 21 2011
+
+Abc2midi bug: %%MIDI control command after a rest causes loss of
+synchronization. In the following example
+
+
+
+X:1
+T: Synchronization Loss after rest (z2)
+V:1
+V:2
+M: 4/4
+K:F#dor
+V:1
+|: A,G, | F,G,F,G, A,B,A,G, | F,4-F,2 :|
+V:2
+%%MIDI program 65
+|:\
+%%MIDI control 7 40
+ de|  f4 z2
+%%MIDI control 7 80
+GA|  f4-f2\
+:|
+
+
+The control command is used to modulate the loudness of the alto saxophone
+in voice 2. The second control command which attenuates the saxophone
+to velocity 80 introduces another delay of z2 causing the following
+notes G and A to be played one beat late (into the next bar).
+
+Analysis: The second control command introduces a beat delay because
+delta_time is not zero when the function write_event is called. (Delta_time
+is not zero after a rest so that the following note will be delayed.)
+
+Fix: write_event should not introduce any delay, so that delta_time was
+replaced by 0 in the function call mf_write_midi_event(..). The function
+write_event is also called to turn on (off) portamento, to handle
+pitch_bend, pedal on and pedal off MIDI commands. (Hopefully, this
+change does not introduce a bug in the other functions.)
 

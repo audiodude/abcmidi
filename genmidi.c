@@ -1521,7 +1521,8 @@ char data[];
   if (channel >= MAXCHANS) {
     event_error("Channel limit exceeded\n");
   } else {
-    mf_write_midi_event(delta_time, event_type, channel, data, n);
+    /*mf_write_midi_event(delta_time, event_type, channel, data, n);  [SS] 2011-10-21 */
+    mf_write_midi_event(0, event_type, channel, data, n);
   };
 }
 
