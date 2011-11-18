@@ -1778,15 +1778,33 @@ int noteson;
     prog = readnump(&p);
     if (gchordson) {
       write_program(prog, gchord.chan);
+      /* [SS] 2011-11-18 */
+      p = strstr(p,"octave=");
+      if (p != '\0')
+                      {int octave,found;
+                       p = p+7;
+                       found = sscanf(p,"%d",&octave);
+                       if (found == 1 && octave > -3 && octave < 3) gchord.base = 48 + 12*octave;
+                       printf("gchord.base = %d\n",gchord.base);
+                       }
     };
     done = 1;
-  };
+  }
   if ((strcmp(command, "bassprog") == 0)) {
     int prog;
 
     prog = readnump(&p);
     if (gchordson) {
       write_program(prog, fun.chan);
+      /* [SS] 2011-11-18 */
+      p = strstr(p,"octave=");
+      if (p != '\0')
+                      {int octave,found;
+                       p = p+7;
+                       found = sscanf(p,"%d",&octave);
+                       if (found == 1 && octave > -3 && octave < 3) fun.base = 36 + 12*octave;
+                       printf("fun.base = %d\n",fun.base);
+                       }
     };
     done = 1;
   };

@@ -8425,3 +8425,41 @@ write_event is also called to turn on (off) portamento, to handle
 pitch_bend, pedal on and pedal off MIDI commands. (Hopefully, this
 change does not introduce a bug in the other functions.)
 
+
+November 18 2011
+
+Abcmidi new feature. The MIDI commands, chordprog and bassprog have
+been extended to allow for an octave offset. In the following example
+
+X:1
+T: octave test
+M: 2/4
+L: 1/8
+K: C
+Q:1/4 =96
+%%MIDI program 74 Recorder
+%%MIDI chordprog 0 
+%%MIDI bassprog  0
+"C"C4|C4|C4|C4|
+%%MIDI chordprog 0 octave=2
+%%MIDI bassprog  0 octave=2
+"C"C4|C4|C4|C4|
+
+The piano bass chordal accompaniment is shifted up two octaves from its
+usual position. The amount of shift is limited to + or - two octaves.
+To reset to the default position put,
+%%MIDI chordprog 0 octave=0
+%%MIDI bassprog  0 octave=0
+
+Implementation, in dodeferred() in genmidi.c, I added a few lines of
+code beginning with p = strstr(p,"octave="). For bassprog and
+chordprog declarations, the function searches for string "octave=" anywhere
+in the command line and then grabs the value following the equal sign and
+puts it in the temporary variable octave. gchord.base and fun.base are
+reset by
+if (found == 1 && octave > -3 && octave < 3) gchord.base = 48 + 12*octave;
+if (found == 1 && octave > -3 && octave < 3) fun.base = 36 + 12*octave;
+
+gchord.base is used in configure_gchord() and fun.base is used in 
+dogchords(), both in genmidi.c.
+

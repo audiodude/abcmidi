@@ -306,11 +306,18 @@ You can use any combination of the gchord codes,
 .PP
 %%MIDI chordprog n
 .PP
-Sets the MIDI instrument for the chords to be n.
+Sets the MIDI instrument for the chords to be n. If the command
+includes the string octave=n where n is a number between -2 and 2
+inclusive, then this will shift the pitch of the instrument by n
+octaves. For example %%MIDI chordprog 10 octave=1.)
+
 .PP
 %%MIDI bassprog n
 .PP
-Sets the MIDI instrument for the bass notes to be n.
+Sets the MIDI instrument for the bass notes to be n. If the command
+includes the string octave=n where n is a number between -2 and 2
+inclusive, then this will shift the pitch of the instrument by n
+octaves. For example %%MIDI bassprog 10 octave=-1.)
 .PP
 %%MIDI chordvol n
 .PP

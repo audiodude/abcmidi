@@ -917,11 +917,18 @@ z4|"D" z4|z4|
 
 %%MIDI chordprog n
 
-Sets the MIDI instrument for the chords to be n.
+Sets the MIDI instrument for the chord notes to be n. If the
+command includes the string octave=n where n is a number between
+-2 and +2, then the chord notes will be shifted n octaves from its
+usual position, eg. (%%MIDI chordprog 32 octave=1). Any other
+descriptors will be ignored, eg (%%MIDI chordprog 0 Acoustic Piano).
 
 %%MIDI bassprog n
 
-Sets the MIDI instrument for the bass notes to be n.
+Sets the MIDI instrument for the bass notes to be n. If the
+command includes the string octave=n where n is a number between
+-2 and +2, then the bass note will be shifted n octaves from its
+usual position. eg. (%%MIDI bassprog 32 octave=-1). 
 
 %%MIDI chordvol n
 
