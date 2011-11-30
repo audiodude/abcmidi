@@ -2478,6 +2478,7 @@ int xtrack;
   int maxpass;
   int expect_repeat;
   int slurring;
+  int was_slurring; /* [SS] 2011-11-30 */
   int state[5];
   int texton;
   int timekey;
@@ -2617,6 +2618,7 @@ int xtrack;
   pass = 1;
   save_state(state, j, barno, div_factor, transpose, channel);
   slurring = 0;
+  was_slurring = 0; /* [SS] 2011-11-30 */
   expect_repeat = 0;
   while (j < notes) {
     switch(feature[j]) {
@@ -2653,8 +2655,8 @@ int xtrack;
                }
             note_num = num[j];
             note_denom = denom[j];
-/* turn off slurring prematurely two separate two slurs in a row */
-            if (slurring && feature[j+1] == SLUR_OFF) slurring = 0;
+/* turn off slurring prematurely to separate two slurs in a row */
+            if (slurring && feature[j+2] == SLUR_OFF) slurring = 0; /* [SS] 2011-11-30 */
             if (trim && !slurring && !graceflag) {
               tnote_num = note_num;
               tnote_denom = note_denom;
@@ -2814,6 +2816,7 @@ int xtrack;
             pass++;   /* we may have multiple repeats */
             restore_state(state, &j, &barno, &div_factor, &transpose, &channel);
             slurring = 0;
+            was_slurring = 0;
             expect_repeat = 0;
           };
 
@@ -2831,6 +2834,7 @@ int xtrack;
               pass++;   /* we may have multiple repeats */
               restore_state(state, &j, &barno, &div_factor, &transpose, &channel);
               slurring = 0;
+              was_slurring = 0;
               }
       };
       break;
@@ -2918,6 +2922,7 @@ int xtrack;
             /* go back and do the repeat */
             restore_state(state, &j, &barno, &div_factor, &transpose, &channel);
             slurring = 0;
+            was_slurring = 0;
             /*pass = 2;  [SS] 2004-10-14*/
             pass++;
           };
@@ -3024,12 +3029,14 @@ int xtrack;
         event_error("Unexpected start of slur found");
       };
       slurring = 1;
+      was_slurring = 1; /* [SS] 2011-11-30 */
       break;
     case SLUR_OFF:
-      if (!slurring) {
+      if (!slurring && !was_slurring) {  /* [SS] 2011-11-30 */
         event_error("Unexpected end of slur found");
       };
       slurring = 0;
+      was_slurring = 0;
       break;
     case COPYRIGHT:
        if (xtrack == 0) {

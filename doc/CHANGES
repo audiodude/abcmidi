@@ -8463,3 +8463,31 @@ if (found == 1 && octave > -3 && octave < 3) fun.base = 36 + 12*octave;
 gchord.base is used in configure_gchord() and fun.base is used in 
 dogchords(), both in genmidi.c.
 
+
+November 30 2011
+
+Abc2midi slurring bug. In the following example,
+
+
+X:1
+T:Slur Bug
+M:C|
+L:1/4
+%%MIDI trim 1/2
+K:C
+%%MIDI program 70
+(cde)c | (cdec) | (cd)(ec) | (e/d/c) Gc/e/ | d2ed | c4 ||
+
+The last note of every slur complex is not separated from the
+next note which is not in the complex.
+
+Analysis: writetrack() in genmidi.c looks turns off slurring when
+it sees a SLUR_OFF one unit away from the note it is processing.
+Unfortunately, there is always a SLUR_TIE there and writetrack should
+be looking two units away. (SLUR_TIE is used in yaps.) Fixing this
+situation introduces another problem; when SLUR_OFF is finally
+encountered writetrack discovers that slurring was already turned off
+and sends a warning. To fix this problem, a new global was_slurring
+is introduced and is used to detect the situation where slurring was
+turned off recently.
+
