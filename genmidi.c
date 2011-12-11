@@ -2761,6 +2761,12 @@ int xtrack;
     case VOICE:
       /* search on for next occurence of voice */
       j = findvoice(j, trackvoice, xtrack);
+      /* [SS] 2011-12-11 inline voice commands are not followed
+       by MUSICLINE where we would normally get thismline */
+      if (wordson) {     
+        thismline = j+1;
+        nowordline = 0;
+      };
       break;
     case TEXT:
       if (texton) {

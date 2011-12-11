@@ -1144,6 +1144,22 @@ char **s;
           decorators[i] = decorators[i] | chorddecorators[i];
           };
   };
+
+/* [SS] 2011-12-08 to catch fermata H followed by a rest */
+
+  if (**s == 'z') {
+          *s = *s + 1;
+          readlen(&n, &m, s);
+          event_rest(decorators,n, m, 0);
+          return;
+          }
+  if (**s == 'x') {
+          *s = *s + 1;
+          readlen(&n, &m, s);
+          event_rest(decorators,n, m, 1);
+          return;
+          }
+
   /* read accidental */
   switch (**s) {
   case '_':

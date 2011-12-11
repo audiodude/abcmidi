@@ -8491,3 +8491,160 @@ and sends a warning. To fix this problem, a new global was_slurring
 is introduced and is used to detect the situation where slurring was
 turned off recently.
 
+December 8 2011
+
+Abc2midi: fermata bug. When a rest is preceded by a fermata symbol
+H, abc2midi fails to recognize the rest. For example,
+
+X:1
+T: Malformed note
+M:4/4
+L:1/8
+K:C
+E2 DG  +fermata+z2 FG | E2 DG  Hz2 FG | AGFD HE2 FG | ABdg e4 |
+
+The first fermata is expressed correctly, but the fermata in the
+following bar causes abc2midi to issue the following message.
+
+Error in line 6 : Malformed note : expecting a-g or A-G
+
+Analysis: parsemusic() in parseabc.c expects decorations to be always
+followed by a note and calls parsenote().
+
+ while(*p != '\0') {
+    lineposition = p - linestart;  /* [SS] 2011-07-18 */
+    if (((*p >= 'a') && (*p <= 'g')) || ((*p >= 'A') && (*p <= 'G')) ||
+        (strchr("_^=", *p) != NULL) || (strchr(decorations, *p) != NULL)) {
+      parsenote(&p);
+    } else {
+   
+Parsenote() does not see a note since the decorations is followed by
+a rest. The rest is not processed. If the fermata is indicated using
+the instruction !fermata! or the more modern notation +fermata+,
+then cases 'x' and 'z' in parsemusic() process the rest getting the
+decorations from decorators_passback[] and everything works well.
+
+Fix: the easiest fix is to add a check for rests in parsenote(). New
+code was added.
+
+/* [SS] 2011-12-08 to catch fermata H followed by a rest */
+
+  if (**s == 'z') {
+          *s = *s + 1;
+          readlen(&n, &m, s);
+          event_rest(decorators,n, m, 0);
+          return;
+          }
+  if (**s == 'x') {
+          *s = *s + 1;
+          readlen(&n, &m, s);
+          event_rest(decorators,n, m, 1);
+          return;
+          }
+
+Prior to looking for accidentals in the note.
+
+
+
+December 11 2011
+
+Abc2midi: lyrics bug with inline voices. When abc2midi is applied to the following
+tune,
+
+X:1
+T:Lyrics bug
+M:4/4
+L:1/8
+Q:80
+V:1 clef=treble %%MIDI program 73 % General-MIDI "Flute"
+V:2 clef=treble %%MIDI program 26 % General-MIDI "Electric Jazz Guitar"
+K:C
+[V:1] ABcd            e2   dc     | ABcd               e2  dc     |
+w:    This is just a test. Just a | quick-ie lit-tle test To see |
+[V:2] ABcd            e2   dc     | ABcd               e2  dc     |
+%
+[V:1] ABcd            e2 dc        |  C8     | 
+w:    what is go-ing on  With lyr- | ics   |
+[V:2] ABcd            e2 dc        |  c8   | 
+%
+
+It returns the following errors and warnings.
+
+Warning in line 7 : Line of music without lyrics
+Error in line 11 : Verse 1 mismatch;  8 syllables in music 7 in lyrics
+
+Furthermore, the lyric information in the ouput karaoke MIDI file
+is mangled. The first line "This is just ..." is not associated with
+the individual notes and the second line "what is go-ing..." is missing.
+
+However, if we eliminate all the inline voice fields,
+
+X:1
+T:Lyrics bug
+M:4/4
+L:1/8
+Q:80
+V:1 clef=treble %%MIDI program 73 % General-MIDI "Flute"
+V:2 clef=treble %%MIDI program 26 % General-MIDI "Electric Jazz Guitar"
+K:C
+V:1
+ ABcd            e2   dc     | ABcd               e2  dc     |
+w:    This is just a test. Just a | quick-ie lit-tle test To see |
+V:2
+ ABcd            e2   dc     | ABcd               e2  dc     |
+%
+V:1
+ ABcd            e2 dc        |  C8     | 
+w:    what is go-ing on  With lyr- | ics   |
+V:2
+ ABcd            e2 dc        |  c8   | 
+%
+
+There are no errors or warnings and the resulting MIDI file is
+correct.
+
+
+Analysis: when abc2midi detects lyrics in the w: field, it calls event_words
+(in store.c) which saves the entire line in one of the entries of the global
+array words[]. It indicates the particular entry location in the words[]
+using the WORDLINE feature.  During the final pass, writetrack() calls
+write_syllable() each time it encounters a NOTE, TNOTE (tied note), CHORDOFF
+(end of chord). At the end of line of notes signaled by MUSICSTOP,
+checksyllables() is called which merely verifies that it had sucessfully
+matched the notes with the line of lyrics. For this to work properly,
+findwline() must associate the line of music with the line of lyrics
+stored in the words[] array. Given a starting location in the feature[]
+which matches a particular music line in the tune, findwline searches
+the feature[] array for the next WORDLINE feature where it will get
+the address of the lyrics in the words[] array. This seach is aborted
+if findwline() encounters a WORDSTOP, PART, VOICE, or MUSICLINE prior
+to WORDLINE. The starting location for this search is given in the
+global variable thismline which gives the location of the last MUSICLINE
+that was processed. Writetrack() updates thismline each time it encounters
+another MUSICLINE feature.
+
+The source of the bug is that inline voice commands are not immediately
+followed by a MUSICLINE feature as would occur when the V: command is
+on a separate line. As a result, the variable thismline has not been
+updated to reflect the current music line. findwline() starts searching
+from the beginning of the feature[] array and aborts as soon as
+it encounters a VOICE or MUSICLINE feature. The function write_syllable,
+assumes it does not have any lyrics for that line. More confusion
+occurs when the next music line with lyrics is processed.
+
+Fix: now include
+  /* [SS] 2011-12-11 inline voice commands are not followed
+       by MUSICLINE where we would normally get thismline */
+      if (wordson) {
+        thismline = j+1;
+        nowordline = 0;
+      };
+
+in writetrack() after processing the VOICE feature.
+
+As an added comment, when genmidi.c is processing a voice with lyrics
+it assumes that every line of music for that voice has a line of lyrics.
+checksyllables() puts out annoying messages when a line of lyrics is
+missing. I do not completely understand the code in checksyllables().
+
+
