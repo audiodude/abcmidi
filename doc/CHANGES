@@ -8648,3 +8648,33 @@ checksyllables() puts out annoying messages when a line of lyrics is
 missing. I do not completely understand the code in checksyllables().
 
 
+December 19 2011
+
+Abc2midi clef-octave bug. In the following example, the clef=treble
+declaration does not restore the octave setting to zero.
+
+X:1
+T:Octave-Shifting Syntax Test
+M:6/8
+L:1/8
+K:G
+[V:1 clef=treble]   GAB c2d | efg eBG || % in correct, notated  octave
+[V:1 clef=treble+8] GAB c2d | efg eBG || % an octave higher, as requested
+[V:1 clef=treble]   GAB c2d | efg eBG || % should be original octave, but isn't
+[V:1 clef=treble-8] GAB c2d | efg eBG || % octave below ABC notation, correctly
+[V:1 clef=treble]   GAB c2d | efg eBG || % should be original octave, but isn't
+
+
+Fix:
+
+Added to the function isclef() in parseabc.c after
+
+if (strncmp(s, "treble", 6) == 0) {
+    gotclef= 1;
+
+    *gotoctave=1; /* [SS] 2011-12-19 */
+    *octave=0;
+    if (fileprogram == ABC2MIDI && *gotoctave != 1 && *octave !=1) event_warning("clef= is overriding octave= setting");
+  };
+
+

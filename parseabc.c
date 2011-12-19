@@ -469,6 +469,9 @@ int strict;
   };
   if (strncmp(s, "treble", 6) == 0) {
     gotclef= 1;
+    *gotoctave=1; /* [SS] 2011-12-19 */
+    *octave=0;
+    if (fileprogram == ABC2MIDI && *gotoctave != 1 && *octave !=1) event_warning("clef= is overriding octave= setting");
   };
   if (strncmp(s, "treble+8", 8) == 0) {
     gotclef= 1;
