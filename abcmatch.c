@@ -394,7 +394,7 @@ int last_sample;
 if (mmsamples != isamples) return -1;
 dif = 0;
 changes = 0;
-last_sample = ipitch_samples[i];
+last_sample = ipitch_samples[0]; /* [SS] 2012-02-05 */
 for (i=0;i<mmsamples;i++) {
  if (ipitch_samples[i] == -1 || mmpitch_samples[i] == -1) 
       continue; /* unknown contour note (ie. 1st note) */

@@ -31,7 +31,7 @@
  * Wil Macaulay (wil@syndesis.com)
  */
 
-#define VERSION "2.80 December 19 2011"
+#define VERSION "2.81 January 29 2012"
 /* enables reading V: indication in header */
 #define XTEN1 1
 /*#define INFO_OCTAVE_DISABLED 1*/
@@ -179,7 +179,8 @@ int ntexts = 0;
 
 /* Named guitar chords */
 char chordname[MAXCHORDNAMES][8];
-int chordnotes[MAXCHORDNAMES][6];
+/* int chordnotes[MAXCHORDNAMES][6]; */
+int chordnotes[MAXCHORDNAMES][10]; /* [SS] 2012-01-29 */
 int chordlen[MAXCHORDNAMES];
 int chordsnamed = 0;
 
@@ -507,8 +508,8 @@ int len;
     event_error("Chord name cannot exceed 7 characters");
     return;
   };  
-  if (len > 6) {
-    event_error("Named chord cannot have more than 6 notes");
+  if (len > 10) {
+    event_error("Named chord cannot have more than 10 notes");
     return;
   };
   i = 0;
@@ -1530,7 +1531,7 @@ char *package, *s;
     };
     if (strcmp(command, "chordname") == 0) {
       char name[20];
-      int i, notes[6];
+      int i, notes[10]; /* [SS] 2012-01-29 */
 
       skipspace(&p);
       i = 0;
@@ -1544,7 +1545,7 @@ char *package, *s;
         event_error("Bad format for chordname command");
       } else {
         i = 0;
-        while ((i<=6) && (*p == ' ')) {
+        while ((i<=10) && (*p == ' ')) { /* [SS] 2012-01-29 */
           skipspace(&p);
           notes[i] = readsnump(&p); 
           i = i + 1;

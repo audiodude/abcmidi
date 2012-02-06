@@ -8678,3 +8678,7 @@ if (strncmp(s, "treble", 6) == 0) {
   };
 
 
+January 29 2012
+
+Abc2midi: extended %%MIDI chordname command to handle up to 10 notes (instead
+of 6).

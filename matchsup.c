@@ -68,6 +68,10 @@ voice indications are ignored.
 #include <stdio.h>
 #include <stdlib.h>
 
+#ifdef  WIN32
+#include <string.h>  /* [gjg] 2012-02-01  Visual C++ 2010 Express compatability */
+#endif
+
 #ifdef __MWERKS__
 #define __MACINTOSH__ 1
 #endif /* __MWERKS__ */
@@ -553,8 +557,8 @@ int f, p, n, d;
   };
 #ifdef DEBUG
   if ((f == NOTE) || (f == REST)) {
-    fract = (float) num[notes]/ (float) denom[notes];
-    length = fract * 12.0 +0.1;
+    float  fract = (float) num[notes]/ (float) denom[notes];  /* [gjg] 2012-02-01 */
+    int  length = fract * 12.0 +0.1;  /* [gjg] 2012-02-01 */
     printf("%2d %2d %2d %2d\n",pitch[notes],num[notes],denom[notes],length);
     }
   if (f == TIME) printf("time signature = %d/%d\n",n,d);

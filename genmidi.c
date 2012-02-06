@@ -72,7 +72,7 @@ extern int lineno; /* source line being parsed */
 extern char** atext;
 
 /* Named guitar chords */
-extern int chordnotes[MAXCHORDNAMES][6];
+extern int chordnotes[MAXCHORDNAMES][10];  /* [SS] 2012-01-29 */
 extern int chordlen[MAXCHORDNAMES];
 
 /* general purpose storage structure */
