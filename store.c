@@ -31,7 +31,7 @@
  * Wil Macaulay (wil@syndesis.com)
  */
 
-#define VERSION "2.81 January 29 2012"
+#define VERSION "2.82 March 08 2012"
 /* enables reading V: indication in header */
 #define XTEN1 1
 /*#define INFO_OCTAVE_DISABLED 1*/
@@ -967,10 +967,19 @@ while (j<=maxnotes) {
        addfeature(feature[j], pitch[j], num[j], denom[j]); /* copy feature */
        break; /* [SS] 2008-08-12 */
 
+    case GRACEON:	/*[SS] 2012-03-08 */
+       gracenotes = 1;
+       break;
+
+    case GRACEOFF:      /*[SS] 2012-03-08 */
+       gracenotes = 0;
+       break;
+
     case NOTE:
     case TNOTE:
     case REST:
-       if (insidechord < 2) addfract(&snum,&sdenom,num[j],denom[j]);
+       /*if (insidechord < 2) addfract(&snum,&sdenom,num[j],denom[j]);*/
+       if (insidechord < 2 && !gracenotes) addfract(&snum,&sdenom,num[j],denom[j]); /* [SS] 2012-03-08 */
        if (insidechord) insidechord++;
        begin = 1;
        break;

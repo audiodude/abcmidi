@@ -8682,3 +8682,31 @@ January 29 2012
 
 Abc2midi: extended %%MIDI chordname command to handle up to 10 notes (instead
 of 6).
+
+
+March 08 2012
+
+Abc2midi: grace bug with voice overlay. Abc2midi loses synchronization when voice overlays and gracenotes present. In the following example
+
+X: 1
+T: Grace Bug
+M:C|
+L:1/8
+Q:1/2=80
+K:G
+|{ABcB}c2B2B2A2|d2f2 g4 &D2F2 G4|
+
+the overlay D2F2 G4 appears two quarter notes late. When the
+grace notes are removed the voice overlay is in sync.
+
+Analysis: the problem is in the code sync_voice in store.c.
+Sync_voice determines the delay for the voice overlay; unfortunately,
+it does not distinguish regular notes from grace notes which should
+not have any time value in the calculation.
+
+Fix: added two new cases to switch (feature[j]), GRACEON and GRACEOFF
+to detect grace notes and to control the gracenotes flag. For case NOTE:
+check that gracenotes is not set before addfract().
+
+
+
