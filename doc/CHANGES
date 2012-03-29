@@ -8783,4 +8783,40 @@ Fix: added the function call clear_voice_repeat_arrays() at the
 beginning of scan_for_missing_repeats() in store.c
 
 
+March 26 2012
+
+Abc2midi fermata bug: in the following example
+
+X:1
+T: Another fermata bug
+M: 2/4
+L: 1/4
+K: G
+%%MIDI program 68 oboe
+C2 H[CEG]2|C2 H[C2E2G2]|
+
+The first fermata is not held but the second one is held.
+
+Analysis: when the length of the chord is set outside the chord, the
+function fix_enclosed_note_lengths() in store.c is called to readjust
+the length of each note comprising the chord. The function did not
+take into account that the chord was being held longer.
+
+Fix: a new global flag, apply_fermata_to_chord, was introduced and
+used by the fix_enclosed_note_lengths to determine whether the notes
+in the chord should be lengthened. The flag is set in event_chordon
+by the variable chorddecorators[FERMATA]. It is reset to zero by
+fix_enclosed_note_lengths.
+
+
+March 29 2012
+
+Abc2midi bug: abc2midi applies fermatas to all chords in which the
+length is set outside the chord.
+
+Analysis:
+3721	if (apply_fermata_to_chord && !ignore_fermata) ;  /* [SS] 2012-03-26
+There should no semicolon ending this statement.
+
+Fix: removed the semicolon
 

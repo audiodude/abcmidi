@@ -31,7 +31,7 @@
  * Wil Macaulay (wil@syndesis.com)
  */
 
-#define VERSION "2.83 March 22 2012"
+#define VERSION "2.85 March 29 2012"
 /* enables reading V: indication in header */
 #define XTEN1 1
 /*#define INFO_OCTAVE_DISABLED 1*/
@@ -205,6 +205,7 @@ int ratio_standard = -1; /* flag corresponding to -RS parameter */
 int quiet = -1; /* if not -1 many common warnings and error messages */
                 /* are suppressed.                                   */
 int fermata_fixed = 0; /* flag on how to process fermata */
+int apply_fermata_to_chord = 0; /* [SS] 2012-03-26 */
 
 /* Part handling */
 struct vstring part;
@@ -2697,8 +2698,9 @@ int n, m;
 void event_chordon(int chorddecorators[])
 /* handles a chord start [ in the abc */
 /* the array chorddecorators is needed in toabc.c and yapstree.c */
-/* but is not relevant here.                                     */
+/* and is used here to handle fermatas.                          */
 {
+  apply_fermata_to_chord = chorddecorators[FERMATA]; /* [SS] 2012-03-26 */
   if (v->inchord) {
     event_error("Attempt to nest chords");
   } else {
@@ -3716,6 +3718,11 @@ static void fix_enclosed_note_lengths(int from, int end)
 /* inside the chord.                                   */
 
 int j;
+if (apply_fermata_to_chord && !ignore_fermata)   /* [SS] 2012-03-26 */
+    {
+    if (fermata_fixed) addfract(&num[end],&denom[end],1,1);
+    else num[end] *= 2;
+    }
 for (j = from; j < end; j++)
   {
   if (feature[j] == NOTE || feature[j] == TNOTE) 
@@ -3724,6 +3731,7 @@ for (j = from; j < end; j++)
       denom[j] =denom[end]; 
     }
   }
+apply_fermata_to_chord = 0;
 }
 
 
