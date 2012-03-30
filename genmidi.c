@@ -844,7 +844,7 @@ int startline;
 static int getword(place, w)
 /* picks up next syllable out of w: field.
  * It strips out all the control codes ~ - _  * in the
- * words and sends each syllable out to the Karoake track.
+ * words and sends each syllable out to the Karaoke track.
  * Using the place variable, it loops through each character
  * in the word until it encounters a space or next control
  * code. The syllstatus variable controls the loop. After,
@@ -858,7 +858,7 @@ static int getword(place, w)
  *
  * The variable i keeps count of the number of characters
  * inserted into the syllable[] char for output to the
- * karoake track. The kspace variables signals that a
+ * karaoke track. The kspace variables signals that a
  * space was encountered.
  */
 int* place;

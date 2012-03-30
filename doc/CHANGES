@@ -8820,3 +8820,63 @@ There should no semicolon ending this statement.
 
 Fix: removed the semicolon
 
+
+March 30 2012
+
+Abc2midi bug: more bugs when fermata is applied to a chord.
+
+In the following example:
+
+X:1
+T: Another fermata bug
+M: 2/4
+L: 1/8
+K: G
++fermata+[C2G2] z2|+fermata+[CG2] z2|
+
+only the first note in the chord is held.
+
+Analysis: +fermata+ is one of the many instructions which is
+treated quite differently. Most of the instructions are not note
+decorations eg. +pp+ and are handled inside store.c. Unfortunately,
++fermata+ is different since it is treated as a note decoration which
+is passed to event_note from parseabc.c. For this reason it was
+necessary to introduce a new array decorators_passback[] which
+is shared with parseabc.c (as well as toabc.c and yapstree.c)
+(See 2003 May 11 in this file.) The method worked well for single
+notes, however it has never worked for chords. The array
+decorators_passback[] is cleared to zero in parsenote() in parseabc.c
+as soon as it is used to transfer information to the decorator[]
+array. As a result, the second note in the chord is not held.
+
+Fix: it was still preferred to reset decorators_passback[] in parseabc.c
+rather than in all the files sharing this variable. Unfortunately,
+parseabc.c does not know whether a given note is inside a chord or
+not. A new flag, inchordflag, shared between parseabc.c and store.c
+was introduced. This flag is managed by event_chordon() and event_chordoff()
+in store.c. Now parsenote() does not zero the decorators_passback[] array
+if the note is inside a chord.
+
+A different fermata bug was exposed in the following example:
+
+X:1
+T: Yet another fermata bug
+M: 2/4
+L: 1/4
+K: G
+%%MIDI program 68
+C2 +fermata+ [CEG]2|C2 +fermata+ [C2E2G2]|
+
+The first fermata is never applied to [CEG]2.
+
+Analysis: the new function fix_enclosed_note_lengths does not apply
+the fermata because the flag apply_fermata_to_chord was not set.
+This flag was not set because chorddecorators[FERMATA] was not
+set in event_chordon(). In this case event_chordon() was called
+inside the function parsemusic() rather than parsenote().
+
+Fix: It was necessary to update chorddecorators with information in both
+decorators[] and decorators_passback[] prior to calling event_chordon().
+It was also discovered that the local array decorators() was not
+initialized inside the function parsemusic().
+

@@ -96,6 +96,7 @@ int nokey=0;  /* K: none was encountered */
 int chord_n,chord_m ; /* for event_chordoff */
 int fileline_number = 1;
 int intune = 1;
+int inchordflag; /* [SS] 2012-03-30 */
 
 extern programname fileprogram;
 int oldchordconvention = 0;
@@ -1121,7 +1122,7 @@ char **s;
   note = ' ';
   for (i = 0; i<DECSIZE; i++) {
 	  decorators[i] = decorators_passback[i];
-	  decorators_passback[i] = 0;
+	  if (!inchordflag) decorators_passback[i] = 0; /* [SS] 2012-03-30 */
           }
   while (strchr(decorations, **s) != NULL) {
     t = strchr(decorations, **s) - decorations;
@@ -1710,6 +1711,8 @@ char* field;
   char playonrep_list[80];
   int decorators[DECSIZE];
 
+  for (i=0;i<DECSIZE;i++) decorators[i] = 0; /* [SS] 2012-03-30 */
+
   event_startmusicline();
   endchar = ' ';
   comment = field;
@@ -1860,6 +1863,8 @@ char* field;
               p = parseinlinefield(p);
             } else {
               lineposition = p - linestart;  /* [SS] 2011-07-18 */
+              /* [SS] 2012-03-30 */
+              for (i = 0; i<DECSIZE; i++) chorddecorators[i] = decorators[i] | decorators_passback[i]; 
               event_chordon(chorddecorators);
               parserinchord = 1;
             };
@@ -1872,7 +1877,10 @@ char* field;
         readlen(&chord_n, &chord_m, &p);
         event_chordoff(chord_n,chord_m);
         parserinchord = 0;
-        for (i = 0; i<DECSIZE; i++) chorddecorators[i] = 0;
+        for (i = 0; i<DECSIZE; i++) {
+           chorddecorators[i] = 0;
+	   decorators_passback[i] = 0; /* [SS] 2012-03-30 */
+           }
         break;
 /*  hidden rest  */
       case 'x':

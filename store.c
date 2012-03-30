@@ -31,7 +31,7 @@
  * Wil Macaulay (wil@syndesis.com)
  */
 
-#define VERSION "2.85 March 29 2012"
+#define VERSION "2.86 March 30 2012"
 /* enables reading V: indication in header */
 #define XTEN1 1
 /*#define INFO_OCTAVE_DISABLED 1*/
@@ -262,6 +262,10 @@ int maxwords = INITWORDS;
 extern int decorators_passback[DECSIZE]; /* a kludge for passing
 information from the event_handle_instruction to parsenote
 in parseabc.c */
+
+
+extern int inchordflag; /* [SS] 2012-03-30 */
+/* for reseting decorators_passback in parseabc.c */
 
 /* time signature after header processed */
 int header_time_num,header_time_denom;
@@ -2700,6 +2704,7 @@ void event_chordon(int chorddecorators[])
 /* the array chorddecorators is needed in toabc.c and yapstree.c */
 /* and is used here to handle fermatas.                          */
 {
+  inchordflag = 1; /* [SS] 2012-03-30 */
   apply_fermata_to_chord = chorddecorators[FERMATA]; /* [SS] 2012-03-26 */
   if (v->inchord) {
     event_error("Attempt to nest chords");
@@ -2721,6 +2726,7 @@ void event_chordoff(int chord_n, int chord_m)
 /* handles a chord close ] in the abc */
 {
   int c_n,c_m;
+  inchordflag = 0; /* [SS] 2012-03-30 */
   if (chord_m == 1 && chord_n == 1) {
      c_m = denom[chordstart];
      c_n = num[chordstart];
