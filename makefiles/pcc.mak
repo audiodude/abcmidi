@@ -24,7 +24,7 @@ LNK=pccl
 
 all : abc2midi.exe midi2abc.exe abc2abc.exe mftext.exe yaps.exe midicopy.exe abcmatch.exe
 
-abc2midi.exe : parseabc.o store.o genmidi.o queues.o midifile.o parser2.o stresspat.o
+abc2midi.exe : parseabc.o store.o genmidi.o queues.o midifile.o parser2.o stresspat.o -lm
 	$(LNK) -Lc:\bin\pcc\ -Oabc2midi parseabc.o store.o genmidi.o queues.o midifile.o parser2.o stresspat.o
 
 abc2abc.exe : parseabc.o toabc.o

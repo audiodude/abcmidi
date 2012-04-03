@@ -56,6 +56,7 @@ void addfract(int *xnum, int *xdenom, int a, int b);
 void fdursum_at_segment(int segposnum, int segposden, int *val_num, int *val_den);
 void articulated_stress_factors (int n,  int *vel); 
 
+static void write_event(int event_type, int channel, char data[], int n);
 
 float ranfrac ()
 {
@@ -88,6 +89,8 @@ extern int stressmodel; /* [SS] 2011-08-26 */
 extern int verbose;
 extern int quiet;
 extern int sf, mi;
+
+extern int retuning,bend; /* [SS] 2012-04-01 */
 int drumbars;
 int gchordbars;
 int gchordbarcount;
@@ -1320,6 +1323,39 @@ int pitch, pitchbend, channel, vel;
   delta_time = 0L;
 }
 
+/* [SS] 2012-04-01 */
+static void midi_re_tune (int channel) {
+/* changes the master coarse tuning and master fine tuning
+   using Register Parameter Number (RPN) for a specific
+   track. See http://home.roadrunner.com/~jgglatt/tech/midispec/rpn.htm
+   or http://www.2writers.com/eddie/TutNrpn.htm for a tutorial on how
+   this is done.
+*/
+char data[2];
+data[0] = (char) (bend & 0x7f); /* least significant bits */
+data[1] = (char) ((bend >>7) & 0x7f);
+/* indicate that we are applying RPN fine and gross tuning using
+   the following two control commands. 
+   control 101 0  
+   control 100 1 */
+data[0] = 101; /* RPN command */
+data[1] = 0;   /* type of command */
+write_event(control_change, channel, data, 2);
+data[0] = 100; /* RPN command */
+data[1] = 1;   /* type of command */
+write_event(control_change, channel, data, 2);
+/* now enter the bend parameters using the control data entry
+   commands for the least significant and most significant bits
+*/
+data[0] = 6; /* control data entry for coarse bits */
+data[1] = (char) ((bend >>7) & 0x7f);
+write_event(control_change, channel, data, 2);
+
+data[0] = 38; /* control data entry for fine bits */
+data[1] = (char) (bend & 0x7f); /* least significant bits */
+write_event(control_change, channel, data, 2);
+} 
+
 
 
 /* [SS] 2011-07-04 */
@@ -2359,6 +2395,7 @@ static void starttrack()
   if (noteson) {
     channel = findchannel();
     if(verbose) printf("assigning channel %d to voice\n",channel);
+    if (retuning) midi_re_tune (channel); /* [SS] 2012-04-01 */
   } else {
     /* set to valid value just in case - should never be used */
     channel = 0;
@@ -2373,6 +2410,8 @@ static void starttrack()
     if(verbose) printf("assigning channel %d to bass voice\n",fun.chan);
     gchord.chan = findchannel();
     if(verbose) printf("assigning channel %d to chordal accompaniment\n",gchord.chan);
+    if (retuning) midi_re_tune (fun.chan); /* [SS] 2012-04-01 */
+    if (retuning) midi_re_tune (gchord.chan); /* [SS] 2012-04-01 */
   };
   if (drumson) {  /* [SS] 2010-08-12 */
        drum_ptr = 0;
@@ -2382,6 +2421,7 @@ static void starttrack()
     drone.event =0;
     drone.chan = findchannel();
     if(verbose) printf("assigning channel %d to drone\n",drone.chan);
+    if (retuning) midi_re_tune (drone.chan); /* [SS] 2012-04-01 */
     drone.prog  = 70; /* bassoon */
     drone.vel1 =  80;
     drone.pitch1 = 45;

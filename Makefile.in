@@ -59,7 +59,7 @@ all : abc2midi midi2abc abc2abc mftext yaps midicopy abcmatch
 
 OBJECTS_ABC2MIDI=parseabc.o store.o genmidi.o midifile.o queues.o parser2.o stresspat.o
 abc2midi : $(OBJECTS_ABC2MIDI)
-	$(CC) $(CFLAGS) -o abc2midi $(OBJECTS_ABC2MIDI) $(LDFLAGS)
+	$(CC) $(CFLAGS) -o abc2midi $(OBJECTS_ABC2MIDI) $(LDFLAGS) -lm
 $(OBJECTS_ABC2MIDI): abc.h parseabc.h config.h Makefile
 
 OBJECTS_ABC2ABC=parseabc.o toabc.o

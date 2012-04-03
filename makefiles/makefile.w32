@@ -12,7 +12,7 @@ comp	= $(cc) /wd4996 -D_CRT_SECURE_NO_WARNINGS $(cdebug) $(cflags) $(cvars)
 all:	abc2midi.exe midi2abc.exe abc2abc.exe mftext.exe yaps.exe midicopy.exe abcmatch.exe
 
 
-abc2midi.exe:	parseabc.obj store.obj genmidi.obj midifile.obj queues.obj parser2.obj stresspat.obj
+abc2midi.exe:	parseabc.obj store.obj genmidi.obj midifile.obj queues.obj parser2.obj stresspat.obj -lm
 	$(link) $(ldebug) $(conflags) -out:abc2midi.exe  parseabc.obj store.obj genmidi.obj queues.obj parser2.obj midifile.obj stresspat.obj
 
 abcmatch.exe:	abcmatch.obj matchsup.obj parseabc.obj

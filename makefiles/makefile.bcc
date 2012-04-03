@@ -32,7 +32,7 @@ LDFLAGS2=import32.lib cw32.lib
 
 all : abc2midi.exe midi2abc.exe abc2abc.exe mftext.exe yaps.exe midicopy.exe abcmatch.exe
 
-abc2midi.exe : parseabc.obj store.obj genmidi.obj queues.obj midifile.obj parser2.obj stresspat.obj
+abc2midi.exe : parseabc.obj store.obj genmidi.obj queues.obj midifile.obj parser2.obj stresspat.obj -lm
 	$(LNK) $(LDFLAGS) parseabc.obj genmidi.obj store.obj \
 	queues.obj midifile.obj parser2.obj stresspat.obj, abc2midi.exe,, $(LDFLAGS2)
 

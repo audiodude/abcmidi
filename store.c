@@ -31,7 +31,7 @@
  * Wil Macaulay (wil@syndesis.com)
  */
 
-#define VERSION "2.86 March 30 2012"
+#define VERSION "2.88 April 03 2012"
 /* enables reading V: indication in header */
 #define XTEN1 1
 /*#define INFO_OCTAVE_DISABLED 1*/
@@ -53,6 +53,7 @@
 #include "midifile.h"
 #include "genmidi.h"
 #include <stdio.h>
+#include <math.h>
 
 #ifdef __MWERKS__
 #define __MACINTOSH__ 1
@@ -77,7 +78,6 @@ extern void reduce();
 #endif
 /*int snprintf(char *str, size_t size, const char *format, ...);*/
 void load_stress_parameters(char *);
-
 
 #define MAXLINE 500
 #define INITTEXTS 20
@@ -121,6 +121,8 @@ int harpmode=0;  /* [JS] 2011-04-29 */
 int easyabcmode = 1; /* [SS] 2011-07-18 */
 int barflymode = 1; /* [SS] 2011-08-19 */
 char rhythmdesignator[32]; /* [SS] 2011-08-19 */
+int retuning = 0; /* [SS] 2012-04-01 */
+int bend = 8192; /* [SS] 2012-04-01 */
 
 struct voicecontext {
   /* maps of accidentals for each stave line */
@@ -608,6 +610,8 @@ char **filename;
 {
   int j;
   int arg,m,n;
+  float afreq,semitone_shift; /* [SS] 2012-04-01 */
+  double log10();
 
   /* look for code checking option */
   if (getarg("-c", argc, argv) != -1) {
@@ -692,7 +696,30 @@ char **filename;
     stressmodel = 0;
   }
 
-
+  arg = getarg("-TT",argc,argv); /* [SS] 2012-04-01 */
+  if (arg != -1) {
+    n =0;
+    if (argc > arg) {
+       n = sscanf(argv[arg],"%f",&afreq);
+       }
+    if (n < 1) {printf("expecting float between 415.30 and 466.16 after -TT\n");
+               } else {
+               retuning = 1;
+               semitone_shift = 12.0 * log10(afreq/440.0f)/log10(2.0f);
+               printf("afreq = %f semitone_shift = %f\n",afreq,semitone_shift);         
+               if (semitone_shift >= 1.001) {printf("frequency %f must be less than 466.16\n",afreq);
+                   retuning = 0;
+                  }
+               if (semitone_shift <= -1.015) {printf("frequency %f must be greater than 415.0\n",afreq);
+                  retuning = 0;
+                  }             
+               if (retuning) {bend = (int) (8192.0 * semitone_shift) + 8192;
+                              if (bend > 16383) bend=16383;
+                              if (bend < 0) bend = 0;
+                              printf("bend = %d\n",bend);
+                              }
+               }
+    } 
 
   if (getarg("-OCC",argc,argv) != -1) oldchordconvention=1;
 
@@ -733,6 +760,7 @@ char **filename;
     printf("        -HARP ornaments=roll for harpist (same pitch)\n"); /* [JS] 2011-04-29 */
     printf("        -BF Barfly mode: invokes a stress model if possible\n");
     printf("        -OCC old chord convention (eg. +CE+)\n");
+    printf("        -TT tune to A =  <frequency>\n");
     printf(" The default action is to write a MIDI file for each abc tune\n");
     printf(" with the filename <stem>N.mid, where <stem> is the filestem\n");
     printf(" of the abc file and N is the tune reference number. If the -o\n");

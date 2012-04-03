@@ -8880,3 +8880,38 @@ decorators[] and decorators_passback[] prior to calling event_chordon().
 It was also discovered that the local array decorators() was not
 initialized inside the function parsemusic().
 
+
+April 1 2012
+
+Abc2midi: new feature. Introduced a new option (-TT)  to tune the key of
+A above or below 440.0 Hz but less than a semitone. The output MIDI
+file will re-tune to that frequency. The purpose of this feature
+is to accommodate some instruments like the accordian which are
+not tune exactly to 440.0 Hz.
+
+Implementation: in store.c introduced two new globals
+retuning and bend which will be shared with genmidi.c.
+Also added code in event_init() in store.c to handle the
+-TT option. Abc2midi now needs to link to the math library
+so all the makefiles need to include -lm as well as Makefile.in
+which is used by configure. If the user inputs a valid
+frequency for the -TT option, the flag retuning is set
+and the integer bend contains the amount of pitch shift
+for all notes.
+
+In genmidi.c created a new function midi_re_tune() which
+sends the control RPN commands and the control data entry commands
+for changing the master coarse and master fine tuning. This
+function is called at the beginning of the track if the
+flag retuning is set and the track either contains notes,
+chordal accompaniment, or bagpipe drone.
+
+
+April 03 2012
+
+Abc2midi -tuning. Changed to the lower frequency limit to 414.9 to
+permit A=415 Hz, a common tuning for Baroque music. The bend
+variable is still limited between 0 and 16383.
+
+
+

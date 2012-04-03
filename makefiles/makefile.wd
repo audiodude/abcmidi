@@ -29,7 +29,7 @@ LNK=wlink
 
 all : abc2midi.exe midi2abc.exe abc2abc.exe mftext.exe yaps.exe midicopy.exe abcmatch.exe
 
-abc2midi.exe : parseabc.obj store.obj genmidi.obj queues.obj midifile.obj parser2.obj stresspat.obj
+abc2midi.exe : parseabc.obj store.obj genmidi.obj queues.obj midifile.obj parser2.obj -lm
 	$(LNK) $(LDFLAGS) abc2midi.exe $(LDFLAGS2) FILE parseabc.obj FILE genmidi.obj FILE store.obj \
 	FILE queues.obj FILE midifile.obj FILE parser2.obj FILE stresspat.obj
 
