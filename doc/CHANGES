@@ -8914,4 +8914,15 @@ permit A=415 Hz, a common tuning for Baroque music. The bend
 variable is still limited between 0 and 16383.
 
 
+April 15 2012
+
+Abc2midi - lyrics. The function checksyllables() in genmidi.c emits
+warnings even when there do not seem to be any errors in the
+placement of the lyrics. I do not know how to fix this problem,
+or even whether a fix exists. Furthermore, the warnings do not
+appear useful as they are not very specific. Users can easily
+check the placement of the syllables by viewing the score produced
+by abcm2ps.  The error message in checksyllables() is now suppressed
+except when running abc2midi in verbose mode.
+
 

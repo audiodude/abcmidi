@@ -1134,7 +1134,7 @@ static void checksyllables()
   if (lyricsyllables != musicsyllables) {
     sprintf(msg, "Verse %d mismatch;  %d syllables in music %d in lyrics",
                 partrepno+1, musicsyllables, lyricsyllables);
-    event_error(msg);
+    if (verbose) event_error(msg); /* [SS] 2012-04-15 */
   };
   if (onemorenote == 1){  /* [Bas Schoutsen] 2010-04-08 */
 	onemorenote = 0;
