@@ -8926,3 +8926,19 @@ by abcm2ps.  The error message in checksyllables() is now suppressed
 except when running abc2midi in verbose mode.
 
 
+May 28 2012
+
+Abc2midi - added a missing break command following the META: case in
+in writetrack() in genmidi.c
+
+May 29 2012
+Abc2midi - bug. When running in -EA mode (easyabc), the META command
+carries the pitchbend value but the NOTE command has the wrong pitchbend
+value (usually garbage depending on the compiler).
+
+Analysis: in event_note() bentpitch[notes] was set before the META
+command rather than the NOTE command.
+
+Fix: moved the line setting bentpitch so it occurs before
+addfeature(NOTE...).
+

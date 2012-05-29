@@ -2460,11 +2460,6 @@ void easyabc_interface (int j) {
             unsigned int row = num[j];
             unsigned int col = denom[j] + 1;           
 
-/* This code produces a faulty MIDI file so we ignore it presently */
-/* 2011-08-03 [SS] */
-             return;
-
-
            
             /* the row number is encoded as three 7-bit numbers: CC#110 (least significant) CC#111, and CC#112 (most significant) */                       
             data[0] = 110;
@@ -3100,6 +3095,7 @@ int xtrack;
             /*printf("linenum = %d charpos = %d\n",num[j],denom[j]);*/
             easyabc_interface(j);
           }
+       break; /* [SS] 2012-05-28 */
     case PEDAL_ON: /* [SS] 2011-10-19 */
        pedal_on();
        break;

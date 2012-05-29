@@ -31,7 +31,7 @@
  * Wil Macaulay (wil@syndesis.com)
  */
 
-#define VERSION "2.89 April 15 2012"
+#define VERSION "2.91 May 29 2012"
 /* enables reading V: indication in header */
 #define XTEN1 1
 /*#define INFO_OCTAVE_DISABLED 1*/
@@ -3229,9 +3229,9 @@ int xoctave, n, m;
         addfeature(NOTE, pitch, num*4, denom*2*(v->default_length));
       } else {
 	pitchline[notes] = pitch_noacc;
-        bentpitch[notes] = active_pitchbend;
         if (easyabcmode) /* [SS] 2011-07-18 */ 
          addfeature(META,0,lineno,lineposition); /* [SS] 2011-07-18 */
+        bentpitch[notes] = active_pitchbend; /* [SS] 2012-05-29 */
         addfeature(NOTE, pitch, num*4, denom*2*(v->default_length));
         marknotestart();
         addfeature(REST, pitch, num*4, denom*2*(v->default_length));
@@ -3239,9 +3239,9 @@ int xoctave, n, m;
       };
     } else {
       pitchline[notes] = pitch_noacc;
-      bentpitch[notes] = active_pitchbend;
     if (easyabcmode && !v->inchord) /* [SS] 2011-07-18 */ 
          addfeature(META,0,lineno,lineposition); /* [SS] 2011-07-18 */
+      bentpitch[notes] = active_pitchbend; /* [SS] 2012-05-29 */
       addfeature(NOTE, pitch, num*4, denom*(v->default_length));
       if (!v->inchord) {
         marknote();
