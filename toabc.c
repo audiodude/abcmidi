@@ -21,7 +21,7 @@
 
 /* back-end for outputting (possibly modified) abc */
 
-#define VERSION "1.65 June 10 2011"
+#define VERSION "1.66 May 31 2012"
 
 /* for Microsoft Visual C++ 6.0 or higher */
 #ifdef _MSC_VER
@@ -2400,8 +2400,20 @@ emit_string("/");
 
 void event_split_voice ()
 {
-emit_string("&");
+/* code contributed by Frank Meisshaert 2012-05-31 */
+char msg[40];
+  emit_string("&");
+  if ((count.num*barlen.denom != barlen.num*count.denom) &&
+      (count.num != 0) && (barno != 0) && (barcheck)) {
+    sprintf(msg, "Bar %d is %d/%d not %d/%d", barno, 
+           count.num, count.denom,
+           barlen.num, barlen.denom );
+    event_error(msg);
+  };
+  count.num = 0;
+  count.denom = 1;
 }
+ 
 
 /* The following functions provide an alternative
    method for transposing. The note is converted

@@ -8942,3 +8942,52 @@ command rather than the NOTE command.
 Fix: moved the line setting bentpitch so it occurs before
 addfeature(NOTE...).
 
+
+May 31 2012
+Abc2abc bug: abc2abc returns a bar count error when processing bars
+with split voices. For example for tune,
+
+X:1
+T:Test
+L:1/8
+M:2/4
+K:Cmaj
+G | c4 & E2C2 ||
+
+abc2abc produces
+
+X:1
+T:Test
+L:1/8
+M:2/4
+K:Cmaj
+G | c4 & E2C2
+%Error : Bar 1 is 1/1 not 2/4
+||
+
+Analysis: abc2abc adds the length of every note in the measure, regardless
+of the &-split voice.
+
+Fix provided by Frank Meisshaert: the code for event_split_voice() was
+replaced by
+
+event_split_voice () {
+char msg[40];
+  emit_string("&");
+  if ((count.num*barlen.denom != barlen.num*count.denom) &&
+      (count.num != 0) && (barno != 0) && (barcheck)) {
+    sprintf(msg, "Bar %d is %d/%d not %d/%d", barno,
+           count.num, count.denom,
+           barlen.num, barlen.denom );
+    event_error(msg);
+  };
+  count.num = 0;
+  count.denom = 1;
+}
+
+The code resets checks the length of the bar and resets count.num,
+count.denom when a & is encountered.
+
+
+
+
