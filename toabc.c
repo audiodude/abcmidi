@@ -21,7 +21,7 @@
 
 /* back-end for outputting (possibly modified) abc */
 
-#define VERSION "1.66 May 31 2012"
+#define VERSION "1.67 June 04 2012"
 
 /* for Microsoft Visual C++ 6.0 or higher */
 #ifdef _MSC_VER
@@ -496,7 +496,9 @@ char** filename;
     printf("  -ver  prints version number and exits\n");
     printf("  -X n renumber the all X: fields as n, n+1, ..\n");
     printf("  -OCC old chord convention (eg. +CE+)\n");
-    printf("  -noplus use !...! instead of +...+ for instructions\n");
+    /*printf("  -noplus use !...! instead of +...+ for instructions\n");
+     [SS] 2012-06-04
+    */
 
     exit(0);
   } else {
@@ -617,7 +619,8 @@ char** filename;
      setup_sharps_flats (usekey);
      }
   if (getarg("-OCC",argc,argv) != -1) oldchordconvention=1;
-  if (getarg("-noplus",argc,argv) != -1) noplus = 1;
+  /*if (getarg("-noplus",argc,argv) != -1) noplus = 1; [SS] 2012-06-04*/
+
 
   /* printf("%% output from abc2abc\n"); */
   startline = 1;
@@ -1326,7 +1329,7 @@ static void start_tune()
   count.denom = 1;
   barno = 0;
   tuplenotes = 0;
-  expect_repeat = 0;
+  expect_repeat = -1;	/* repeat from start may occur [J-FM] 2012-06-04 */
   inlinefield = 0;
   if (barlen.num == 0) {
     /* generate missing time signature */
@@ -1697,7 +1700,8 @@ char* replist;
     break;
   case BAR_REP:
     emit_string("|:");
-    if ((expect_repeat) && (repcheck)) {
+    if (expect_repeat > 0 /* no error if first repeat [J-FM] 2012-06-04 */
+     && repcheck) {
       event_error("Expecting repeat, found |:");
     };
     expect_repeat = 1;
@@ -1732,15 +1736,32 @@ char* replist;
   };
   if ((count.num*barlen.denom != barlen.num*count.denom) &&
       (count.num != 0) && (barno != 0) && (barcheck)) {
-    sprintf(msg, "Bar %d is %d/%d not %d/%d", barno, 
-           count.num, count.denom,
-           barlen.num, barlen.denom );
-    event_error(msg);
-  };
+
+/* [J-FM] 2012-06-04  start */
+    switch (type) {
+    case BAR_REP:
+    case REP_BAR:
+    case BAR1:
+    case REP_BAR2:
+    case DOUBLE_REP:
+	break;		/* no error if repeat bar */
+    default:
+	sprintf(msg, "Bar %d is %d/%d not %d/%d", barno, 
+		count.num, count.denom,
+		barlen.num, barlen.denom );
+	event_error(msg);
+	count.num = 0;
+	count.denom = 1;
+	break;
+    }
+  } else {
+	count.num = 0;
+	count.denom = 1;
+  }
+/* [J-FM] 2012-06-04 end */
+
   newabctext(barline);
   barno = barno + 1;
-  count.num = 0;
-  count.denom = 1;
   copymap();
 }
 
@@ -2557,7 +2578,7 @@ char *argv[];
   char *filename;
 
   oldchordconvention = 0; /* for handling +..+ chords */
-  noplus = 0;
+  noplus = 1;  /* [SS] 2012-06-04 */
 
   /*for (i=0;i<DECSIZE;i++) decorators_passback[i]=0; */
 
@@ -2571,4 +2592,3 @@ char *argv[];
   };
   return(0);
 }
-

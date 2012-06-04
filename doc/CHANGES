@@ -8989,5 +8989,59 @@ The code resets checks the length of the bar and resets count.num,
 count.denom when a & is encountered.
 
 
+June 4 2012
 
+Abc2abc error messages: the following is musically correct.
+
+X:1
+T: abc2abc errors
+M: 2/4
+L: 1/8
+K: Am
+G|ABcd|[1efg:|[2f|edcB|
+
+However, processing it through abc2abc returns many error messages.
+
+X:1
+T:abc2abc errors
+M:2/4
+L:1/8
+K:Am
+G|ABcd| [1efg
+%Warning : No repeat expected, found :|
+
+%Error : Bar 2 is 3/8 not 2/4
+:| [2f
+%Error : Bar 3 is 1/8 not 2/4
+|edcB|
+
+First abc2abc complains that an opening repeat |: is
+missing at the beginning. Next it complains that bar 2 and 3
+[1efg:|[2f| are incomplete measures. 
+
+Fix: Jef Moine has contributed a ingenious fixes in toabc.c.
+In start_tune() the flag expect_repeat is set to -1 instead of 0
+to signal the start of tune. In event_bar, there is a check that
+expect_repeat is greater than zero. Finally, if the number of
+beats in the bar does not match the time signature, the error
+message is suppressed for if the bar ends with :|, |:, |[1, :|[2
+or :: and bar length is not reset to 0 so that it contributes
+to the next bar.
+
+
+June 04 2012
+
+Abc2abc compliance with 2.1 standard:
+the abc music standard 2.0 recommended changing the syntax for
+decorations from !...! to +...+. Thus a mezzoforte indication
+should be indicated as +mf+ instead of !mf!. Abc2abc was 
+modified on April 17 2011 to be compliant with this change.
+This recommendation was revoked in the 2.1 music standard,
+(Dec 2011) http://abcnotation.com/wiki/abc:standard:v2.1
+
+Fix: the option to output decorations using the +...+ syntax
+has been removed and the default is now !...!. Any decorations
+using the +...+ syntax are automatically changed to !...! syntax.
+The flag noplus is now initialized to 1 instead of 0. The redundant 
+runtime parameter -noplus was removed. 
 
