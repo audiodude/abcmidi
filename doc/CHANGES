@@ -9045,3 +9045,90 @@ using the +...+ syntax are automatically changed to !...! syntax.
 The flag noplus is now initialized to 1 instead of 0. The redundant 
 runtime parameter -noplus was removed. 
 
+
+July 03 2012
+
+Abc2midi trill and roll problem: an attempt was made to fix the
+problem reported on September 11 2006. For multivoiced tunes,
+this can cause a loss of synchronization between the voices
+as illustrated in the following example.
+
+X:1
+T: broken trill
+L:1/8
+M:3/4
+K:G
+[V:1] G>D   B,>D  G>TB | GA   Bc  dc | GA   Bc  dc |
+[V:2] B,>A, G,>A, B,>D | G,A, B,C DC | G,A, B,C DC |
+
+The problem also appears when trills are combined with grace
+notes as illustrated here.
+
+
+X:1
+L:1/8
+M:3/4
+K:Am
+Q:1/4=60
+V:1
+c2 {d}TcB/c/ d>B | BA Ac e>d |
+V:2
+A2{B}A^G/A/ B>G  |^GE EA c>B  | 
+
+
+Analysis: The trilled or rolled notes are expanded into a sequence of notes
+as soon as they are detected. As a result, the grace or broken rhythm is applied
+to the first note of this sequence. To fix this problem it is necessary
+to expand trills and rolls after broken rhythms and grace notes are treated
+rather than as soon as they are detected. 
+
+Fix: (2012-05-29 to 2012-06-03) a new function expand_ornaments ()
+is called by finishfile() that converts trilled and rolled notes into
+a sequence of notes. The defunct function dotrill() was split into
+dotrill_setup() (called by event_note) and dotrill_output() called
+by expand_ornaments(). Similarly, doroll() was split into doroll_setup()
+and doroll_output().  Notes to treated by expand_ornaments() were
+flagged using a new feature array called decotype[] which was checkmalloc'd
+like stressvelocity, and pitchline.  If the note was flagged it
+is treated by either dotrill_output() or doroll_output() depending
+on its type.
+
+The implementation was complicated by the problem, that the internal
+representation of the music in the feature arrays does not preserve
+the key signature information which is needed to decide whether to
+ascend (descend) a tone or semitone in the trill or roll. Therefore 
+it was still necessary to analyze the context of the trill or roll
+at the time of detection using the .._setup() functions and save
+the generation parameters for .._output() in a specifically designed
+struct called notestruct. These structures are generated as needed,
+but a pointer array noteaddr[1000], (assuming not more than 999
+trills or rolls occur in a particular tune) is used to find the
+struct. The notestruct struct thus acts as a bridge between the
+setup and output functions. Treatment of microtones added another
+complications and at this point I have not verified whether the
+new code is correct with regard to microtones.
+
+There is still a synchronization problem when broken rhythms
+are combined with ornaments as illustrated below.
+
+X:1
+T: ornament test
+M: 2/4
+L: 1/8
+K: G
+V:1
+D2 >~B2 |c2 G2|
+V:2
+F2 >D2| e2 D2|
+
+Ornaments are handled in a different fashion. If harpmode is set,
+then ornaments are expanded into a sequence of notes like trills
+and rolls. If harpmode is not set, then a grace note is inserted
+prior to the note and graceon() is called to make the final adjustments.
+Furthermore if the note is dotted, then two grace notes are added.
+For the present time you should avoid combining ornaments with
+broken rhythms in multivoiced tunes.
+
+
+
+

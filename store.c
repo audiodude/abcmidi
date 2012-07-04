@@ -31,7 +31,7 @@
  * Wil Macaulay (wil@syndesis.com)
  */
 
-#define VERSION "2.91 May 29 2012"
+#define VERSION "2.92 July 04 2012"
 /* enables reading V: indication in header */
 #define XTEN1 1
 /*#define INFO_OCTAVE_DISABLED 1*/
@@ -153,7 +153,7 @@ struct voicecontext {
   int chord_num, chord_denom;
   /* details of last 2 notes/chords to apply length-modifiers to */
   int laststart, lastend, thisstart, thisend; /* for handling broken rhythms*/
-  /* broken rythm handling */
+  /* broken rhythm handling */
   int brokentype, brokenmult, brokenpending;
   int broken_stack[7];
   struct voicecontext* next;
@@ -164,6 +164,25 @@ struct voicecontext* v;
 struct voicecontext* head;
 struct voicecontext* vaddr[64]; /* address of all voices (by v->indexno) */
 /* vaddr is only a convenience for debugging */
+
+
+/* [SS] 2012-06-30 */
+/* structure for expanding a note into a TRILL, ROLL, or ORNAMENT */
+struct notestruct {
+  int note;
+  int index;
+  int notetype;
+  int pitch;
+  int pitchup;
+  int bendup;
+  int benddown;
+  int pitchdown;
+  int default_length;
+  };
+
+struct notestruct* noteaddr[1000];
+int notesdefined = 1;
+
 
 
 struct trackstruct trackdescriptor[40]; /* trackstruct defined in genmidi.h*/
@@ -193,6 +212,7 @@ int *bentpitch; /* needed for handling microtones */
 featuretype *feature;
 int *stressvelocity;  /* [SS] 2011-08-17 for Phil's stress model*/
 int *pitchline; /* introduced for handling ties */
+int *decotype; /* [SS] 2012-06-29 for handling ROLLS, TRILLS, etc. */
 int notes;
 
 int verbose = 0;
@@ -730,6 +750,7 @@ char **filename;
   denom = checkmalloc(maxnotes*sizeof(int));
   stressvelocity = checkmalloc(maxnotes*sizeof(int)); /* [SS] 2011-08-17 */
   bentpitch = checkmalloc(maxnotes*sizeof(int));
+  decotype  = checkmalloc(maxnotes*sizeof(int)); /* [SS] 2012-06-29 */
   feature = (featuretype*) checkmalloc(maxnotes*sizeof(featuretype));
   pitchline = checkmalloc(maxnotes*sizeof(int));
   for (j=0;j<DECSIZE;j++)  dummydecorator[j] = 0;
@@ -1211,7 +1232,7 @@ static int autoextend(maxnotes)
 int maxnotes;
 {
   int newlimit;
-  int *ptr,*ptr2,*ptr3;
+  int *ptr,*ptr2,*ptr3, *ptr4;
   featuretype *fptr;
   int i;
 
@@ -1228,17 +1249,21 @@ int maxnotes;
   ptr = checkmalloc(newlimit*sizeof(int));
   ptr2 = checkmalloc(newlimit*sizeof(int));
   ptr3 = checkmalloc(newlimit*sizeof(int));
+  ptr4 = checkmalloc(newlimit*sizeof(int)); /* [SS] 2012-06-29 */
   for(i=0;i<maxnotes;i++){
     ptr[i] = pitch[i];
     ptr2[i] = pitchline[i];
     ptr3[i] = bentpitch[i];
+    ptr4[i] = decotype[i];
   };
   free(pitch);
   free(pitchline);
   free(bentpitch);
+  free(decotype);
   pitch = ptr;
   pitchline = ptr2;
   bentpitch = ptr3;
+  decotype = ptr4; /* [SS] 2012-06-29 */
   ptr = checkmalloc(newlimit*sizeof(int));
   for(i=0;i<maxnotes;i++){
     ptr[i] = num[i];
@@ -1325,6 +1350,7 @@ int f,p,n,d,loc;
     pitch[i] = pitch[i-1];
     pitchline[i] = pitchline[i-1];
     bentpitch[i] = bentpitch[i-1];
+    decotype[i] = decotype[i-1]; /* [SS] 2012-06-29 */
     num[i] = num[i-1];
     denom[i] = denom[i-1];
     };
@@ -1334,6 +1360,7 @@ int f,p,n,d,loc;
   denom[i]     = d;
   pitchline[i] = 0;
   bentpitch[i] = 0;
+  decotype[i] = 0;
 }
 
 static void removefeature(loc)
@@ -1348,6 +1375,7 @@ int loc;
     denom[i]   = denom[i+1];
     pitchline[i] = pitchline[i+1];
     bentpitch[i] = bentpitch[i+1];
+    decotype[i] = decotype[i+1]; /* [SS] 2012-06-29 */
     }
   notes--;
 }
@@ -2965,6 +2993,84 @@ int pitch;
   marknoteend();
 }
 
+
+
+/* [SS] 2012-06-30 */
+static void doroll_setup(note,octave,n,m,pitch)
+char note;
+int octave, n, m;
+int pitch;
+{
+  char up, down;
+  int t;
+  int upoct, downoct, pitchup, pitchdown;
+  int bend_up,bend_down;
+  char *anoctave = "cdefgab";
+  struct notestruct *s;
+
+  upoct = octave;
+  downoct = octave;
+  t = (int) ((long) strchr(anoctave, note)  - (long) anoctave);
+  up = *(anoctave + ((t+1) % 7));
+  down = *(anoctave + ((t+6) % 7));
+  if (up == 'c') upoct = upoct + 1;
+  if (down == 'b') downoct = downoct - 1;
+  pitchup = pitchof_b(up, v->basemap[(int)up - 'a'], 1, upoct, 0,&bend_up);
+  pitchdown = pitchof_b(down, v->basemap[(int)down - 'a'], 1, downoct, 0,&bend_down);
+
+  s = (struct notestruct*) checkmalloc(sizeof(struct notestruct));
+  s->pitch = pitch;
+  s->index = notes;
+  s->notetype = ROLL;
+  s->pitchup = pitchup;
+  s->pitchdown = pitchdown;
+  s->bendup = bend_up;
+  s->benddown = bend_down;
+  s->default_length = global.default_length;
+  noteaddr[notesdefined] = s;
+  if (notesdefined < 1000) notesdefined++;
+}
+
+static void doroll_output(i)
+int i;
+{
+int deco_index;
+int pitch,pitchup,pitchdown,bend_up,bend_down;
+int default_length;
+int n,m;
+int a,b;
+struct notestruct *s;
+deco_index = decotype[i];
+s =  noteaddr[deco_index];
+pitch = s->pitch;
+pitchdown = s->pitchdown;
+pitchup = s->pitchup;
+active_pitchbend = bentpitch[i];
+bend_up =  s->bendup;
+bend_down =  s->benddown;
+default_length = s->default_length;
+n = num[i]*default_length;
+m = denom[i]*4;
+reduce(&n,&m);
+a = n*4;
+b = m*default_length*5;
+reduce(&a,&b);
+replacefeature(NOTE, pitch, a, b,i);
+i++;
+insertfeature(NOTE, pitchup, a, b,i);
+bentpitch[i] = bend_up;
+i++;
+insertfeature(NOTE, pitch, a, b,i);
+bentpitch[i] = active_pitchbend;
+i++;
+insertfeature(NOTE, pitchdown, a, b,i);
+bentpitch[i] = bend_down;
+i++;
+insertfeature(NOTE, pitch, a, b,i);
+bentpitch[i] = active_pitchbend;
+}
+
+
 static void dotrill(note, octave, n, m, pitch)
 /* applies a trill to a note */
 char note;
@@ -3008,7 +3114,108 @@ int pitch;
   marknoteend();
 }
 
+static void dotrill_setup(note, octave, n, m, pitch)
+char note;
+int octave, n, m;
+int pitch;
+{
+  char up;
+  int i, t;
+  int upoct, pitchup;
+  char *anoctave = "cdefgab";
+  int bend;
+  struct notestruct *s;
 
+  upoct = octave;
+  t = (int) ((long) strchr(anoctave, note)  - (long) anoctave);
+  up = *(anoctave + ((t+1) % 7));
+  if (up == 'c') upoct = upoct + 1;
+  pitchup = pitchof_b(up, v->basemap[(int)up - 'a'], 1, upoct, 0,&bend);
+  s = (struct notestruct*) checkmalloc(sizeof(struct notestruct));
+  s->pitch = pitch;
+  s->index = notes;
+  s->notetype = TRILL;
+  s->pitchup = pitchup;
+  s->pitchdown = 0;
+  s->default_length = global.default_length;
+  s->bendup = bend;
+  s->benddown = active_pitchbend;
+  noteaddr[notesdefined] = s;
+  if (notesdefined < 1000) notesdefined++;
+  }
+
+static void dotrill_output(i)
+int i;
+{
+int deco_index;
+int pitch,pitchup,pitchdown;
+int bend;
+int default_length;
+int n,m,a,b;
+int count,j;
+struct notestruct *s;
+deco_index = decotype[i];
+s =  noteaddr[deco_index];
+pitch = s->pitch;
+pitchdown = s->pitchdown;
+pitchup = s->pitchup;
+default_length = s->default_length;
+bend = s->bendup;
+active_pitchbend = s->benddown;
+n = num[i]*default_length;
+m = denom[i]*4;
+reduce(&n,&m);
+removefeature(i);
+  a = 4;
+  b = m*default_length;
+  count = n;
+  while ((tempo*a)/((long)b) > 100000L) {
+    count = count*2;
+    b = b*2;
+  };
+  j = 0;
+reduce(&a,&b);
+  while (j < count) {
+    /*if (i == count - 1) {  **bug** [SS] 2006-09-10 */
+    if (j%2 == 0) {
+      insertfeature(NOTE, pitchup, a, b,i);
+      bentpitch[i] = bend;
+      i++;
+    } else {
+      insertfeature(NOTE, pitch, a, b,i);
+      bentpitch[i] = active_pitchbend;
+      i++;
+    };
+    j = j + 1;
+  };
+}
+
+
+void dump_notestruct () {
+  int i;
+  struct notestruct *s;
+  for (i = 0;i<notesdefined; i++) {
+    s = noteaddr[i];
+    printf("%d ",i);
+    printf("%d ",s->index);
+    printf("%d ",s->notetype);
+    printf("%d ",s->pitch);
+    printf("%d ",s->pitchup);
+    printf("%d\n",s->pitchdown);
+    }
+  } 
+
+/* [SS] 2012-07-03 */
+
+void free_notestructs () {
+int i;
+struct notestruct *s;
+for (i=1;i<notesdefined;i++) {
+  s =  noteaddr[i];
+  free(s);
+  }
+}  
+  
 
 void makecut (mainpitch, shortpitch,mainbend,shortbend, n,m)
 int mainpitch,shortpitch,mainbend,shortbend,n,m;
@@ -3149,6 +3356,7 @@ int xoctave, n, m;
   int pitch_noacc;
   int dummy;
 
+  decotype[notes] = 0; /* [SS] 2012-07-02 no decoration */
   if (voicesused == 0) bodystarted=1;
   if (v == NULL) {
     event_fatal_error("Internal error - no voice allocated");
@@ -3208,13 +3416,20 @@ int xoctave, n, m;
       if (easyabcmode) /* [SS] 2011-07-18 */ 
          addfeature(META,0,lineno,lineposition); /* [SS] 2011-07-18 */
       if (decorators[TRILL]) {
-        dotrill(note, octave, num, denom, pitch);
+        decotype[notes] = notesdefined; /* [SS] 2012-06-29 */
+        /*dotrill(note, octave, num, denom, pitch);*/
+        dotrill_setup(note, octave, num, denom, pitch);
+        addfeature(NOTE, pitch, num*4, denom*(v->default_length));
       }
       else if (decorators[ORNAMENT]) {
         doornament(note, octave, num, denom, pitch);
       }
       else { 
-        doroll(note, octave, num, denom, pitch);
+        decotype[notes] = notesdefined; /* [SS] 2012-06-29 */
+        /*doroll(note, octave, num, denom, pitch);*/
+        doroll_setup(note, octave, num, denom, pitch);
+        bentpitch[notes] = active_pitchbend;
+        addfeature(NOTE, pitch, num*4, denom*(v->default_length));
       };
      }; /* end of else block for not in chord */
    } /* end of if block for ROLL,ORNAMENT,TRILL */
@@ -4520,6 +4735,7 @@ static void startfile()
   set_drums("z");
   drumvoice = 0;
   wordvoice = 0;
+  notesdefined = 1; /* [SS] 2012-07-02 */
 }
 
 void setbeat()
@@ -4721,6 +4937,31 @@ for (i = num2add-1; i >= 0; i--) {
   }
 }
 
+/* [SS] 2012-05-30 */
+void expand_ornaments () {
+int i;
+struct notestruct *s;
+int notetype,deco_index;
+for (i=0;i<notes;i++) {
+  if (decotype[i] != 0 && feature[i] == NOTE) {
+      deco_index = decotype[i];
+      s =  noteaddr[deco_index];
+      notetype = s->notetype;
+      switch (notetype) {
+         case TRILL:
+           dotrill_output(i);
+           break;
+         case ROLL:
+           doroll_output(i);
+           break;
+         default: printf("no such decoration %d\n",decotype);
+         }
+      }
+  }
+/*dump_notestruct();*/
+ }
+
+
 
 
 static void finishfile()
@@ -4760,6 +5001,7 @@ static void finishfile()
 
     if (barflymode) apply_bf_stress_factors (); /* [SS] 2011-08-24 */ 
  
+    expand_ornaments();
 
     if (check) {
       Mf_putc = nullputc;
@@ -4799,6 +5041,7 @@ static void finishfile()
       free(words[i]);
     };
     freevstring(&part);
+    free_notestructs(); /* [SS] 2012-06-03 */ 
   };
 }
 
