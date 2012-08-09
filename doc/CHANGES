@@ -9130,5 +9130,11 @@ For the present time you should avoid combining ornaments with
 broken rhythms in multivoiced tunes.
 
 
+August 08 2012
+
+Abc2midi, yaps, abc2abc: The time signature C| or c| is now
+interpreted as 2/2 instead of 4/4.
+
+Implementation: added another test in void readsig() in parseabc.c
 
 

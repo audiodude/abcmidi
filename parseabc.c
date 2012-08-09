@@ -342,6 +342,13 @@ char **sig;
 {
   int t;
 
+  /* [SS] 2012-08-08  cut time (C| or c|) is 2/2 not 4/4 */
+  if ((*(*sig+1) == '|') && ((**sig == 'C') || (**sig == 'c'))) {
+    *a = 2;
+    *b = 2;
+    return;
+    }
+
   if ((**sig == 'C') || (**sig == 'c')) {
     *a = 4;
     *b = 4;
