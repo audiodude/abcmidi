@@ -868,10 +868,12 @@ int* place;
 int w;
 {
   char syllable[200];
-  char c;
+  unsigned char c; /* [BY] 2012-10-03 */
   int i;
   int syllcount;
   enum {empty, inword, postword, foundnext, failed} syllstatus;
+  /* [BY] 2012-10-03  Big5 chinese character support */
+  int isBig5; /* boolean check for first byte of Big-5: 0xA140 ~ 0xF9FE */
 
   /*printf("GETWORD: w = %d\n",c);*/
   i = 0;
@@ -894,9 +896,15 @@ int w;
   };
   syllstatus = empty;
   c = *(words[w]+(*place));
+  isBig5 = 0;  /* [BI] 2012-10-03 */
   while ((syllstatus != postword) && (syllstatus != failed)) {
   syllable[i] = c;
     /* printf("syllstatus = %d c = %c i = %d place = %d row= %d \n",syllstatus,c,i,*place,w); */
+	if (isBig5) { /* [BI] 2012-10-03 */
+      i = i + 1;
+      *place = *place + 1;
+	  isBig5 = 0;
+	} else {
     switch(c) {
     case '\0':
       if (syllstatus == empty) {
@@ -986,13 +994,18 @@ int w;
       /* copying plain text character across */
       /* first character must be alphabetic */
 	  hyphenstate = 0;
-      if ((i>0) || isalpha(syllable[0])) {
+          /* [BI] 2012-10-03 */
+	  if (c >= 0xA1) {	/* 0xA1, 161 */
+		isBig5 = 1;
+	  };
+      if ((i>0) || isalpha(syllable[0]) || (c >= 0xA1)) {
         syllstatus = inword;
         i = i + 1;
       };
       *place = *place + 1;
       break;
     };
+};
     c = *(words[w]+(*place));
   };
   syllable[i] = '\0';

@@ -9138,3 +9138,9 @@ interpreted as 2/2 instead of 4/4.
 Implementation: added another test in void readsig() in parseabc.c
 
 
+October 03 2012
+
+Chinese character support in lyrics was added to abc2midi by
+Bow Yi Jang <byjang61@gmail.com>. Changes were restricted to
+the function getword(.) in genmidi.c
+
