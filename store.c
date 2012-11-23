@@ -31,7 +31,7 @@
  * Wil Macaulay (wil@syndesis.com)
  */
 
-#define VERSION "2.97 Nov 15 2012"
+#define VERSION "2.99 Nov 23 2012"
 /* enables reading V: indication in header */
 #define XTEN1 1
 /*#define INFO_OCTAVE_DISABLED 1*/
@@ -3982,7 +3982,7 @@ int j, xinchord,voiceno;
       event_error("Could not find note to be tied");
     };
   };
-/*printf("dotie finished\n");*/ 
+/*if (verbose > 3) printf("dotie finished\n"); */
 }
 
 static void fix_enclosed_note_lengths(int from, int end) 
@@ -4088,6 +4088,7 @@ static void tiefix()
       break;
     };
   };
+if (verbose >3) printf("tiefix finished\n");
 }
 
 static void applygrace_orig(int);
@@ -4356,6 +4357,7 @@ static void dograce()
     };
     j = j + 1;
   };
+if (verbose >3) printf("dograce finished\n");
 }
 
 static void zerobar()
@@ -4945,7 +4947,7 @@ for (i=0;i<notes;i++) {
   }
 if (num2add > 0) 
  add_missing_repeats (); 
-
+if (verbose >3) printf("scan_for_missing_repeats finished\n");
 }
 
 
@@ -4962,12 +4964,37 @@ for (i = num2add-1; i >= 0; i--) {
   }
 }
 
-/* [SS] 2012-05-30 */
+/* [SS] 2012-11-23 */
+void convert_tnote_to_note (int loc) {
+/* tied notes TNOTE are handled in a different
+   manner by genmidi so we need to change it
+   to NOTE so it expand_ornament can process
+   it. We change TNOTE to NOTE and eliminate the
+   RESTS associated with TNOTE
+*/
+int i,j,pitchflag;
+feature[loc] = NOTE;
+/* Look ahead and remove the REST associated with TNOTE    */
+/* The last REST in the TNOTE sequence has a nonzero pitch */
+j=loc;
+for (i=0;i<6;i++) {
+  if(feature[j] == REST) {
+    pitchflag = pitch[j];
+    removefeature(j);
+    if (pitchflag != 0) break;
+    } else j++; 
+  }
+}
+
+
+
+/* [SS] 2012-05-30  2012-11-23 */
 void expand_ornaments () {
 int i;
 struct notestruct *s;
 int notetype,deco_index;
 for (i=0;i<notes;i++) {
+  if (decotype[i] != 0 && feature[i] == TNOTE) convert_tnote_to_note(i);
   if (decotype[i] != 0 && feature[i] == NOTE) {
       deco_index = decotype[i];
       s =  noteaddr[deco_index];
@@ -4984,6 +5011,7 @@ for (i=0;i<notes;i++) {
       }
   }
 /*dump_notestruct();*/
+if (verbose> 3) printf("expand_ornaments finished\n");
  }
 
 
@@ -5027,6 +5055,7 @@ static void finishfile()
     if (barflymode) apply_bf_stress_factors (); /* [SS] 2011-08-24 */ 
  
     expand_ornaments();
+    if (verbose > 5) dumpfeat(0,notes);
 
     if (check) {
       Mf_putc = nullputc;
