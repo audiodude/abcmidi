@@ -9304,3 +9304,11 @@ extends over a measure. Also, lyrics may not align correctly
 with tied and trilled notes. It gets messy to make expand_ornaments()
 to split up a trill across a measure.
 
+
+November 25 2012
+
+Abc2midi: the compiler on Windows PC does not initialize arrays
+to zero when they are allocated. As a protection the arrays the bentpitch
+and decotype are now initialized to 0 when they are allocated.
+Some array pointers are now checked for valid values.
+

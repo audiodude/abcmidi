@@ -31,7 +31,7 @@
  * Wil Macaulay (wil@syndesis.com)
  */
 
-#define VERSION "2.99 Nov 23 2012"
+#define VERSION "3.00 Nov 25 2012"
 /* enables reading V: indication in header */
 #define XTEN1 1
 /*#define INFO_OCTAVE_DISABLED 1*/
@@ -369,6 +369,8 @@ int n;
   s->keyset = global.keyset;
   s->octaveshift = global.octaveshift;
   s->drumchannel = 0;
+  if (voicecount < 0 || voicecount >63)
+     printf("illegal voicecount = %d\n",voicecount); /* [SS] 2012-11-25 */
   vaddr[voicecount] = s;
   return(s);
 }
@@ -764,6 +766,8 @@ char **filename;
   decotype  = checkmalloc(maxnotes*sizeof(int)); /* [SS] 2012-06-29 */
   feature = (featuretype*) checkmalloc(maxnotes*sizeof(featuretype));
   pitchline = checkmalloc(maxnotes*sizeof(int));
+  for (j=0; j<maxnotes; j++)           /* [SS] 2012-11-25 */
+       bentpitch[j] = decotype[j] = 0; /* [SS] 2012-11-25 */
   for (j=0;j<DECSIZE;j++)  dummydecorator[j] = 0;
 
   /* and for text */
@@ -1261,6 +1265,10 @@ int maxnotes;
   ptr2 = checkmalloc(newlimit*sizeof(int));
   ptr3 = checkmalloc(newlimit*sizeof(int));
   ptr4 = checkmalloc(newlimit*sizeof(int)); /* [SS] 2012-06-29 */
+  for (i=0; i<newlimit; i++) {
+      ptr3[i] = 0;
+      ptr4[i] =0;
+      }      
   for(i=0;i<maxnotes;i++){
     ptr[i] = pitch[i];
     ptr2[i] = pitchline[i];
@@ -3052,6 +3060,8 @@ int pitch;
   s->bendup = bend_up;
   s->benddown = bend_down;
   s->default_length = global.default_length;
+  if (notesdefined < 0 || notesdefined>999)
+      printf("illegal notesdefined = %d\n",notesdefined);
   noteaddr[notesdefined] = s;
   if (notesdefined < 1000) notesdefined++;
 }
@@ -3165,6 +3175,8 @@ int pitch;
   s->default_length = global.default_length;
   s->bendup = bend;
   s->benddown = active_pitchbend;
+  if (notesdefined < 0 || notesdefined>999)
+      printf("illegal notesdefined = %d\n",notesdefined);
   noteaddr[notesdefined] = s;
   if (notesdefined < 1000) notesdefined++;
   }

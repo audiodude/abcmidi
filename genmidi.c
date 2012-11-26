@@ -80,6 +80,7 @@ extern int chordlen[MAXCHORDNAMES];
 /* these 6 arrays are used to hold the tune data */
 extern int *pitch, *num, *denom;
 extern int *bentpitch;
+extern int *decotype; /* [SS] 2012-11-25 */
 extern featuretype *feature;
 extern int *stressvelocity; /* [SS] 2011-08-17 */
 extern int notes;
@@ -3171,7 +3172,8 @@ int i,j;
 for (i=from;i<=to;i++)
   {
   j = feature[i]; 
-  printf("%d %s   %d %d %d %d \n",i,featname[j],pitch[i],bentpitch[i],num[i],denom[i]);
+  if (j<0 || j>72) printf("illegal feature[%d] = %d\n",i,j); /* [SS] 2012-11-25 */
+  else printf("%d %s   %d %d %d %d %d \n",i,featname[j],pitch[i],bentpitch[i],decotype[i],num[i],denom[i]);
   }
 }
 

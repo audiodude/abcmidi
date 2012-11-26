@@ -616,16 +616,16 @@ int interpret_voicestring(char *s)
 */
 int i;
 char code[32];
-char msg[80]; /* [PDM] 2012-11-22 */
+char msg[80]; /* [PHDM] 2012-11-22 */
 char *c;
 c =readword(code,s);
 
-/* [PDM] 2012-11-22 */
+/* [PHDM] 2012-11-22 */
 if (*c != '\0' && *c != ' ' && *c != ']') {
      sprintf(msg, "invalid character `%c' in Voice ID", *c);
      event_error(msg);
     }
-/* [PDM] 2012-11-22 */
+/* [PHDM] 2012-11-22 */
 
 if (code[0] == '\0') return 0;
 if (voicecodes == 0) {strcpy(voicecode[voicecodes],code);
@@ -2106,7 +2106,8 @@ char* line;
   char *p, *q;
 
 /*  printf("%d parsing : %s\n", lineno, line);  */
-  strncpy(inputline,line,256); /* [SS] 2011-06-07 */
+/***** strncpy(inputline,line,256);  [SS] 2011-06-07 */
+  strncpy(inputline,line,sizeof inputline); /* [PHDM] 2012-11-22 */
 
   p = line;
   linestart = p;  /* [SS] 2011-07-18 */
