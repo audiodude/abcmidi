@@ -9312,3 +9312,14 @@ to zero when they are allocated. As a protection the arrays the bentpitch
 and decotype are now initialized to 0 when they are allocated.
 Some array pointers are now checked for valid values.
 
+
+December 01 2012 -- submitted by Philippe de Muyter
+
+abc2abc truncates a line to 512 characters without warning in the
+-P mode. (This is the continuation of the changes November 22 2012.)
+
+Analysis event_error is muted during the output so it is necessary
+to simulate it with a plain printf in the function print_inputline_nolinefeed()
+in the file parseabc.c.
+
+
