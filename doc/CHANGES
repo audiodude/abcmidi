@@ -8887,7 +8887,7 @@ Abc2midi: new feature. Introduced a new option (-TT)  to tune the key of
 A above or below 440.0 Hz but less than a semitone. The output MIDI
 file will re-tune to that frequency. The purpose of this feature
 is to accommodate some instruments like the accordian which are
-not tune exactly to 440.0 Hz.
+not tuned exactly to 440.0 Hz.
 
 Implementation: in store.c introduced two new globals
 retuning and bend which will be shared with genmidi.c.
@@ -9408,4 +9408,32 @@ no longer valid.
 
 Fix: created a new function fix_part_start() in store.c which
 is called after expand_ornaments() in finishfile().
+
+
+Jan 27 2013
+
+Abc2midi: the abc2midi allows but does not recommend the tempo
+command to just specify a number. eg. Q:320. abc2midi automatically
+assumes that this number refers to a quarter note; however,
+the abc standard 2.0 specifies that it should refer to the unit length
+specified by the L: command prior to the body.
+
+Fix: in parseabc.c changed a=1 to a=0 in the function parse_tempo().
+The existing code in tempunits() in store.c does all the rest.
+
+Jan 28 2013
+
+Abc2midi: the above change was withdrawn since there is disagreement
+between abc standard 1.7.6 and abc standard 2.0.
+
+February 25 2013
+
+Abcmatch: introduced -wpitch_hist runtime parameter for computing
+the pitch histogram weighted by the note length. Some minor clean-up
+of the output.
+
+February 26 2013
+
+Abcmatch: negative array index fixed in abcmatch.c (compute_note_histogram).
+Problem is exposed on Windows operating system.
 
