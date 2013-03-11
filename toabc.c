@@ -21,7 +21,7 @@
 
 /* back-end for outputting (possibly modified) abc */
 
-#define VERSION "1.70 December 01 2012"
+#define VERSION "1.71 March 08 2013"
 
 /* for Microsoft Visual C++ 6.0 or higher */
 #ifdef _MSC_VER
@@ -90,7 +90,9 @@ int cleanup; /* boolean to indicate -u option (update notation) */
 char tmp[2000]; /* buffer to hold abc output being assembled */
 int output_on = 1;  /* if 0 suppress output */
 int passthru = 0; /* output original abc file [SS] 2011-06-07 */
-int selected_voice = -1; /* no voice was selected */
+long selected_voices = -1; /* all voices are selected [PHDM] 2013-03-08 */
+/* selected_voices is now a bit map where each bit in the word */
+/* corresponds to a specific voice number                      */   
 int newrefnos; /* boolean for -X option (renumber X: fields) */
 int newref; /* next new number for X: field */
 int useflats=0; /* flag associated with nokey.*/ 
@@ -466,6 +468,25 @@ static void repudiate_lastaddunits()
   count = prevcount;
 }
 
+void parse_voices_selection(voices_string) /* [PHDM] 2013-03-08 */
+char *voices_string;
+{
+  char *s = voices_string;
+
+  selected_voices = 0;
+  do {
+    int v = readnump(&s);
+
+    selected_voices |= 1 << v;
+  } while (*s++);
+}
+
+int must_emit_voice(n) /* [PHDM] 2013-03-08 */
+int n;
+{
+  return selected_voices & (1 << n);
+}
+
 void event_init(argc, argv, filename)
 int argc;
 char* argv[];
@@ -477,7 +498,7 @@ char** filename;
   if ((getarg("-h", argc, argv) != -1) || (argc < 2)) {
     printf("abc2abc version %s\n",VERSION);
     printf("Usage: abc2abc <filename> [-s] [-n X] [-b] [-r] [-e] [-t X]\n");
-    printf("       [-u] [-d] [-v] [-V X] [-ver] [-X n]\n");
+    printf("       [-u] [-d] [-v] [-V X[,Y,,,]] [-P X[,Y...]] [-ver] [-X n]\n");
     printf("  -s for new spacing\n");
     printf("  -n X to re-format the abc with a new linebreak every X bars\n");
     printf("  -b to remove bar checking\n");
@@ -491,8 +512,8 @@ char** filename;
     printf("  -usekey n Use key signature sf (sharps/flats)\n");
     printf("  -d to notate with doubled note lengths\n");
     printf("  -v to notate with halved note lengths\n");
-    printf("  -V X to output only voice X\n");
-    printf("  -P X restricts action to voice X, leaving other voices intact\n");
+    printf("  -V X[,Y...] to output only voices X,Y...\n");
+    printf("  -P X[,Y...] restricts action to voice X,Y..., leaving other voices intact\n");
     printf("  -ver  prints version number and exits\n");
     printf("  -X n renumber the all X: fields as n, n+1, ..\n");
     printf("  -OCC old chord convention (eg. +CE+)\n");
@@ -600,13 +621,13 @@ char** filename;
 
   targ = getarg("-V", argc, argv);
   if (targ != -1) {
-    selected_voice  = readnumf(argv[targ]);
+    parse_voices_selection(argv[targ]); /* [PHDM] 2013-03-08 */
   };
 
   targ = getarg("-P", argc, argv);   /* [SS] 2011-06-07 */
   if (targ != -1) {
-    selected_voice = readnumf(argv[targ]);
     passthru = 1;
+    parse_voices_selection(argv[targ]); /* [PHDM] 2013-03-08 */
     }
 
   targ = getarg("-usekey",argc,argv);
@@ -1140,7 +1161,7 @@ struct voice_params *vp;
   if (xinbody) {
     next_voice = setvoice(n);
   };
-  if ((selected_voice != -1) && (n != selected_voice)) {
+  if (!must_emit_voice(n)) { /* [PHDM] 2013-03-08 */
     if ((inlinefield) && (output_on == 1)) { 
       unemit_inline();
     }; 

@@ -9437,3 +9437,24 @@ February 26 2013
 Abcmatch: negative array index fixed in abcmatch.c (compute_note_histogram).
 Problem is exposed on Windows operating system.
 
+March 08 2013 -- patch submitted by Philippe De Muyter
+
+Abc2abc: the -V and -P options have been generalized so that more
+than one voice can be selected using a comma separated list.
+
+Implementation:
+
+The long global variable selected_voices represents the selected
+voice in a bit map. Each bit in the word corresponds to a specific
+voice number. Two new functions are introduced. parse_voices_selection
+parses the voices_string in the -P or -V command and converts it
+into the bitmap in the selected_voices variable. must_emit_voice(n)
+examines the n'th bit of the selected_voices and indicates whether
+it is on or off. The other change is the replacement of the control
+
+-  if ((selected_voice != -1) && (n != selected_voice)) {
+with
++  if (!must_emit_voice(n)) { /* [PHDM] 2013-03-08 */
+
+
+

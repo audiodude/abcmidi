@@ -2,7 +2,7 @@ abcMIDI :   abc <-> MIDI conversion utilities
 
 midi2abc version 2.92 Aug  04 2008
 abc2midi version 3.02 Dec  25 2012
-abc2abc  version 1.70 Dec  01 2012
+abc2abc  version 1.71 March 08 2013
 yaps     version 1.53 Aug  08 2012
 abcmatch version 1.46 Feb  26 2012
 midicopy version 1.10 Sep  22 2006
@@ -342,8 +342,8 @@ Usage: abc2abc <filename> [-s] [-n X] [-b] [-r] [-e] [-t X]
   -u to update notation ([] for chords and () for slurs)
   -d to notate with doubled note lengths
   -v to notate with halved note lengths
-  -V X to output only voice X
-  -P X restricts action to voice X, leaving other voices intact
+  -V X[,Y...] to output only voice X,Y...
+  -P X[,Y...] restricts action to voice X,Y... leaving other voices intact
   -ver prints version number and exits
   -X n renumber the all X: fields as n, n+1, ..
   -usekey sf Use key signature sf (flats/sharps)
