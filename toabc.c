@@ -21,7 +21,7 @@
 
 /* back-end for outputting (possibly modified) abc */
 
-#define VERSION "1.71 March 08 2013"
+#define VERSION "1.72 March 10 2013"
 
 /* for Microsoft Visual C++ 6.0 or higher */
 #ifdef _MSC_VER
@@ -60,6 +60,7 @@ struct fract unitlen; /* unit length as given by the L: field */
 struct fract count; /* length of bar so far */
 struct fract prevcount; /* length of bar before last increment */
 struct fract tuplefactor; /* factor associated with a tuple (N */
+struct fract chordfactor; /* factor of the first note in a chord [PHDM] 2013-03-10 */
 struct fract breakpoint; /* used to break bar into beamed sets of notes */
 int barno; /* number of bar within tune */
 int newspacing; /* was -s option selected ? */
@@ -91,8 +92,6 @@ char tmp[2000]; /* buffer to hold abc output being assembled */
 int output_on = 1;  /* if 0 suppress output */
 int passthru = 0; /* output original abc file [SS] 2011-06-07 */
 long selected_voices = -1; /* all voices are selected [PHDM] 2013-03-08 */
-/* selected_voices is now a bit map where each bit in the word */
-/* corresponds to a specific voice number                      */   
 int newrefnos; /* boolean for -X option (renumber X: fields) */
 int newref; /* next new number for X: field */
 int useflats=0; /* flag associated with nokey.*/ 
@@ -452,20 +451,29 @@ int *a, *b;
   *b = *b/n;
 }
 
-
+/*
+ * addunits must be called for each single note or rest and
+ * at each chord end.  When called at chordoff time, make
+ * sure that inchord is still true. [PHDM] 2013-03-10
+ */
 static void addunits(n, m)
 int n, m;
 /* add fraction n/m to count */
 {
-  prevcount = count;  /* in case of chord extension eg [CE]3/2 */
+  if (inchord) { /* [PHDM] 2013-03-10 */
+    if (!chordcount) /* empty chord */
+      return;
+    n *= chordfactor.num;
+    m *= chordfactor.denom;
+  }
+  if (tuplenotes) { /* [PHDM] 2013-03-10 */
+    n *= tuplefactor.num;
+    m *= tuplefactor.denom;
+    tuplenotes = tuplenotes - 1;
+  };
   count.num = n*count.denom + count.num*(m*unitlen.denom);
   count.denom = (m*unitlen.denom)*count.denom;
   reduce(&count.num, &count.denom);
-}
-
-static void repudiate_lastaddunits()
-{
-  count = prevcount;
 }
 
 void parse_voices_selection(voices_string) /* [PHDM] 2013-03-08 */
@@ -1669,13 +1677,13 @@ int decorators[DECSIZE];
   printlen(newlen.num, newlen.denom);
   if (inchord) {
     chordcount = chordcount + 1;
+    if (chordcount == 1) { /* [PHDM] 2013-03-10 */
+      chordfactor.num = n;
+      chordfactor.denom = m;
+    }
   };
-  if ((!ingrace) && (!inchord || (chordcount == 1))) {
-    if (!tuplenotes) addunits(n, m);
-    else {
-      addunits(n*tuplefactor.num, m*tuplefactor.denom);
-      tuplenotes = tuplenotes - 1;
-      }
+  if ((!ingrace) && (!inchord)) {
+    addunits(n, m);
   };
 }
 
@@ -1894,6 +1902,8 @@ void event_chord()
     emit_string("+");
   };
   inmusic = 1;
+  if (inchord) /* [PHDM] 2013-03-10 */
+    addunits(1, 1);
   inchord = 1 - inchord;
   chordcount = 0;
 }
@@ -1931,12 +1941,8 @@ void event_chordoff(int chord_n, int chord_m)
      emit_string(string);
      }
   inmusic = 1;
+  addunits(chord_n, chord_m);
   inchord = 0;
-  if(chord_n !=1 || chord_m !=1)
-    {
-    repudiate_lastaddunits();
-    addunits(chord_n,chord_m);
-    }
 }
 
 static void splitstring(s, sep, handler)
@@ -2291,14 +2297,13 @@ int xoctave, n, m;
   printlen(newlen.num, newlen.denom);
   if (inchord) {
     chordcount = chordcount + 1;
+    if (chordcount == 1) { /* [PHDM] 2013-03-10 */
+      chordfactor.num = n;
+      chordfactor.denom = m;
+    }
   };
-  if ((!ingrace) && (!inchord || (chordcount == 1))) {
-    if (tuplenotes == 0) {
-      addunits(n, m);
-    } else {
-      addunits(n*tuplefactor.num, m*tuplefactor.denom);
-      tuplenotes = tuplenotes - 1;
-    };
+  if ((!ingrace) && (!inchord)) {
+    addunits(n, m);
   };
   if (newspacing) {
     barpoint.num = count.num * breakpoint.denom;
@@ -2384,14 +2389,13 @@ int xoctave, n, m;
   printlen(newlen.num, newlen.denom);
   if (inchord) {
     chordcount = chordcount + 1;
+    if (chordcount == 1) { /* [PHDM] 2013-03-10 */
+      chordfactor.num = n;
+      chordfactor.denom = m;
+    }
   };
-  if ((!ingrace) && (!inchord || (chordcount == 1))) {
-    if (tuplenotes == 0) {
-      addunits(n, m);
-    } else {
-      addunits(n*tuplefactor.num, m*tuplefactor.denom);
-      tuplenotes = tuplenotes - 1;
-    };
+  if ((!ingrace) && (!inchord)) {
+    addunits(n, m);
   };
   if (newspacing) {
     barpoint.num = count.num * breakpoint.denom;

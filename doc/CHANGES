@@ -9437,6 +9437,7 @@ February 26 2013
 Abcmatch: negative array index fixed in abcmatch.c (compute_note_histogram).
 Problem is exposed on Windows operating system.
 
+
 March 08 2013 -- patch submitted by Philippe De Muyter
 
 Abc2abc: the -V and -P options have been generalized so that more
@@ -9457,4 +9458,38 @@ with
 +  if (!must_emit_voice(n)) { /* [PHDM] 2013-03-08 */
 
 
+
+
+March 10 2013 -- also submitted by Philippe De Muyter
+
+abc2abc: fix chord's tuple length calculation
+
+Up to now, bar length was increased at first note of chord, and
+tuple status was lost at first note of last chord.  When a chord
+in a tuple had a length modifier, the resulting bar length
+was wrong, which caused wrong error messages.
+
+With
+        X:1
+        T:wrongbarlengtherror
+        M:4/4
+        L:1/8
+        K:C
+        z8 | z6 (3  [fd]/ [fd]3/ [fd] | z6 (3 [f/d/] [f3/d3/] [fd] |
+abc2abc gave a wrong message :
+        %Error : Bar 1 is 13/12 not 4/4
+
+Fix that, by incrementing bar length and decrementing `tuplenotes' at
+chordoff time, not at first chord note.
+Move also the tuple-implied length conversion in `addunits', to
+avoid code duplication.
+Because there are two ways to specify a chord length,
+        [c2e2g2]
+and        [ceg]2
+in the first case, we must now memorize the note length to be able
+to retrieve it at chordoff time; this is done in the new
+`chordfactor' variable.
+
+Additionnaly, as 'addunits' is only called when we know the exact length
+of a note or chord, `repudiate_lastaddunits' is now useless and removed.
 
