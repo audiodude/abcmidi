@@ -8770,7 +8770,7 @@ it is creating the midi file lamb2.mid. In most cases the position
 of the missing left repeat |: can be inferred, (in particular if
 it is at the beginning of the tune). However, in some cases the
 missing repeat is put at the wrong place or abc2midi fails to
-apply the repeat. In July 23 2009 new code was introduced to 
+apply the repeat. In June 23 2009 new code was introduced to 
 address this problem since it is proper for the left repeat to be
 omitted when it should occur at the beginning of the tune. 
 The new functions scan_for_missing_repeats(), add_missing_repeats(),
@@ -9492,4 +9492,54 @@ to retrieve it at chordoff time; this is done in the new
 
 Additionnaly, as 'addunits' is only called when we know the exact length
 of a note or chord, `repudiate_lastaddunits' is now useless and removed.
+
+
+
+March 14 2013
+
+Abc2midi: part/repeat bug. In the following example
+
+X:1
+T: Part - repeat bug
+Q:1/2=120
+M:2/2
+L:1/4
+K:D
+%%vskip 0
+P:Intro
+|: "Em"e4 ||
+P:A
+|| "D"d4 :|
+
+abc2midi returns the following messages:
+Error in line 12 :  found another |: after a |:
+Warning in line 12 : Assuming repeat
+Warning in line 12 : replacing with double repeat (::)
+writing MIDI file temp21.mid
+
+Furthermore, the e4 in the Intro is repeated and then the D4
+in part A is repeated. Since the P: are only labels here
+(there is no P: command preceding K:), it was expected that
+the entire the tune would be played as
+|: "Em" e4 | "D" d4 :|
+
+Analysis: the function scan_for_missing_repeats() which was
+introduced in June 23 2009 is the source of the problem. The
+function assumes that the tune is actually in two parts and
+inserts a |: in the beginning of part A. When fixreps() is
+called it discovers that two |: occur without an
+intervening :|, so it decides to replace the second |: with
+a double repeat ::. (Note that fixreps() would not be called
+if the parts were real and not just annotations.)
+ 
+Fix:
+The useless conditional statement
+if (J == PART || j == VOICE || j == BAR_REP etc.
+was commented out since it does nothing.
+In the following statement, an additional check parts != -1
+was added. If parts == -1, this implies that the part indications
+are merely annotations and do imply a real part as abc2midi is
+concerned. Therefore bar_rep_found[] and voicestart[] are not
+cleared again, implying that a |: may need to be introduced at
+the beginning of the part if the part ends with a :|.
 
