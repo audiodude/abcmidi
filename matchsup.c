@@ -207,6 +207,8 @@ int maxwords = INITWORDS;
 int xrefno;
 
 extern int intune; /* signals to parsetune that tune is finished */
+extern char titlename[32]; /* stores title of tune */
+extern char keysignature[16];
 
 /* Many of these functions have been retained in order to link with parseabc.
 As I have been forced to also modifiy parseabc, now called abcparse, these
@@ -632,6 +634,9 @@ char *f;
         };
 ********/
       };
+      break;
+    case 'T':
+      strncpy(titlename,f,30);
       break;
     default:
       {
@@ -1827,6 +1832,7 @@ int explict;
 char* clefname;
 {
   int minor;
+  strncpy(keysignature,s,16);
   if (modeindex >0 && modeindex <4) minor = 1;
   if ((dotune) && gotkey) {
     if (pastheader) {
@@ -1928,6 +1934,7 @@ int n;
     finishfile();
     parseroff();
     dotune = 0;
+    intune = 0; /* [SS] 2013-03-20 */
   };
   if (verbose) {
     printf("Reference X: %d\n", n);

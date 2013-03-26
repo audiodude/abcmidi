@@ -2149,8 +2149,20 @@ char* line;
       };
       if ((*(q+1) == ':') || (*(q+1) == '|')) {
         event_warning("potentially ambiguous line");
-      };
-      parsefield(*p, q+1);
+/*    [SS] 2013-03-20 */
+/*     };             */
+/*      parsefield(*p,q+1); */
+
+/*    [SS} 2013-03-20 start */
+/*    malformed field command try processing it as a music line */
+        if (inbody) {
+          if (parsing) parsemusic(p);
+        } else {
+          if (parsing) event_text(p);
+        };
+      } else parsefield(*p, q+1); /* not field command malformed */
+/*    [SS] 2013-03-20  end */
+
     } else {
       if (inbody) {
         if (parsing) parsemusic(p);

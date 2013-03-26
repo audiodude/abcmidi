@@ -9543,3 +9543,97 @@ concerned. Therefore bar_rep_found[] and voicestart[] are not
 cleared again, implying that a |: may need to be introduced at
 the beginning of the part if the part ends with a :|.
 
+
+
+
+March 20 2013
+
+Abc2midi: invisible and visible multirest confusion with field commands.
+Z and X are used both as field declarations (X: reference number
+and Z: transcription source) and as multirests in the body. In unusual
+cases where the multirest is followed by a repeat sign and happens
+to be at the beginning of a line, it can cause confusion. For example,
+
+
+X:1
+T: rests
+M:3/4
+K:C
+c6|e6|^g6|\
+X ::\
+C6|e'6|^G6|\
+Z :|\
+[CE^G]6|]
+
+
+X:2
+T:rests
+M:3/4
+K:C
+c6|e6|^g6|\
+X1::\
+C6|e'6|^G6|\
+Z1:|\
+[CE^G]6|]
+
+are two examples which abc2midi fails to interpret correctly. parseline()
+in parseabc.c attempts to treat X :: and Z :| as field commands even
+though they are malformed. Abc2abc also does not produce correct output.
+
+Fortunately parseline issues warnings
+
+Warning in line 8 : whitespace in field declaration
+Warning in line 8 : potentially ambiguous line
+Error in line 8 : Missing Number
+
+and the transcriber is urged to reformat the line to avoid this problem.
+
+Fix: I am not sure whether I should fix this problem. In any case,
+I have put a small patch in parseline() so that the above examples
+are treated correctly.
+
+
+March 21 2013
+
+abcmatch: several bug fixes and a new feature -pitch_table.
+Given a file containing a collection of tunes eg. Modes.abc,
+abcmatch Modes.abc -pitch_table
+will output the interval weighted pitch histogram for each
+tune. If the output is stored in a separate file, eg. Modes.tab,
+this table could be used for searching for the tune having the
+closest matching pitch histogram (a feature to be introduced
+in runabc).
+
+
+
+March 26 2013
+
+abc2midi bug: if a chord is preceded by a Roll or Trill indication,
+abc2midi fails to encode the chord in the MIDI file.
+
+For example:
+
+
+X:1
+T: chordtrill
+M: 4/4
+L: 1/8
+K:C
+V:1
+%%MIDI program 16
+T[ceg]4 [AEc]4 :|
+V:2
+%%MIDI channel 10
+GA GA GA GA :|
+
+A warning is issued that trills and rolls are not implemented for
+chords, but [ceg]4 is not encoded in the MIDI file.
+
+Fix: in event_note, in store.c added the lines 
+
+      pitchline[notes] = pitch_noacc; /* [SS] 2013-03-26 */
+      bentpitch[notes] = active_pitchbend; /* [SS] 2013-03-26 */
+      addfeature(NOTE, pitch, num*4, denom*2*(v->default_length)); /* [SS] */
+
+following the statement
+     event_error("Rolls and trills not supported in chords");

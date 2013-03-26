@@ -31,7 +31,7 @@
  * Wil Macaulay (wil@syndesis.com)
  */
 
-#define VERSION "3.03 March 14 2013"
+#define VERSION "3.05 March 26 2013"
 /* enables reading V: indication in header */
 #define XTEN1 1
 /*#define INFO_OCTAVE_DISABLED 1*/
@@ -3449,6 +3449,9 @@ int xoctave, n, m;
   if ((decorators[ROLL]) || (decorators[ORNAMENT]) || (decorators[TRILL])) {
     if (v->inchord) {
       event_error("Rolls and trills not supported in chords");
+      pitchline[notes] = pitch_noacc; /* [SS] 2013-03-26 */
+      bentpitch[notes] = active_pitchbend; /* [SS] 2013-03-26 */
+      addfeature(NOTE, pitch, num*4, denom*2*(v->default_length)); /* [SS] */
     } else {
       if (easyabcmode) /* [SS] 2011-07-18 */ 
          addfeature(META,0,lineno,lineposition); /* [SS] 2011-07-18 */
