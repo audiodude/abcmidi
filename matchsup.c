@@ -99,6 +99,7 @@ extern void reduce();
 #define INITWORDS 20
 #define MAXCHANS 16
 
+
 /*#define DEBUG*/
 
 
@@ -207,7 +208,7 @@ int maxwords = INITWORDS;
 int xrefno;
 
 extern int intune; /* signals to parsetune that tune is finished */
-extern char titlename[32]; /* stores title of tune */
+extern char titlename[48]; /* stores title of tune */
 extern char keysignature[16];
 
 /* Many of these functions have been retained in order to link with parseabc.
@@ -636,7 +637,7 @@ char *f;
       };
       break;
     case 'T':
-      strncpy(titlename,f,30);
+      strncpy(titlename,f,46);
       break;
     default:
       {
@@ -1668,7 +1669,7 @@ static void tiefix()
       j = j + 1;
       break;
     case TIE:
-      dotie(j, inchord,voiceno);
+      /*dotie(j, inchord,voiceno); [SS] 2013-04-04 */
       j = j + 1;
       break;
     case LINENUM:

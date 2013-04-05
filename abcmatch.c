@@ -19,7 +19,7 @@ tied notes longer than 8 quarter notes are ignored.
 
 
 
-#define VERSION "1.47 March 21 2013"
+#define VERSION "1.49 April 05 2013"
 #include <stdio.h>
 #include <stdlib.h>
 #include "abc.h"
@@ -27,6 +27,11 @@ tied notes longer than 8 quarter notes are ignored.
 
 #define MAX(A, B) ((A) > (B) ? (A) : (B))
 #define MIN(A, B) ((A) < (B) ? (A) : (B))
+
+#define BAR -1000
+#define RESTNOTE -2000
+#define ANY -3000
+
 
 int *checkmalloc (int);
 extern int getarg (char *, int, char **);
@@ -49,7 +54,7 @@ extern int check, nowarn, noerror, verbose, maxnotes, xmatch, dotune;
 extern int maxtexts, maxwords;
 
 /* midipitch: pitch in midi units of each note in the abc file. A pitch
-   of zero is reserved for rest notes. Bar lines are signaled with -1000.
+   of zero is reserved for rest notes. Bar lines are signaled with BAR.
    If contour matching is used, then all the pitch differences are offsetted
    by 256 to avoid the likelihood of a zero difference mistaken for a
    rest.
@@ -120,7 +125,7 @@ int sf2midishift[] = { 11, 6, 1, 8, 3, 10, 5, 0, 7, 2, 9, 4, 11, 6, 1, };
 int ipitch_samples[400], isamples;
 int mpitch_samples[4000], msamples[160];	/* maximum number of bars 160 */
 
-char titlename[32];
+char titlename[48];
 char keysignature[16];
 
 
@@ -179,7 +184,7 @@ make_note_representation (int *nnotes, int *nbars, int maxnotes, int maxbars,
 	    }
 	  else			/* for handling tied notes */
 	    {
-	      midipitch[*nnotes] = pitch[i];
+	      midipitch[*nnotes] = RESTNOTE;
 	      fract = (float) num[i] / (float) denom[i];
 	      notelength[*nnotes] = (int) (fract * multiplier + 0.01);
 	      (*nnotes)++;
@@ -207,8 +212,8 @@ make_note_representation (int *nnotes, int *nbars, int maxnotes, int maxbars,
 	case REP_BAR:
 	case REP_BAR2:
 	case BAR_REP:
-	  midipitch[*nnotes] = -1000;
-	  notelength[*nnotes] = -1000;
+	  midipitch[*nnotes] = BAR;
+	  notelength[*nnotes] = BAR;
 	  (*nnotes)++;
 	  (*nbars)++;
 	  barlineptr[*nbars] = *nnotes;
@@ -231,7 +236,7 @@ make_note_representation (int *nnotes, int *nbars, int maxnotes, int maxbars,
 	  exit (0);
 	}
     }
-  midipitch[*nnotes + 1] = -1000;	/* in case a final bar line is missing */
+  midipitch[*nnotes + 1] = BAR;	/* in case a final bar line is missing */
 /*printf("refno =%d  %d notes %d bar lines  %d/%d time-signature %d sharps\n"
 ,xrefno,(*nnotes),(*nbars),(*timesig_num),(*timesig_denom),sf);*/
 }
@@ -252,38 +257,6 @@ quantize5 (int pitch)
   return 0;
 }
 
-void
-compute_pitch_contour (int nnotes, int *midipitch, int qntflag)
-{
-/* computes the pitch difference between adjacent musical note in 
-   midipitch array. To avoid confusion between the rest indication = 0
-   we add an offset of 256 to the difference if the note is not a rest.
-*/
-  int lastpitch, newpitch;
-  int i;
-  lastpitch = -1;
-  for (i = 0; i < nnotes; i++)
-    {
-      if (midipitch[i] == -1000 || midipitch[i] == 0)
-	continue;		/* ignore all bar line  and rest indications */
-      if (lastpitch < 0)
-	{
-	  lastpitch = midipitch[i];
-	  midipitch[i] = -1;
-	  continue;
-	}			/* -1 means unknown and matches anything */
-
-      else
-	{
-	  newpitch = midipitch[i];
-	  midipitch[i] = midipitch[i] - lastpitch;
-	  lastpitch = newpitch;
-	  if (qntflag > 0)
-	    midipitch[i] = quantize5 (midipitch[i]);
-	  midipitch[i] += 256;
-	}
-    }
-}
 
 
 void
@@ -369,6 +342,30 @@ for (i=0;i<12;i++) {pdf[i] = pdf[i]/sum;
 }
 
 
+void difference_midipitch (int *pitch_samples, int nsamples, int qntflag)
+{
+int i;
+int lastsample,newsample;
+lastsample = -1;
+for (i=0;i<nsamples;i++) {
+    newsample = pitch_samples[i];
+    if (newsample == RESTNOTE) {
+       pitch_samples[i] = RESTNOTE;
+       continue;}
+
+  else if (lastsample == -1)  {
+       pitch_samples[i] = ANY; }
+  else 
+      {
+       pitch_samples[i] = newsample - lastsample;
+       if (qntflag > 0)
+	    pitch_samples[i] = quantize5 (pitch_samples[i]);
+      }
+  lastsample = newsample;
+  } 
+}
+
+
 
 int
 make_bar_image (int bar_number, int resolution, int *pitch_samples,
@@ -384,6 +381,13 @@ make_bar_image (int bar_number, int resolution, int *pitch_samples,
    mainly CCDDEEFF or 60,60,62,62,64,64,65,65 in midipitch.
    The pitch is shifted by delta_pitch to account for a different
    key signature in the matching template.
+
+   input: midipitch[],notelength,resolution,delta_pitch,nnotes
+          bar_number
+   output: pitch_samples
+
+   the function returns the number of pitch_samples i creates
+
 */
   int integrated_length[50];	/* maximum of 50 notes in a bar */
 /* integrated_length is the number of time units in the bar after note i;
@@ -396,7 +400,7 @@ make_bar_image (int bar_number, int resolution, int *pitch_samples,
   i = 1;
   integrated_length[0] = notelength[offset];
   lastnote = 0;
-  while (notelength[i + offset] != -1000)
+  while (notelength[i + offset] != BAR)
     {
       if (notelength[i + offset] > 288)
 	return -1;		/* don't try to handle notes longer than 2 whole */
@@ -426,10 +430,8 @@ make_bar_image (int bar_number, int resolution, int *pitch_samples,
 	i++;
       while (t < integrated_length[i])
 	{
-	  if (midipitch[i + offset] == 0)
-	    pitch_samples[j] = 0;	/* REST don't transpose */
-	  if (midipitch[i + offset] == -1)
-	    pitch_samples[j] = -1;	/*also doesn't tranpose */
+	  if (midipitch[i + offset] == RESTNOTE)
+	    pitch_samples[j] = RESTNOTE; /* REST don't transpose */
 	  else
 	    pitch_samples[j] = midipitch[i + offset] + delta_pitch;
 	  j++;
@@ -448,6 +450,7 @@ make_bar_image (int bar_number, int resolution, int *pitch_samples,
   return lastsample;
 }
 
+/* for debugging */
 void print_bars (int mbar_number, int ibar_number)
 {
   int i, notes;
@@ -455,7 +458,7 @@ void print_bars (int mbar_number, int ibar_number)
   ioffset = ibarlineptr[ibar_number];
   moffset = mbarlineptr[mbar_number];
   i = 0;
-  while (mmidipitch[i + moffset] != -1000)
+  while (mmidipitch[i + moffset] != BAR)
     {
      printf("%d %d\n",mmidipitch[i+moffset],imidipitch[i+ioffset]); 
      i++;
@@ -477,11 +480,11 @@ match_notes (int mbar_number, int ibar_number, int delta_pitch)
   moffset = mbarlineptr[mbar_number];
   i = 0;
   notes = 0;
-  if (mmidipitch[moffset] == -1000)
+  if (mmidipitch[moffset] == BAR)
     return -1;			/* in case nothing in bar */
-  while (mmidipitch[i + moffset] != -1000)
+  while (mmidipitch[i + moffset] != BAR)
     {
-      if (imidipitch[i + ioffset] == 0 && mmidipitch[i + moffset] == 0)
+      if (imidipitch[i + ioffset] == RESTNOTE && mmidipitch[i + moffset] == RESTNOTE)
 	{
 	  i++;
 	  continue;
@@ -498,7 +501,7 @@ match_notes (int mbar_number, int ibar_number, int delta_pitch)
       i++;
       notes++;
     }
-  if (imidipitch[i + ioffset] != -1000)
+  if (imidipitch[i + ioffset] != BAR)
     return -1;			/* in case template has fewer notes */
   if (notes > 2) {
     return 0;}
@@ -508,6 +511,14 @@ match_notes (int mbar_number, int ibar_number, int delta_pitch)
   else return -1;
 }
 
+
+/* for debugging */
+void print_bar_samples (int mmsamples, int *mmpitch_samples)
+{
+int i;
+for (i=0;i<mmsamples;i++)
+  printf("%d  %d\n",mmpitch_samples[i],ipitch_samples[i]);
+}
 
 
 int
@@ -543,9 +554,8 @@ match_samples (int mmsamples, int *mmpitch_samples)
 
 
 
-
 int
-match_any_bars (int mnbars, int barnum, int delta_key, int nmatches)
+match_any_bars (int mnbars, int barnum, int delta_key, int nmatches, int qntflag)
 {
 /* This function reports any bars in match template  match a paticular
  * bar (barnum) in the tune. If a match is found then barnum is 
@@ -564,9 +574,18 @@ match_any_bars (int mnbars, int barnum, int delta_key, int nmatches)
 				 imidipitch);
       if (isamples < 1)
 	return kmatches;
+      if (con == 1)
+          difference_midipitch (ipitch_samples,isamples,qntflag);
       for (j = 0; j < mnbars; j++)
 	{
+
 	  dif = match_samples (msamples[j], mpitch_samples + moffset);
+/* debugging 
+          printf("bar %d\n",j);
+          print_bar_samples(msamples[j],mpitch_samples+moffset);
+          printf("dif = %d\n\n",dif);
+*/
+
 	  moffset += msamples[j];
 	  if (dif == 0)
 	    {
@@ -602,7 +621,7 @@ match_any_bars (int mnbars, int barnum, int delta_key, int nmatches)
 
 
 int
-match_all_bars (int mnbars, int barnum, int delta_key, int nmatches)
+match_all_bars (int mnbars, int barnum, int delta_key, int nmatches, int qntflag )
 {
 /* This function tries to match all the bars in the match template
    with  the bars in the bars in the tune. All the template bars
@@ -621,6 +640,8 @@ match_all_bars (int mnbars, int barnum, int delta_key, int nmatches)
 	isamples = make_bar_image (barnum + j, resolution, ipitch_samples,
 				   ibarlineptr, inotelength, innotes,
 				   delta_key, imidipitch);
+      if (con == 1)
+          difference_midipitch (ipitch_samples,isamples,qntflag);
 	dif = match_samples (msamples[j], mpitch_samples + moffset);
 	moffset += msamples[j];
 	if (dif != 0)
@@ -655,12 +676,11 @@ void find_and_report_matching_bars
 /* top level matching function. Distinguishes between,
    any, all and contour modes and calls the right functions
 */
-  (int mnbars, int inbars, int transpose, int anymode, int con)
+  (int mnbars, int inbars, int transpose, int anymode, int con, int qntflag)
 {
   int i, nmatches;
   if (con == 1)
     {
-      compute_pitch_contour (innotes, imidipitch, qnt);
       transpose = 0;		/* not applicable here */
     }
   nmatches = 0;
@@ -668,14 +688,14 @@ void find_and_report_matching_bars
 
     for (i = 1; i < inbars; i++)
       {
-	nmatches = match_any_bars (mnbars, i, transpose, nmatches);
+	nmatches = match_any_bars (mnbars, i, transpose, nmatches,qntflag);
       }
 
   else
     /* match all bars in template in sequence */
     for (i = 1; i <= inbars - mnbars; i++)
       {
-	nmatches = match_all_bars (mnbars, i, transpose, nmatches);
+	nmatches = match_all_bars (mnbars, i, transpose, nmatches, qntflag);
       }
 
   if (nmatches > 0)
@@ -812,6 +832,9 @@ event_init (argc, argv, filename)
   j = getarg ("-br", argc, argv);
   if (j != -1)
     {
+      if (argv[j] == NULL) {printf("error: expecting number after parameter -br\n");
+      exit(0);}
+    
       sscanf (argv[j], "%d", &cthresh);
       brief = 1;
     }
@@ -920,18 +943,13 @@ main (argc, argv)
       for (i = 0; i < mnbars; i++)
 	{
 	  j = i;
-	  if (mmidipitch[mbarlineptr[i]] != -1000)
+	  if (mmidipitch[mbarlineptr[i]] != BAR)
 	    break;
 	}
       for (i = j; i < mnbars; i++)
 	mbarlineptr[i - j] = mbarlineptr[i];
       mnbars -= j;
 
-/* if con == 1 compute the pitch differences
-   int the template.
-*/
-      if (con == 1)
-	compute_pitch_contour (mnnotes, mmidipitch, qnt);
       moffset = 0;
 /* if not exact match, i.e. resolution > 0 compute to an
    sample representation of the template.
@@ -943,6 +961,8 @@ main (argc, argv)
 	      make_bar_image (i, resolution, mpitch_samples + moffset,
 			      mbarlineptr, mnotelength, mnnotes, 0,
 			      mmidipitch);
+            if (con == 1)
+               difference_midipitch (mpitch_samples+moffset,msamples[i],qnt);
 	    moffset += msamples[i];
 	    if (moffset > 3900)
 	      printf ("abcmatch: out of room in mpitch_samples\n");
@@ -1006,7 +1026,7 @@ main (argc, argv)
 	  else
 /* top level matching function if not brief mode */
 	    find_and_report_matching_bars (mnbars, inbars, transpose, anymode,
-					   con);
+					   con, qnt);
 	}
     }
 
