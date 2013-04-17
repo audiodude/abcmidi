@@ -31,7 +31,7 @@
  * Wil Macaulay (wil@syndesis.com)
  */
 
-#define VERSION "3.05 March 26 2013"
+#define VERSION "3.07 April 11 2013"
 /* enables reading V: indication in header */
 #define XTEN1 1
 /*#define INFO_OCTAVE_DISABLED 1*/
@@ -299,6 +299,8 @@ int header_time_num,header_time_denom;
 
 int dummydecorator[DECSIZE]; /* used in event_chord */
 extern char* featname[];
+
+char *csmfilename = NULL;  /* [SS] 2013-04-10 */
 
 void addfract(int *xnum, int *xdenom, int a, int b);
 static void zerobar();
@@ -797,6 +799,7 @@ char **filename;
     printf("        -BF Barfly mode: invokes a stress model if possible\n");
     printf("        -OCC old chord convention (eg. +CE+)\n");
     printf("        -TT tune to A =  <frequency>\n");
+    printf("        -CSM <filename> load custom stress models from file\n");
     printf(" The default action is to write a MIDI file for each abc tune\n");
     printf(" with the filename <stem>N.mid, where <stem> is the filestem\n");
     printf(" of the abc file and N is the tune reference number. If the -o\n");
@@ -867,7 +870,22 @@ outbase = addstring(argv[1]); /* [RM] 2010-11-21 */
     } else {
       event_error("No filename given, ignoring -o option");
     };
-  };
+  }
+
+/* [SS] 2013-04-10 */
+  j = getarg("-CSM", argc, argv);
+  if (j != -1) {
+    if (argc >= j+1) {
+      csmfilename = addstring(argv[j]);
+      if (*csmfilename == '-') {
+        event_error("csmfilename confused with options");
+        csmfilename = NULL;
+       }
+  } else {
+     event_error("Filename required after -CSM option");
+     } 
+ }
+
   ratio_standard = getarg("-RS", argc, argv);
   quiet  = getarg("-quiet", argc, argv);
   dotune = 0;
@@ -5234,8 +5252,9 @@ char *argv[];
 
   for (i=0;i<DECSIZE;i++) decorators_passback[i]=0;
   for (i=0;i<64;i++) dependent_voice[i]=0;
-
   event_init(argc, argv, &filename);
+  /* [SS] 2013-04-10 */
+  if (csmfilename != NULL) read_custom_stress_file(csmfilename);
   if (argc < 2) {
     /* printf("argc = %d\n", argc); */
   } else {

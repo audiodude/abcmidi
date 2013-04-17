@@ -15,11 +15,41 @@ as runabc.tcl (version 1.59 or higher).
 
 Limitations: 
 tied notes longer than 8 quarter notes are ignored.
+
+Road map to the code:
+
+Matching:
+ The templates derived from match.abc are stored in the
+ global arrays tpmidipitch, tpnotelength, tpnotes, tpbars, and
+ tpbarlineptr.
+
+ If temporal quantization is selected, (i.e. qnt >0) then
+ the template is represented by mpitch_samples[] and msamples[].
+ The temporal quantization representation is created by the
+ function make_bar_image ().  All the bars in the template
+ file match.abc are converted and stored in mpitch_samples
+ and msamples[] when match.abc is processed. However, the bars
+ in the tunes compared are converted only as needed.
+
+ match_notes() is called if there is no temporal quantization
+ (exact matching).
+ match_samples() is called if there is temporal quantization.
+
+ difference_midipitch() is called if we are doing contour
+ matching on the temporal quantized images. For exact matching
+ (i.e. qnt == 0), when contouring is specified (con ==1) the
+ differencing (and possibly quantization of the contour) is
+ performed in the function match_notes.
+ 
+ count_matched_tune_bars () is called if only want an overview
+ (brief ==1).
+ find_and_report_matching_bars() is called if we want the details
+ (brief !=1);
 */
 
 
 
-#define VERSION "1.49 April 05 2013"
+#define VERSION "1.51 April 17 2013"
 #include <stdio.h>
 #include <stdlib.h>
 #include "abc.h"
@@ -31,6 +61,15 @@ tied notes longer than 8 quarter notes are ignored.
 #define BAR -1000
 #define RESTNOTE -2000
 #define ANY -3000
+
+enum ACTION
+{
+  none,
+  cpitch_histogram,
+  cwpitch_histogram,
+  clength_histogram,
+  cpitch_histogram_table
+} action;
 
 
 int *checkmalloc (int);
@@ -52,6 +91,7 @@ extern FILE *fp;
 extern int xrefno;
 extern int check, nowarn, noerror, verbose, maxnotes, xmatch, dotune;
 extern int maxtexts, maxwords;
+extern int voicesused;
 
 /* midipitch: pitch in midi units of each note in the abc file. A pitch
    of zero is reserved for rest notes. Bar lines are signaled with BAR.
@@ -86,17 +126,19 @@ int cthresh = 3;		/* minimum number of common bars to report */
 int fileindex = -1;
 int wphist, phist, lhist;	/* flags for computing pitch or length histogram */
 int pdftab;			/* flag for computing pitch pdf for each tune */
+int qntflag = 0;		/* flag for turning on contour quantization */
+int norhythm = 0;		/* ignore note lengths */
 
 
 /* data structure for matcher (template) (usually match.abc)*/
-int mmidipitch[1000];		/*pitch-barline representation for template */
-int mnotelength[1000];		/*note lengths for template */
-int mnnotes;			/* number of notes in template */
-int mnbars;			/* number of bar lines in template */
-int mbarlineptr[300];		/* I don't expect 300 bar lines, but lets play safe */
-int mtimesig_num, mtimesig_denom;
-int mmaxnotes = 1000;		/* maximum limits of this program */
-int mmaxbars = 300;
+int tpmidipitch[1000];		/*pitch-barline representation for template */
+int tpnotelength[1000];		/*note lengths for template */
+int tpnotes;			/* number of notes in template */
+int tpbars;			/* number of bar lines in template */
+int tpbarlineptr[300];		/* I don't expect 300 bar lines, but lets play safe */
+int tptimesig_num, tptimesig_denom;
+int tpmaxnotes = 1000;		/* maximum limits of this program */
+int tpmaxbars = 300;
 
 int pitch_histogram[128];
 int weighted_pitch_histogram[128];
@@ -227,12 +269,12 @@ make_note_representation (int *nnotes, int *nbars, int maxnotes, int maxbars,
 	}
       if (*nnotes > 2000)
 	{
-	  printf ("ran out of space for midipitch\n");
+	  printf ("ran out of space for midipitch for xref %d\n",xrefno);
 	  exit (0);
 	}
       if (*nbars > 599)
 	{
-	  printf ("ran out of space for barlineptr\n");
+	  printf ("ran out of space for barlineptr for xref %d\n",xrefno);
 	  exit (0);
 	}
     }
@@ -257,6 +299,23 @@ quantize5 (int pitch)
   return 0;
 }
 
+quantize7(int pitch)
+{
+if (pitch < -4)
+   return -3;
+if (pitch < -2)
+   return -2;
+if (pitch < 0)
+   return -1;
+if (pitch > 4)
+   return 3;
+if (pitch >2)
+   return 2;
+if (pitch >0)
+   return 1;
+return 0;
+}
+  
 
 
 void
@@ -324,53 +383,64 @@ print_weighted_pitch_histogram ()
 
 
 void
-make_and_print_pdf()
+make_and_print_pdf ()
 {
-float pdf[12],sum;
-int i,j;
-for (i=0;i<12;i++) pdf[i]=0.0;
-sum = 0.0;
-for (i=1;i<128;i++) {
-   j = i%12;
-   pdf[j] += (float) weighted_pitch_histogram[i]; 
-   sum += (float) weighted_pitch_histogram[i];
-   }
-if (sum <= 0.000001) sum=1.0;
-for (i=0;i<12;i++) {pdf[i] = pdf[i]/sum;
-                    printf("%d %5.3f\n",i,pdf[i]);
-                   }
+  float pdf[12], sum;
+  int i, j;
+  for (i = 0; i < 12; i++)
+    pdf[i] = 0.0;
+  sum = 0.0;
+  for (i = 1; i < 128; i++)
+    {
+      j = i % 12;
+      pdf[j] += (float) weighted_pitch_histogram[i];
+      sum += (float) weighted_pitch_histogram[i];
+    }
+  if (sum <= 0.000001)
+    sum = 1.0;
+  for (i = 0; i < 12; i++)
+    {
+      pdf[i] = pdf[i] / sum;
+      printf ("%d %5.3f\n", i, pdf[i]);
+    }
 }
 
 
-void difference_midipitch (int *pitch_samples, int nsamples, int qntflag)
+void
+difference_midipitch (int *pitch_samples, int nsamples)
 {
-int i;
-int lastsample,newsample;
-lastsample = -1;
-for (i=0;i<nsamples;i++) {
-    newsample = pitch_samples[i];
-    if (newsample == RESTNOTE) {
-       pitch_samples[i] = RESTNOTE;
-       continue;}
+  int i;
+  int lastsample, newsample;
+  lastsample = -1;
+  for (i = 0; i < nsamples; i++)
+    {
+      newsample = pitch_samples[i];
+      if (newsample == RESTNOTE)
+	{
+	  pitch_samples[i] = RESTNOTE;
+	  continue;
+	}
 
-  else if (lastsample == -1)  {
-       pitch_samples[i] = ANY; }
-  else 
-      {
-       pitch_samples[i] = newsample - lastsample;
-       if (qntflag > 0)
-	    pitch_samples[i] = quantize5 (pitch_samples[i]);
-      }
-  lastsample = newsample;
-  } 
+      else if (lastsample == -1)
+	{
+	  pitch_samples[i] = ANY;
+	}
+      else
+	{
+	  pitch_samples[i] = newsample - lastsample;
+	  if (qntflag > 0)
+	    pitch_samples[i] = quantize7 (pitch_samples[i]);
+	}
+      lastsample = newsample;
+    }
 }
 
 
 
 int
-make_bar_image (int bar_number, int resolution, int *pitch_samples,
+make_bar_image (int bar_number, int resolution,
 		int *barlineptr, int *notelength, int nnotes, int delta_pitch,
-		int *midipitch)
+		int *midipitch, int *pitch_samples)
 {
 /* the function returns the midipitch at regular time interval
    for bar %d xref %d\n,bar_number,xrefnos
@@ -431,7 +501,7 @@ make_bar_image (int bar_number, int resolution, int *pitch_samples,
       while (t < integrated_length[i])
 	{
 	  if (midipitch[i + offset] == RESTNOTE)
-	    pitch_samples[j] = RESTNOTE; /* REST don't transpose */
+	    pitch_samples[j] = RESTNOTE;	/* REST don't transpose */
 	  else
 	    pitch_samples[j] = midipitch[i + offset] + delta_pitch;
 	  j++;
@@ -451,19 +521,20 @@ make_bar_image (int bar_number, int resolution, int *pitch_samples,
 }
 
 /* for debugging */
-void print_bars (int mbar_number, int ibar_number)
+void
+print_bars (int mbar_number, int ibar_number)
 {
   int i, notes;
   int ioffset, moffset;
   ioffset = ibarlineptr[ibar_number];
-  moffset = mbarlineptr[mbar_number];
+  moffset = tpbarlineptr[mbar_number];
   i = 0;
-  while (mmidipitch[i + moffset] != BAR)
+  while (tpmidipitch[i + moffset] != BAR)
     {
-     printf("%d %d\n",mmidipitch[i+moffset],imidipitch[i+ioffset]); 
-     i++;
+      printf ("%d %d\n", tpmidipitch[i + moffset], imidipitch[i + ioffset]);
+      i++;
     }
-   printf("\n");
+  printf ("\n");
 }
 
 
@@ -476,48 +547,91 @@ match_notes (int mbar_number, int ibar_number, int delta_pitch)
 {
   int i, notes;
   int ioffset, moffset;
+  int tplastnote,lastnote; /* for contour matching */
+  int deltapitch,deltapitchtp;
   ioffset = ibarlineptr[ibar_number];
-  moffset = mbarlineptr[mbar_number];
+  moffset = tpbarlineptr[mbar_number];
+  /*printf("ioffset = %d moffset = %d\n",ioffset,moffset);*/ 
   i = 0;
   notes = 0;
-  if (mmidipitch[moffset] == BAR)
+  lastnote = 0;
+  tplastnote =0;
+  if (tpmidipitch[moffset] == BAR)
     return -1;			/* in case nothing in bar */
-  while (mmidipitch[i + moffset] != BAR)
+  while (tpmidipitch[i + moffset] != BAR)
     {
-      if (imidipitch[i + ioffset] == RESTNOTE && mmidipitch[i + moffset] == RESTNOTE)
+      /*printf("%d %d\n",imidipitch[i+ioffset],tpmidipitch[i+moffset]);*/
+      if (imidipitch[i + ioffset] == RESTNOTE
+	  && tpmidipitch[i + moffset] == RESTNOTE)
 	{
 	  i++;
 	  continue;
 	}			/* REST -- don't transpose */
-      if (imidipitch[i + ioffset] == -1 || mmidipitch[i + moffset] == -1)
+      if (imidipitch[i + ioffset] == -1 || tpmidipitch[i + moffset] == -1)
 	{
+         printf("unexpected negative pitch at %d or %d for xref %d\n",i+ioffset,i+moffset,xrefno);
 	  i++;
 	  continue;
 	}			/* unknown contour note */
-      if (imidipitch[i + ioffset] != (mmidipitch[i + moffset] - delta_pitch))
+
+      if (norhythm == 0)
+        if (inotelength[i + ioffset] != tpnotelength[i + moffset])
+  	  return -1;
+
+      if (con == 1) {
+/* contour matching */
+        if (tplastnote !=0) {
+          deltapitchtp = tpmidipitch[i+moffset] - tplastnote;
+          deltapitch = imidipitch[i+ioffset] - lastnote;
+          tplastnote = tpmidipitch[i+moffset];
+          lastnote = imidipitch[i+ioffset];
+	  if (qntflag > 0) {
+	     deltapitch = quantize7 (deltapitch);
+             deltapitchtp = quantize7(deltapitchtp);
+             }
+          
+          /*printf("deltapitch = %d deltapitchtp = %d\n",deltapitch,deltapitchtp);*/
+          if (deltapitch != deltapitchtp) 
+            return -1;
+/* match succeeded */
+         /* printf("%d %d\n",deltapitch,deltapitchtp);*/
+          } else { /* first note in bar - no lastnote */
+       tplastnote = tpmidipitch[i+moffset];
+       lastnote = imidipitch[i+ioffset];
+       }
+     } 
+      else  
+/* absolute matching (with transposition) */
+/*printf("%d %d\n",imidipitch[i+ioffset],tpmidipitch[i+moffset]-delta_pitch);*/
+      if (imidipitch[i + ioffset] != (tpmidipitch[i + moffset] - delta_pitch))
 	return -1;
-      if (inotelength[i + ioffset] != mnotelength[i + moffset])
-	return -1;
+
+
       i++;
       notes++;
-    }
+      }    
   if (imidipitch[i + ioffset] != BAR)
     return -1;			/* in case template has fewer notes */
-  if (notes > 2) {
-    return 0;}
+  if (notes > 2)
+    {
+      return 0;
+    }
   if (ignore_simple)
     return -1;
-  if (notes>2) return 0;
-  else return -1;
+  if (notes > 2)
+    return 0;
+  else
+    return -1;
 }
 
 
 /* for debugging */
-void print_bar_samples (int mmsamples, int *mmpitch_samples)
+void
+print_bar_samples (int mmsamples, int *mmpitch_samples)
 {
-int i;
-for (i=0;i<mmsamples;i++)
-  printf("%d  %d\n",mmpitch_samples[i],ipitch_samples[i]);
+  int i;
+  for (i = 0; i < mmsamples; i++)
+    printf ("%d  %d\n", mmpitch_samples[i], ipitch_samples[i]);
 }
 
 
@@ -555,13 +669,17 @@ match_samples (int mmsamples, int *mmpitch_samples)
 
 
 int
-match_any_bars (int mnbars, int barnum, int delta_key, int nmatches, int qntflag)
+match_any_bars (int tpbars, int barnum, int delta_key, int nmatches)
 {
 /* This function reports any bars in match template  match a paticular
  * bar (barnum) in the tune. If a match is found then barnum is 
  * reported.  It runs in one of two modes depending on the value
  * of the variable called resolution.
+
+ * The template is not passed as an argument but is accessed from
+ * the global arrays, tpmidipitch[1000] and tpnotelength[1000].
  */
+
   int kmatches;
   int moffset, j, dif;
 /* for every bar in match sample */
@@ -569,14 +687,14 @@ match_any_bars (int mnbars, int barnum, int delta_key, int nmatches, int qntflag
   moffset = 0;
   if (resolution > 0)
     {
-      isamples = make_bar_image (barnum, resolution, ipitch_samples,
+      isamples = make_bar_image (barnum, resolution, 
 				 ibarlineptr, inotelength, innotes, delta_key,
-				 imidipitch);
+				 imidipitch,ipitch_samples);
       if (isamples < 1)
 	return kmatches;
       if (con == 1)
-          difference_midipitch (ipitch_samples,isamples,qntflag);
-      for (j = 0; j < mnbars; j++)
+	difference_midipitch (ipitch_samples, isamples);
+      for (j = 0; j < tpbars; j++)
 	{
 
 	  dif = match_samples (msamples[j], mpitch_samples + moffset);
@@ -585,6 +703,7 @@ match_any_bars (int mnbars, int barnum, int delta_key, int nmatches, int qntflag
           print_bar_samples(msamples[j],mpitch_samples+moffset);
           printf("dif = %d\n\n",dif);
 */
+
 
 	  moffset += msamples[j];
 	  if (dif == 0)
@@ -601,7 +720,7 @@ match_any_bars (int mnbars, int barnum, int delta_key, int nmatches, int qntflag
     }
   else				/* exact match */
     {
-      for (j = 0; j < mnbars; j++)
+      for (j = 0; j < tpbars; j++)
 	{
 	  dif = match_notes (j, barnum, delta_key);
 	  if (dif == 0)
@@ -621,7 +740,7 @@ match_any_bars (int mnbars, int barnum, int delta_key, int nmatches, int qntflag
 
 
 int
-match_all_bars (int mnbars, int barnum, int delta_key, int nmatches, int qntflag )
+match_all_bars (int tpbars, int barnum, int delta_key, int nmatches)
 {
 /* This function tries to match all the bars in the match template
    with  the bars in the bars in the tune. All the template bars
@@ -635,13 +754,13 @@ match_all_bars (int mnbars, int barnum, int delta_key, int nmatches, int qntflag
   kmatches = 0;
   moffset = 0;
   if (resolution > 0)
-    for (j = 0; j < mnbars; j++)
+    for (j = 0; j < tpbars; j++)
       {
-	isamples = make_bar_image (barnum + j, resolution, ipitch_samples,
+	isamples = make_bar_image (barnum + j, resolution, 
 				   ibarlineptr, inotelength, innotes,
-				   delta_key, imidipitch);
-      if (con == 1)
-          difference_midipitch (ipitch_samples,isamples,qntflag);
+				   delta_key, imidipitch ,ipitch_samples);
+	if (con == 1)
+	  difference_midipitch (ipitch_samples, isamples);
 	dif = match_samples (msamples[j], mpitch_samples + moffset);
 	moffset += msamples[j];
 	if (dif != 0)
@@ -652,12 +771,13 @@ match_all_bars (int mnbars, int barnum, int delta_key, int nmatches, int qntflag
 	  break;
       }
   else
-    for (j = 0; j < mnbars; j++)
+    for (j = 0; j < tpbars; j++)
       {
 	dif = match_notes (j, barnum + j, delta_key);
 	if (dif != 0)
 	  return nmatches;
 	matched_bars[kmatches] = barnum + j - 1;
+        /*printf("matched %d\n",barnum+j-1);*/
 	kmatches++;
 	if (j > 15)
 	  break;
@@ -676,7 +796,7 @@ void find_and_report_matching_bars
 /* top level matching function. Distinguishes between,
    any, all and contour modes and calls the right functions
 */
-  (int mnbars, int inbars, int transpose, int anymode, int con, int qntflag)
+  (int tpbars, int inbars, int transpose, int anymode, int con)
 {
   int i, nmatches;
   if (con == 1)
@@ -688,14 +808,14 @@ void find_and_report_matching_bars
 
     for (i = 1; i < inbars; i++)
       {
-	nmatches = match_any_bars (mnbars, i, transpose, nmatches,qntflag);
+	nmatches = match_any_bars (tpbars, i, transpose, nmatches);
       }
 
   else
     /* match all bars in template in sequence */
-    for (i = 1; i <= inbars - mnbars; i++)
+    for (i = 1; i <= inbars - tpbars; i++)
       {
-	nmatches = match_all_bars (mnbars, i, transpose, nmatches, qntflag);
+	nmatches = match_all_bars (tpbars, i, transpose, nmatches);
       }
 
   if (nmatches > 0)
@@ -724,16 +844,15 @@ find_first_matching_tune_bar (int mbarnumber, int inbars, int transpose)
 
 
 
-/* The next two functions are not used presently. */
 
 int
-find_first_matching_template_bar (int barnumber, int mnbars, int transpose)
+find_first_matching_template_bar (int barnumber, int tpbars, int transpose)
 /* given a bar number in the tune, the function looks for
  * the first bar in the template which matches the tune bar.
  */
 {
   int i, dif;
-  for (i = 1; i < mnbars; i++)
+  for (i = 1; i < tpbars; i++)
     {
       dif = match_notes (i, barnumber, transpose);
       if (dif == 0)
@@ -742,13 +861,13 @@ find_first_matching_template_bar (int barnumber, int mnbars, int transpose)
   return -1;
 }
 
-
+/* this function is not used */
 int
-count_matched_template_bars (int mnbars, int inbars, int transpose)
+count_matched_template_bars (int tpbars, int inbars, int transpose)
 {
   int i, count, bar;
   count = 0;
-  for (i = 0; i < mnbars; i++)
+  for (i = 0; i < tpbars; i++)
     {
       bar = find_first_matching_tune_bar (i, inbars, transpose);
       /*if (bar >= 0) printf ("bar %d matches %d\n",bar,i); */
@@ -760,7 +879,7 @@ count_matched_template_bars (int mnbars, int inbars, int transpose)
 
 
 int
-count_matched_tune_bars (int mnbars, int inbars, int transpose)
+count_matched_tune_bars (int tpbars, int inbars, int transpose)
 /* used only by brief mode */
 {
   int i, count, bar;
@@ -769,9 +888,9 @@ count_matched_tune_bars (int mnbars, int inbars, int transpose)
     {
       bar = find_first_matching_template_bar (i, inbars, transpose);
       /*if (bar >= 0) {printf ("bar %d matches %d\n",bar,i); 
-                     print_bars(bar,i);
-                     }
-      */
+         print_bars(bar,i);
+         }
+       */
       if (bar >= 0)
 	count++;
     }
@@ -779,6 +898,54 @@ count_matched_tune_bars (int mnbars, int inbars, int transpose)
 }
 
 
+int
+analyze_abc_file (char *filename)
+{
+  FILE *fp;
+  fp = fopen (filename, "rt");
+  if (fp == NULL)
+    {
+      printf ("cannot open file %s\n", filename);
+      exit (0);
+    }
+  init_histograms ();
+  while (!feof (fp))
+    {
+      fileindex++;
+      startfile ();
+      parsetune (fp);
+/*     printf("fileindex = %d xrefno =%d\n",fileindex,xrefno); */
+/*     printf("%s\n",titlename); */
+      if (notes < 10)
+	break;
+      /*print_feature_list(); */
+      make_note_representation (&innotes, &inbars, imaxnotes, imaxbars,
+				&itimesig_num, &itimesig_denom, ibarlineptr,
+				inotelength, imidipitch);
+      compute_note_histograms ();
+      if (action == cpitch_histogram_table)
+	{
+	  printf ("%4d %s %s\n%s\n", xrefno, filename, keysignature,
+		  titlename);
+	  make_and_print_pdf ();
+	  init_histograms ();
+	}
+    }
+  fclose (fp);
+  switch (action)
+    {
+    case cpitch_histogram:
+      print_pitch_histogram ();
+      break;
+    case cwpitch_histogram:
+      print_weighted_pitch_histogram ();
+      break;
+    case clength_histogram:
+      print_length_histogram ();
+      break;
+    }
+  return (0);
+}
 
 
 void
@@ -826,31 +993,47 @@ event_init (argc, argv, filename)
     con = 1;
   if (getarg ("-qnt", argc, argv) != -1)
     {
-      qnt = 1;
+      qntflag = 1;
       con = 1;
     }
+  if (getarg ("-norhythm",argc,argv) != -1)
+    {norhythm = 1;
+     resolution = 0;
+    }
+ 
   j = getarg ("-br", argc, argv);
   if (j != -1)
     {
-      if (argv[j] == NULL) {printf("error: expecting number after parameter -br\n");
-      exit(0);}
-    
+      if (argv[j] == NULL)
+	{
+	  printf ("error: expecting number after parameter -br\n");
+	  exit (0);
+	}
+
       sscanf (argv[j], "%d", &cthresh);
       brief = 1;
     }
   wphist = getarg ("-wpitch_hist", argc, argv);
   phist = getarg ("-pitch_hist", argc, argv);
   lhist = getarg ("-length_hist", argc, argv);
-  pdftab = getarg("-pitch_table",argc,argv);
+  pdftab = getarg ("-pitch_table", argc, argv);
 
-  if (phist >= 0) { phist = 1; }
-  else phist = 0;
-  if (lhist >= 0) { lhist = 1; }
-  else lhist = 0;
-  if (wphist >= 0) { wphist = 1; }
-  else wphist = 0;
-  if (pdftab >= 0) { pdftab = 1; }
-  else pdftab = 0;
+  if (phist >= 0)
+    {
+      action = cpitch_histogram;
+    }
+  if (lhist >= 0)
+    {
+      action = clength_histogram;
+    }
+  if (wphist >= 0)
+    {
+      action = cwpitch_histogram;
+    }
+  if (pdftab >= 0)
+    {
+      action = cpitch_histogram_table;
+    }
 
   if (brief == 1)
     resolution = 0;		/* do not compute msamples in main() */
@@ -918,8 +1101,8 @@ main (argc, argv)
   int kfile, count;
 
 /* initialization */
+  action = none;
   event_init (argc, argv, &filename);
-  init_histograms ();
   init_abbreviations ();
 
 
@@ -928,116 +1111,109 @@ main (argc, argv)
    runabc.tcl when you are using this search function.
 */
 
-  if (!(phist | lhist | wphist |pdftab))
+  if (action != none)
+    analyze_abc_file (filename);
+
+  else
     {				/* if not computing histograms */
       parsefile ("match.abc");
       mkey = sf2midishift[sf + 7];
       mseqno = xrefno;		/* if -br mode, X:refno is file sequence number */
       /* xrefno was set by runabc.tcl to be file sequence number of tune */
       /*print_feature_list(); */
-      make_note_representation (&mnnotes, &mnbars, mmaxnotes, mmaxbars,
-				&mtimesig_num, &mtimesig_denom, mbarlineptr,
-				mnotelength, mmidipitch);
+      make_note_representation (&tpnotes, &tpbars, tpmaxnotes, tpmaxbars,
+				&tptimesig_num, &tptimesig_denom, tpbarlineptr,
+				tpnotelength, tpmidipitch);
 
       /* trim off any initial bar lines */
-      for (i = 0; i < mnbars; i++)
+      for (i = 0; i < tpbars; i++)
 	{
 	  j = i;
-	  if (mmidipitch[mbarlineptr[i]] != BAR)
+	  if (tpmidipitch[tpbarlineptr[i]] != BAR)
 	    break;
 	}
-      for (i = j; i < mnbars; i++)
-	mbarlineptr[i - j] = mbarlineptr[i];
-      mnbars -= j;
+      for (i = j; i < tpbars; i++)
+	tpbarlineptr[i - j] = tpbarlineptr[i];
+      tpbars -= j;
 
       moffset = 0;
 /* if not exact match, i.e. resolution > 0 compute to an
    sample representation of the template.
 */
       if (resolution > 0)
-	for (i = 0; i < mnbars; i++)
+	for (i = 0; i < tpbars; i++)
 	  {
 	    msamples[i] =
-	      make_bar_image (i, resolution, mpitch_samples + moffset,
-			      mbarlineptr, mnotelength, mnnotes, 0,
-			      mmidipitch);
-            if (con == 1)
-               difference_midipitch (mpitch_samples+moffset,msamples[i],qnt);
+	      make_bar_image (i, resolution, 
+			      tpbarlineptr, tpnotelength, tpnotes, 0,
+			      tpmidipitch, mpitch_samples + moffset);
+	    if (con == 1)
+	      difference_midipitch (mpitch_samples + moffset, msamples[i]);
 	    moffset += msamples[i];
 	    if (moffset > 3900)
 	      printf ("abcmatch: out of room in mpitch_samples\n");
 	  }
-    }
 
 /* now process the input file */
 
-  fp = fopen (filename, "rt");
-  if (fp == NULL)
-    {
-      printf ("cannot open file %s\n", filename);
-      exit (0);
-    }
 
-  kfile = 0;
-  while (!feof (fp))
-    {
-      fileindex++;
-      startfile ();
-      parsetune (fp);
-/*     printf("fileindex = %d xrefno =%d\n",fileindex,xrefno); */
-/*     printf("%s\n",titlename); */
-      if (notes < 10)
-	break;
-      ikey = sf2midishift[sf + 7];
-      /*print_feature_list(); */
-      make_note_representation (&innotes, &inbars, imaxnotes, imaxbars,
-				&itimesig_num, &itimesig_denom, ibarlineptr,
-				inotelength, imidipitch);
-      if (phist || lhist || wphist || pdftab)
-	compute_note_histograms ();
-        if (pdftab) {printf("%4d %s %s\n%s\n",xrefno,filename,keysignature,titlename);
-                     make_and_print_pdf();
-                     init_histograms();
-                    }
-      else
+      fp = fopen (filename, "rt");
+      if (fp == NULL)
 	{
+	  printf ("cannot open file %s\n", filename);
+	  exit (0);
+	}
+
+      kfile = 0;
+      while (!feof (fp))
+	{
+	  fileindex++;
+	  startfile ();
+	  parsetune (fp);
+     /* printf("fileindex = %d xrefno =%d\n",fileindex,xrefno); */
+/*     printf("%s\n",titlename); */
+	  if (notes < 10)
+	    break;
+	  ikey = sf2midishift[sf + 7];
+	  /*print_feature_list(); */
+          if (voicesused) {/*printf("xref %d has voices\n",xrefno);*/
+                           continue;
+                          }
+	  make_note_representation (&innotes, &inbars, imaxnotes, imaxbars,
+				    &itimesig_num, &itimesig_denom,
+				    ibarlineptr, inotelength, imidipitch);
+	    {
 
 /* ignore tunes which do not share the same time signature as the template */
-	  if (itimesig_num != mtimesig_num
-	      || itimesig_denom != mtimesig_denom)
-	    continue;
-	  transpose = mkey - ikey;
+	      if (itimesig_num != tptimesig_num
+		  || itimesig_denom != tptimesig_denom)
+		continue;
+	      transpose = mkey - ikey;
 
 /* brief mode is used by the grouper in runabc.tcl */
-	  if (brief)
-	    {
-	      if (mseqno == fileindex)
-		continue;	/* don't check tune against itself */
-	      count = count_matched_tune_bars (mnbars, inbars, transpose);
-	      if (count >= cthresh)
+	      if (brief)
 		{
-		  if (kfile == 0)
-		    printf ("%d\n", mnbars);
-		  printf (" %d %d\n", fileindex, count);
-		  kfile++;
+		  if (mseqno == fileindex)
+		    continue;	/* don't check tune against itself */
+		  count = count_matched_tune_bars (tpbars, inbars, transpose);
+		  if (count >= cthresh)
+		    {
+		      if (kfile == 0)
+			printf ("%d\n", tpbars);
+		      printf (" %d %d\n", fileindex, count);
+		      kfile++;
+		    }
 		}
-	    }
 
-	  else
+	      else
 /* top level matching function if not brief mode */
-	    find_and_report_matching_bars (mnbars, inbars, transpose, anymode,
-					   con, qnt);
+		find_and_report_matching_bars (tpbars, inbars, transpose,
+					       anymode, con);
+	    }
 	}
+      fclose (fp);
     }
-
   free_abbreviations ();
   free_feature_representation ();
-  fclose (fp);
-  if (phist)
-    print_pitch_histogram ();
-  if (wphist)
-    print_weighted_pitch_histogram ();
-  if (lhist)
-    print_length_histogram ();
-  return (0);
+  return 0;
 }

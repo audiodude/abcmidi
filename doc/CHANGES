@@ -9637,3 +9637,53 @@ Fix: in event_note, in store.c added the lines
 
 following the statement
      event_error("Rolls and trills not supported in chords");
+
+
+April 10 2013
+
+Abc2midi: new feature. Added a new runtime option -CSM <filename>.
+This option allows one to customize the BarFly stress models by
+providing an external file.
+
+Background: the 32 stress models are presently built-in the source
+code in the file stresspat.c. This has the advantage that executables
+can be distributed without an auxiliary data file containing
+the models. However, the user does not have much leeway to alter
+the models or add additional stress models. The -CSM feature
+addresses this limitation by allowing the user to add more
+models for other rhythm designators (eg lesnoto), and to alter
+one or more of the existing models. There is room to add up to
+16 additional models. The feature requires the user to specify
+a text file which contains these models. 
+
+Description of the external file and how it works is given
+in abcguide.txt and a sample of such a file is given in the
+pt folder (customstress.txt).
+
+Implementation: a new function read_custom_stress_file()
+was introduced in the file stresspat.c. Assuming the file
+conforms exactly with the expected format, the function
+reads all the models provided. For each model, if the rhythm
+designator and meter conflict with one of the existing standard
+models, the function will update the characteristics of that model.
+Otherwise the function will append the model to the current
+list.
+
+
+April 11 2013
+
+Corrected a minor error in init_stresspat() (Tango) in stresspat.c.
+As a convenience, I have produced default_stress.txt in the format
+that read_custom_stress_file() accepts. Default_stress.txt contains
+the built in models to abc2midi. You can find the file in the pt (Phil
+Taylor) folder.
+
+
+April 17 2013
+
+Abcmatch: numerous bugs fixed. Introduced a new matching -norhythm.
+The matching algorithm ignores the length of the notes and only
+matches the sequence of pitches in a bar. The file abcmatch.txt
+was updated. More internal documentation was added in abcmatch.c
+
+

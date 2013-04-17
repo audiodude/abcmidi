@@ -118,7 +118,9 @@ Usage : abcmatch <abc file> [reference number] [-options]
             above given threshold
         -ver returns version number
         -pitch_hist pitch histogram
+        -wpitch_hist interval weighted pitch histogram
         -length_hist pitch histogram
+        -pitch_table separate pitch pdfs for each tune
 
 
 When running this program, you must provide the name of the abc file name
@@ -133,6 +135,17 @@ from runabc).
 
 All the remaining parameters (-r -con -a -br) control the matching
 process.
+
+The option -norhythm, causes the matching algorithm to ignore
+the length of notes in a bar, thus E3/2F/D GA2 would match
+EFD G2A. The option ignores -r parameter since it is now
+irrelevant.
+
+The option -pitch_table is used to produce a interval weighted
+pitch histogram for each tune in the file. If this is saved
+in an external file, that file could be used as a database
+for finding tunes with similar pitch probability density functions
+(pdf).
 
 The -r parameter controls how the matching criterion handles
 small rhythm variations in the melody.  The -r option must be

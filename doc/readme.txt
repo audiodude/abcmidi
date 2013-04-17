@@ -1,10 +1,10 @@
 abcMIDI :   abc <-> MIDI conversion utilities
 
 midi2abc version 2.92 Aug  04 2008
-abc2midi version 3.05 March 26 2013
+abc2midi version 3.07 April 11 2013
 abc2abc  version 1.73 March 20 2013
 yaps     version 1.53 Aug  08 2012
-abcmatch version 1.49 Apr  05 2013
+abcmatch version 1.51 Apr  17 2013
 midicopy version 1.10 Sep  22 2006
 
 24th January 2002
@@ -14,7 +14,7 @@ J.R.Allwright@westminster.ac.uk
 University of Westminster,
 London, UK
 
-February 2013
+April 2013
 
 Seymour Shlien
 seymour.shlien@crc.ca
@@ -255,6 +255,8 @@ Usage : abc2midi <abc file> [reference number] [-c] [-v] [-o filename]
         -ver prints version number and exits
         -BF Barfly mode: invokes a stress model if possible
         -OCC old chord convention (eg. +CE+)
+        -TT tune to A = <frequency>
+        -CSM <filename> load custom stress models from file
 
  The default action is to write a MIDI file for each abc tune
  with the filename <stem>N.mid, where <stem> is the filestem
