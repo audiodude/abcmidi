@@ -1296,12 +1296,16 @@ char* out;
       count = count + 1;
       q = q + 1;
       digits = digits + 1;
+      /* [SS] 2013-04-21 */
+      if (count > 50) {event_error ("malformed repeat"); break;}
     } else {
       if (((*q == '-')||(*q == ','))&&(digits > 0)&&(isdigit(*(q+1)))) {
         out[count] = *q;
         count = count + 1;
         q = q + 1;
         digits = 0;
+      /* [SS] 2013-04-21 */
+        if (count > 50) {event_error ("malformed repeat"); break;}
       } else {
         done = 1;
       };

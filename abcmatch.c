@@ -49,7 +49,7 @@ Matching:
 
 
 
-#define VERSION "1.51 April 17 2013"
+#define VERSION "1.52 April 21 2013"
 #include <stdio.h>
 #include <stdlib.h>
 #include "abc.h"
@@ -129,6 +129,7 @@ int pdftab;			/* flag for computing pitch pdf for each tune */
 int qntflag = 0;		/* flag for turning on contour quantization */
 int norhythm = 0;		/* ignore note lengths */
 
+char *templatefile;
 
 /* data structure for matcher (template) (usually match.abc)*/
 int tpmidipitch[1000];		/*pitch-barline representation for template */
@@ -1000,6 +1001,21 @@ event_init (argc, argv, filename)
     {norhythm = 1;
      resolution = 0;
     }
+
+  j = getarg("-tp",argc,argv);
+  if (j != -1) {
+    if (argv[j] == NULL) {
+        printf ("error: expecting file name and optional reference number\n");
+        exit(0);
+        }
+    free(templatefile);
+    templatefile = addstring(argv[j]);
+    if (*templatefile == '-') {
+       printf ("error: -tp filename must not begin with a -\n");
+       exit(0);
+       }
+    }
+ 
  
   j = getarg ("-br", argc, argv);
   if (j != -1)
@@ -1050,7 +1066,7 @@ event_init (argc, argv, filename)
   if ((getarg ("-h", argc, argv) != -1) || (argc < 2))
     {
       printf ("abcmatch version %s\n", VERSION);
-      printf ("Usage : abcmatch <abc file> [reference number] [-options] \n");
+      printf ("Usage : abcmatch <abc file> [-options] \n");
       printf ("        [reference number] selects a tune\n");
       printf ("        -c returns error and warning messages\n");
       printf ("        -v selects verbose option\n");
@@ -1061,6 +1077,7 @@ event_init (argc, argv, filename)
       printf ("        -a report any matching bars (default all bars)\n");
       printf ("        -br %%d only report number of matched bars when\n\
 	    above given threshold\n");
+      printf ("        -tp <abc file> [reference number]\n");
       printf ("        -ver returns version number\n");
       printf ("        -pitch_hist pitch histogram\n");
       printf ("        -wpitch_hist interval weighted pitch histogram\n");
@@ -1102,6 +1119,7 @@ main (argc, argv)
 
 /* initialization */
   action = none;
+  templatefile = addstring("match.abc");
   event_init (argc, argv, &filename);
   init_abbreviations ();
 
@@ -1116,7 +1134,7 @@ main (argc, argv)
 
   else
     {				/* if not computing histograms */
-      parsefile ("match.abc");
+      parsefile (templatefile);
       mkey = sf2midishift[sf + 7];
       mseqno = xrefno;		/* if -br mode, X:refno is file sequence number */
       /* xrefno was set by runabc.tcl to be file sequence number of tune */

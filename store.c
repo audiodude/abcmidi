@@ -31,7 +31,7 @@
  * Wil Macaulay (wil@syndesis.com)
  */
 
-#define VERSION "3.07 April 11 2013"
+#define VERSION "3.08 April 21 2013"
 /* enables reading V: indication in header */
 #define XTEN1 1
 /*#define INFO_OCTAVE_DISABLED 1*/
@@ -2635,7 +2635,8 @@ static void lenmul(n, a, b)
 int n, a, b;
 {
   if ((feature[n] == NOTE) || (feature[n] == REST) || 
-      (feature[n] == CHORDOFF)) {
+      (feature[n] == CHORDOFF)
+       || (feature[n] == CHORDOFFEX)) /* [SS] 2013-04-20 */ {
     num[n] = num[n] * a;
     denom[n] = denom[n] * b;
     reduce(&num[n], &denom[n]);

@@ -9687,3 +9687,34 @@ matches the sequence of pitches in a bar. The file abcmatch.txt
 was updated. More internal documentation was added in abcmatch.c
 
 
+April 20 2013
+
+Abc2midi bug: combination of chords and broken rhythm. In the
+following example,
+
+X:1
+T: broken rhythms
+M: 2/4
+L: 1/8
+K: F
+[DF]2 > [CE]2|
+
+The second chord [CE]2 begins before the end of chord [DF]2.
+
+Analysis: the function brokenadjust() (store.c)  is called
+to adjust the lengths of the notes to effect the broken rhythm.
+It adjusts the notes inside the chord but fails to adjust the length
+associated with the CHORD (CHORDOFFEX feature). This causes
+timestep() in queues.c to be called too early, causing the
+second chord to start to early.
+
+Fix: in the function lenmul() added another condition,
+  || (feature[n] == CHORDOFFEX)) /* [SS] 2013-04-20 */
+
+
+April 21 2013
+
+Fixed: a potential memory overflow in parsing the repeat string.
+In getrep() (parseabc.c) ensured the array index for playonrep_list
+does not exceed 50.
+
