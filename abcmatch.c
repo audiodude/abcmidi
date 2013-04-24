@@ -49,7 +49,7 @@ Matching:
 
 
 
-#define VERSION "1.52 April 21 2013"
+#define VERSION "1.53 April 24 2013"
 #include <stdio.h>
 #include <stdlib.h>
 #include "abc.h"
@@ -112,7 +112,7 @@ int imidipitch[2000];		/* pitch-barline midi note representation of input tune *
 int inotelength[2000];		/* notelength representation of input tune */
 int innotes;			/*number of notes in imidipitch,inotelength representation */
 int inbars;			/*number of bars in input tune */
-int ibarlineptr[600];		/*pointers to bar lines in imidipitch */
+int ibarlineptr[500];		/*pointers to bar lines in imidipitch */
 int itimesig_num, itimesig_denom;
 int imaxnotes = 2000;		/* maximum limits of this program */
 int imaxbars = 200;
@@ -140,6 +140,7 @@ int tpbarlineptr[300];		/* I don't expect 300 bar lines, but lets play safe */
 int tptimesig_num, tptimesig_denom;
 int tpmaxnotes = 1000;		/* maximum limits of this program */
 int tpmaxbars = 300;
+unsigned char tpbarstatus[300];
 
 int pitch_histogram[128];
 int weighted_pitch_histogram[128];
@@ -171,6 +172,8 @@ int mpitch_samples[4000], msamples[160];	/* maximum number of bars 160 */
 char titlename[48];
 char keysignature[16];
 
+int tpxref = 0; /* template reference number */
+int tp_fileindex = 0; /* file sequence number for tpxref */
 
 
 void
@@ -726,6 +729,7 @@ match_any_bars (int tpbars, int barnum, int delta_key, int nmatches)
 	  dif = match_notes (j, barnum, delta_key);
 	  if (dif == 0)
 	    {
+              if (tpxref > 0) tpbarstatus[j] = 1;
 	      kmatches++;
 	      if (kmatches == 1)
 		printf ("%d %d  %d ", fileindex, xrefno, barnum - 1);
@@ -956,8 +960,9 @@ event_init (argc, argv, filename)
      char *argv[];
      char **filename;
 {
-  int j;
+  int i,j;
 
+  xmatch = 0;
   /* look for code checking option */
   if (getarg ("-c", argc, argv) != -1)
     {
@@ -1014,6 +1019,11 @@ event_init (argc, argv, filename)
        printf ("error: -tp filename must not begin with a -\n");
        exit(0);
        }
+    if (argv[j+1] != NULL && isdigit(*argv[j+1])) {
+         tpxref = readnumf(argv[j+1]);
+        }
+    anymode = 1; /* only mode which makes sense for a entire tune template*/
+    for (i=0;i<300;i++) tpbarstatus[i] = 0;
     }
  
  
@@ -1087,7 +1097,6 @@ event_init (argc, argv, filename)
     }
   else
     {
-      xmatch = 0;
       *filename = argv[1];
     };
   /* look for user-supplied output filename */
@@ -1134,7 +1143,12 @@ main (argc, argv)
 
   else
     {				/* if not computing histograms */
+      if (tpxref >0 ) xmatch = tpxref;/* get only tune with ref number xmatch*/
       parsefile (templatefile);
+      if (tpxref != 0 && tpxref != xrefno) {
+        printf("could not parse X:%d in file %s\n",tpxref,filename);
+        exit(1);
+        }
       mkey = sf2midishift[sf + 7];
       mseqno = xrefno;		/* if -br mode, X:refno is file sequence number */
       /* xrefno was set by runabc.tcl to be file sequence number of tune */
@@ -1175,6 +1189,7 @@ main (argc, argv)
 /* now process the input file */
 
 
+      xmatch = 0; /* we do not want to filter any reference numbers here */
       fp = fopen (filename, "rt");
       if (fp == NULL)
 	{
@@ -1188,8 +1203,12 @@ main (argc, argv)
 	  fileindex++;
 	  startfile ();
 	  parsetune (fp);
-     /* printf("fileindex = %d xrefno =%d\n",fileindex,xrefno); */
-/*     printf("%s\n",titlename); */
+          /*printf("fileindex = %d xrefno =%d\n",fileindex,xrefno); 
+            printf("%s\n",titlename); */
+          if (tpxref == xrefno) {
+             tp_fileindex = fileindex;
+             continue;
+             }
 	  if (notes < 10)
 	    break;
 	  ikey = sf2midishift[sf + 7];
@@ -1230,6 +1249,14 @@ main (argc, argv)
 	    }
 	}
       fclose (fp);
+      if (tpxref > 0) {
+          printf ("%d %d ", tp_fileindex, tpxref);
+          for (i = 0; i <tpbars ;i++) 
+             if (tpbarstatus[i] != 0) printf("%d ",i);
+          printf ("\n");
+             }
+
+          
     }
   free_abbreviations ();
   free_feature_representation ();

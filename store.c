@@ -31,7 +31,7 @@
  * Wil Macaulay (wil@syndesis.com)
  */
 
-#define VERSION "3.08 April 21 2013"
+#define VERSION "3.09 April 24 2013"
 /* enables reading V: indication in header */
 #define XTEN1 1
 /*#define INFO_OCTAVE_DISABLED 1*/
@@ -2851,11 +2851,12 @@ void event_chordoff(int chord_n, int chord_m)
         tnote_num   = c_n;
         tnote_denom = c_m;
     } else {
-       if (tnote_num * c_m != c_n * tnote_denom) {
+    /*   if (tnote_num * c_m != c_n * tnote_denom) {
           if (!specialtuple) {
             event_warning("Different length notes in tuple for chord");
            };
         };
+      [SS] 2013-04-24 */
      }
      if ((!gracenotes) && (!v->inchord)) {
         tuplecount = tuplecount - 1;

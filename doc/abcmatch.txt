@@ -194,8 +194,11 @@ any larger interval    3
 
 negative numbers are descending intervals.
 
-The -tp followed by a file name and optional reference number
+The -tp followed by a file name and reference number
 allows you to substitute any tune for the template match.abc.
+When using this feature, the entire tune is used as a
+template. Abcmatch does not match the template with itself,
+and only bars which match bars in other tunes are reported.
 
 The -br followed by a threshold, runs the program in a brief
 mode designed to identify groups of tunes sharing common bars.
