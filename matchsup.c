@@ -234,7 +234,7 @@ char *featname[] = {
 "INSTRUCTION", "NOBEAM", "CHORDNOTE", "CLEF",
 "PRINTLINE", "NEWPAGE", "LEFT_TEXT", "CENTRE_TEXT",
 "VSKIP", "COPYRIGHT", "COMPOSER", "ARPEGGIO",
-"SPLITVOICE"
+"SPLITVOICE", "META", "PEDAL_ON", "PEDAL_OFF", "EFFECT"
 };
 
 
@@ -1941,14 +1941,12 @@ int n;
     printf("Reference X: %d\n", n);
   };
   if ((n == xmatch) || (xmatch == 0) || (xmatch == -1)) {
-    if (xmatch == -1) {
-      xmatch = -2;
-    };
     parseron();
     dotune = 1;
     pastheader = 0;
     xrefno = n;
     startfile();
+    return;
   };
 }
 
@@ -1975,3 +1973,18 @@ void free_feature_representation ()
   free(feature);
   free(words);
 }
+
+
+
+void dumpfeat (int from, int to)
+{
+int i,j;
+for (i=from;i<=to;i++)
+  {
+  j = feature[i];
+  if (j<0 || j>73) printf("illegal feature[%d] = %d\n",i,j); /* [SS] 2012-11-25 */
+  else printf("%d %s   %d %d %d %d %d \n",i,featname[j],pitch[i],num[i],denom[i]);
+  }
+}
+
+

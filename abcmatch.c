@@ -49,7 +49,7 @@ Matching:
 
 
 
-#define VERSION "1.53 April 24 2013"
+#define VERSION "1.54 April 30 2013"
 #include <stdio.h>
 #include <stdlib.h>
 #include "abc.h"
@@ -712,6 +712,7 @@ match_any_bars (int tpbars, int barnum, int delta_key, int nmatches)
 	  moffset += msamples[j];
 	  if (dif == 0)
 	    {
+              if (tpxref > 0) tpbarstatus[j] = 1;
 	      kmatches++;
 	      if (kmatches == 1)
 		printf ("%d %d  %d ", fileindex, xrefno, barnum - 1);
@@ -922,7 +923,7 @@ analyze_abc_file (char *filename)
 /*     printf("fileindex = %d xrefno =%d\n",fileindex,xrefno); */
 /*     printf("%s\n",titlename); */
       if (notes < 10)
-	break;
+	continue;
       /*print_feature_list(); */
       make_note_representation (&innotes, &inbars, imaxnotes, imaxbars,
 				&itimesig_num, &itimesig_denom, ibarlineptr,
@@ -1146,8 +1147,8 @@ main (argc, argv)
       if (tpxref >0 ) xmatch = tpxref;/* get only tune with ref number xmatch*/
       parsefile (templatefile);
       if (tpxref != 0 && tpxref != xrefno) {
-        printf("could not parse X:%d in file %s\n",tpxref,filename);
-        exit(1);
+        printf("could not find X:%d in file %s\n",tpxref,filename);
+        exit(0);
         }
       mkey = sf2midishift[sf + 7];
       mseqno = xrefno;		/* if -br mode, X:refno is file sequence number */
@@ -1210,7 +1211,7 @@ main (argc, argv)
              continue;
              }
 	  if (notes < 10)
-	    break;
+	    continue;
 	  ikey = sf2midishift[sf + 7];
 	  /*print_feature_list(); */
           if (voicesused) {/*printf("xref %d has voices\n",xrefno);*/

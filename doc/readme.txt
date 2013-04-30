@@ -4,7 +4,7 @@ midi2abc version 2.92 Aug  04 2008
 abc2midi version 3.09 April 24 2013
 abc2abc  version 1.74 April 21 2013
 yaps     version 1.54 April 21 2013
-abcmatch version 1.53 April 24 2013
+abcmatch version 1.54 April 30 2013
 midicopy version 1.10 Sep  22 2006
 
 24th January 2002
