@@ -9718,3 +9718,48 @@ Fixed: a potential memory overflow in parsing the repeat string.
 In getrep() (parseabc.c) ensured the array index for playonrep_list
 does not exceed 50.
 
+
+April 24 2013
+
+Suppressed warning in abc2midi. For the following example,
+
+X:1
+T:TEST TUPLES
+M:2/2
+L:1/4
+Q:1/2=80
+K:G
+[F,A,D] (3[df]/[eg]/[^e^g]/ [fa][CF] |
+[F,A,D] (3[d/f/][e/g/][^e/^g/] [fa][CF] |
+
+abc2midi issues the following warnings.
+Warning in line 7 : Different length notes in tuple for chord
+Warning in line 7 : Different length notes in tuple for chord
+Warning in line 7 : Different length notes in tuple for chord
+
+Analysis: the message is issued when closing each of the
+tuple chords in the first line. The length of the note in the
+tuple is stored in the variables tnote_num, tnote_denom when
+the first tuple note is encountered. Unfortunately when
+the chord note duration is applied (here one half), the
+note length no longer matches the stored values tnote_num
+and tnote_denom and a warning is sent. The output midi
+file nevertheless correct.
+
+Fix: abc2midi stores the note length of the tuple in tnote_num,
+and tnote_denom. A chordoff feature can modify the value of a tuple
+note (i.e. chord) if its length is indicated outside the chord (eg.
+[CE]3/2. If the modified chord length does not match the stored value
+tnote_num, tnote_denom set by event_note, a warning is issued.
+It is getting too complicated to keep track of a tuple note
+inside and outside a chord, so I have decided to just suppress
+the error message for tuples of chords. (i.e. I would have to
+make extensive changes to the logic of the program to get it working
+properly.)
+
+
+
+May 07 2013
+
+Abcmatch: introducing -fixed <n> runtime parameter. It allows
+matching to go across a bar line.

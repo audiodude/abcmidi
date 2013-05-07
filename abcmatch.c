@@ -49,7 +49,7 @@ Matching:
 
 
 
-#define VERSION "1.54 April 30 2013"
+#define VERSION "1.55 May 07 2013"
 #include <stdio.h>
 #include <stdlib.h>
 #include "abc.h"
@@ -123,6 +123,7 @@ int con = 0;			/* default for no contour matching */
 int qnt = 0;			/* pitch difference quantization flag */
 int brief = 0;			/* set brief to 1 if brief mode */
 int cthresh = 3;		/* minimum number of common bars to report */
+int fixednumberofnotes=0;       /* for -fixed parameter */
 int fileindex = -1;
 int wphist, phist, lhist;	/* flags for computing pitch or length histogram */
 int pdftab;			/* flag for computing pitch pdf for each tune */
@@ -629,6 +630,100 @@ match_notes (int mbar_number, int ibar_number, int delta_pitch)
 }
 
 
+
+/* absolute match - matches notes relative to key signature */
+/* this matching algorithm ignores bar lines and tries to match
+   a fixed number of notes set by fnotes. It is unnecessary for
+   the time signatures in the template and tune to match.   */
+int
+fixed_match_notes (int fnotes, int mbar_number, int ibar_number, int delta_pitch)
+{
+  int i,j, notes;
+  int ioffset, moffset;
+  int tplastnote,lastnote; /* for contour matching */
+  int deltapitch,deltapitchtp;
+  ioffset = ibarlineptr[ibar_number];
+  moffset = tpbarlineptr[mbar_number];
+  /*printf("ioffset = %d moffset = %d\n",ioffset,moffset);*/ 
+  i = j = 0;
+  notes = 0;
+  lastnote = 0;
+  tplastnote =0;
+  while (notes < fnotes)
+    {
+      /*printf("%d %d\n",imidipitch[j+ioffset],tpmidipitch[i+moffset]);*/
+      if (imidipitch[j + ioffset] == RESTNOTE
+	  || imidipitch[j + ioffset] == BAR)
+	{
+          j++;
+	  continue;
+	}			/* pass over RESTS or BARS */
+      if (tpmidipitch[i + ioffset] == RESTNOTE
+	  || tpmidipitch[i + ioffset] == BAR)
+	{
+	  i++;
+	  continue;
+	}			/* pass over RESTS or BARS */
+
+      if (imidipitch[j + ioffset] == -1 || tpmidipitch[i + moffset] == -1)
+	{
+         printf("unexpected negative pitch at %d or %d for xref %d\n",i+ioffset,i+moffset,xrefno);
+	  i++;
+          j++;
+	  continue;
+	}			/* unknown contour note */
+
+      if (norhythm == 0)
+        if (inotelength[j + ioffset] != tpnotelength[i + moffset])
+  	  return -1;
+
+      if (con == 1) {
+/* contour matching */
+        if (tplastnote !=0) {
+          deltapitchtp = tpmidipitch[i+moffset] - tplastnote;
+          deltapitch = imidipitch[j+ioffset] - lastnote;
+          tplastnote = tpmidipitch[i+moffset];
+          lastnote = imidipitch[j+ioffset];
+	  if (qntflag > 0) {
+	     deltapitch = quantize7 (deltapitch);
+             deltapitchtp = quantize7(deltapitchtp);
+             }
+          
+          /*printf("deltapitch = %d deltapitchtp = %d\n",deltapitch,deltapitchtp);*/
+          if (deltapitch != deltapitchtp) 
+            return -1;
+/* match succeeded */
+         /* printf("%d %d\n",deltapitch,deltapitchtp);*/
+          } else { /* first note in bar - no lastnote */
+       tplastnote = tpmidipitch[i+moffset];
+       lastnote = imidipitch[j+ioffset];
+       }
+     } 
+      else  
+/* absolute matching (with transposition) */
+/*printf("%d %d\n",imidipitch[i+ioffset],tpmidipitch[i+moffset]-delta_pitch);*/
+      if (imidipitch[j + ioffset] != (tpmidipitch[i + moffset] - delta_pitch))
+	return -1;
+
+
+      i++;
+      j++;
+      notes++;
+      }    
+  if (notes > 2)
+    {
+      return 0;
+    }
+  if (ignore_simple)
+    return -1;
+  if (notes > 2)
+    return 0;
+  else
+    return -1;
+}
+
+
+
 /* for debugging */
 void
 print_bar_samples (int mmsamples, int *mmpitch_samples)
@@ -727,7 +822,12 @@ match_any_bars (int tpbars, int barnum, int delta_key, int nmatches)
     {
       for (j = 0; j < tpbars; j++)
 	{
-	  dif = match_notes (j, barnum, delta_key);
+          if (fixednumberofnotes) 
+  	    dif = fixed_match_notes (fixednumberofnotes,j, barnum, delta_key);
+          else
+  	    dif = match_notes (j, barnum, delta_key);
+  
+
 	  if (dif == 0)
 	    {
               if (tpxref > 0) tpbarstatus[j] = 1;
@@ -779,7 +879,10 @@ match_all_bars (int tpbars, int barnum, int delta_key, int nmatches)
   else
     for (j = 0; j < tpbars; j++)
       {
-	dif = match_notes (j, barnum + j, delta_key);
+        if (fixednumberofnotes)
+	  dif = fixed_match_notes (fixednumberofnotes,j, barnum + j, delta_key);
+        else
+	  dif = match_notes (j, barnum + j, delta_key);
 	if (dif != 0)
 	  return nmatches;
 	matched_bars[kmatches] = barnum + j - 1;
@@ -860,7 +963,10 @@ find_first_matching_template_bar (int barnumber, int tpbars, int transpose)
   int i, dif;
   for (i = 1; i < tpbars; i++)
     {
-      dif = match_notes (i, barnumber, transpose);
+      if (fixednumberofnotes)
+         dif = fixed_match_notes (fixednumberofnotes,i, barnumber, transpose);
+      else
+         dif = match_notes (i, barnumber, transpose);
       if (dif == 0)
 	return i;
     }
@@ -1040,6 +1146,19 @@ event_init (argc, argv, filename)
       sscanf (argv[j], "%d", &cthresh);
       brief = 1;
     }
+ 
+  j = getarg ("-fixed", argc, argv);
+  if (j != -1)
+    {
+      if (argv[j] == NULL)
+	{
+	  printf ("error: expecting number after parameter -fixed\n");
+	  exit (0);
+	}
+
+      sscanf (argv[j], "%d", &fixednumberofnotes);
+   }
+
   wphist = getarg ("-wpitch_hist", argc, argv);
   phist = getarg ("-pitch_hist", argc, argv);
   lhist = getarg ("-length_hist", argc, argv);
@@ -1066,6 +1185,7 @@ event_init (argc, argv, filename)
     resolution = 0;		/* do not compute msamples in main() */
   maxnotes = 3000;
   /* allocate space for notes */
+  if (fixednumberofnotes > 0) resolution = 0;
   pitch = checkmalloc (maxnotes * sizeof (int));
   num = checkmalloc (maxnotes * sizeof (int));
   denom = checkmalloc (maxnotes * sizeof (int));
@@ -1082,6 +1202,7 @@ event_init (argc, argv, filename)
       printf ("        -c returns error and warning messages\n");
       printf ("        -v selects verbose option\n");
       printf ("        -r resolution for matching\n");
+      printf ("        -fixed <n> fixed number of notes\n");
       printf ("        -con  pitch contour match\n");
       printf ("        -qnt contour quantization\n");
       printf ("        -ign  ignore simple bars\n");
@@ -1223,8 +1344,9 @@ main (argc, argv)
 	    {
 
 /* ignore tunes which do not share the same time signature as the template */
-	      if (itimesig_num != tptimesig_num
+	      if ((itimesig_num != tptimesig_num
 		  || itimesig_denom != tptimesig_denom)
+                 && fixednumberofnotes == 0)
 		continue;
 	      transpose = mkey - ikey;
 
