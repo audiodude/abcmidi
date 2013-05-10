@@ -9762,4 +9762,20 @@ properly.)
 May 07 2013
 
 Abcmatch: introducing -fixed <n> runtime parameter. It allows
-matching to go across a bar line.
+matching to go across a bar line. See doc/abcmatch.txt for
+more information.
+
+
+May 10 2013
+
+Midicopy: bug in extracting a segment of a MIDI file. When
+the segment starts in the middle of a note playing, it causes
+a loss of synchronization between the tracks.
+
+Analysis: there was an attempt to write a negative MIDI time
+increment when Mf_currcopytime exceeds Mf_currtime.
+
+Fix: set negative values to zero in the function WriteVarLen(value).
+
+
+

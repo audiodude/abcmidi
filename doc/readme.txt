@@ -4,8 +4,8 @@ midi2abc version 2.92 Aug  04 2008
 abc2midi version 3.09 April 24 2013
 abc2abc  version 1.74 April 21 2013
 yaps     version 1.54 April 21 2013
-abcmatch version 1.54 April 30 2013
-midicopy version 1.10 Sep  22 2006
+abcmatch version 1.55 May 08 2013
+midicopy version 1.11 May 10 2013
 
 24th January 2002
 
@@ -14,7 +14,7 @@ J.R.Allwright@westminster.ac.uk
 University of Westminster,
 London, UK
 
-April 2013
+May 2013
 
 Seymour Shlien
 seymour.shlien@crc.ca
