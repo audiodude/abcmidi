@@ -49,7 +49,7 @@ Matching:
 
 
 
-#define VERSION "1.55 May 07 2013"
+#define VERSION "1.56 June 09 2013"
 #include <stdio.h>
 #include <stdlib.h>
 #include "abc.h"
@@ -262,7 +262,8 @@ make_note_representation (int *nnotes, int *nbars, int maxnotes, int maxbars,
 	  midipitch[*nnotes] = BAR;
 	  notelength[*nnotes] = BAR;
 	  (*nnotes)++;
-	  (*nbars)++;
+	  if (*nbars < maxbars) (*nbars)++;
+          else printf("abcmatch too many bars\n");
 	  barlineptr[*nbars] = *nnotes;
 	  break;
 	case TIME:
@@ -996,6 +997,7 @@ count_matched_tune_bars (int tpbars, int inbars, int transpose)
 {
   int i, count, bar;
   count = 0;
+  for (i=0;i<300;i++) tpbarstatus[i] = 0;
   for (i = 0; i < inbars; i++)
     {
       bar = find_first_matching_template_bar (i, inbars, transpose);
@@ -1003,13 +1005,23 @@ count_matched_tune_bars (int tpbars, int inbars, int transpose)
          print_bars(bar,i);
          }
        */
-      if (bar >= 0)
+      if (bar >= 0) {
 	count++;
+        tpbarstatus[bar] = 1;
+        }
     }
   return count;
 }
 
-
+int count_matching_template_bars ()
+{
+int i;
+int count;
+count = 0;
+for (i=0;i<300;i++)
+  if (tpbarstatus[i] > 0) count++;
+return count;
+}  
 int
 analyze_abc_file (char *filename)
 {
@@ -1247,6 +1259,7 @@ main (argc, argv)
    */
 
   int kfile, count;
+  int kount;
 
 /* initialization */
   action = none;
@@ -1356,11 +1369,12 @@ main (argc, argv)
 		  if (mseqno == fileindex)
 		    continue;	/* don't check tune against itself */
 		  count = count_matched_tune_bars (tpbars, inbars, transpose);
+                  kount = count_matching_template_bars();
 		  if (count >= cthresh)
 		    {
 		      if (kfile == 0)
 			printf ("%d\n", tpbars);
-		      printf (" %d %d\n", fileindex, count);
+		      printf (" %d %d %d\n", fileindex, count,kount);
 		      kfile++;
 		    }
 		}
