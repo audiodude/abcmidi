@@ -39,7 +39,7 @@
 
 
 
-#define VERSION "1.11 2013-May-10"
+#define VERSION "1.15 2013-Sep-08"
 #include "midicopy.h"
 #define NULLFUNC 0
 #define NULL 0
@@ -86,7 +86,11 @@ char *trackdata = NULL;
 long trackdata_length, trackdata_size;
 int activetrack;
 int nochanmsg=1;
-
+long newtempo = 0; /* to handle tempo [SS] 2013-09-04 */
+float speedfactor = 1.00; /* to handle tempo [SS] 2013-09-06 */
+int newspeed = 0; /* signal application of speedfactor [SS] 2013-09-06 */
+int selected_drum = 0; /* [SS] 2013-09-07 */
+int drumlevel = 0;  /* [SS] 2013-09-07 */
 
 long Mf_numbyteswritten = 0L;
 long readvarinum();
@@ -771,6 +775,7 @@ void metaevent(int type)
 {
     int leng;
     char *m;
+    long qnote; /* [SS] 2013-09-06 */
 
     leng = msgleng();
     m = msg();
@@ -800,7 +805,15 @@ void metaevent(int type)
 	copy_metaeot();
 	break;
     case 0x51:			/* Set tempo */
-	mf_write_tempo(to32bit(0, m[0], m[1], m[2]));
+        if (newtempo > 0)	/* [SS] 2013-09-04 */
+           mf_write_tempo(newtempo);
+        else if (newspeed) {
+           qnote = m[2] + m[1]*256 + m[0]*65536;
+           qnote = (int) ((float) qnote / speedfactor);
+           mf_write_tempo(qnote);
+           }
+        else
+	   mf_write_tempo(to32bit(0, m[0], m[1], m[2]));
 	break;
     case 0x54:
 	mf_write_meta_event(0x54, m, 5);
@@ -843,6 +856,8 @@ void chanmessage(int status, int c1, int c2)
 	    copy_noteoff(chan, c1, c2);
 	    break;
 	case 0x90:
+            if (chan == 9 && selected_drum != 0 && c1 != selected_drum)
+                 c2 = drumlevel; /* [SS] 2013-09-07 */
 	    copy_noteon(chan, c1, c2);
 	    break;
 	case 0xa0:
@@ -1063,7 +1078,8 @@ FILE *fp;
     for (i = 0; i < ntracks; i++) {
         activetrack = i;
         nochanmsg = 1;
-	if (start_tick + end_tick < 0 && chnflag == 0 && !use_seconds)
+	if (start_tick + end_tick < 0 && chnflag == 0 && !use_seconds
+           && newtempo == 0 && newspeed == 0 && selected_drum == 0)	/* [SS] 2013-09-07 */
 	    copytrack_verbatim();	/*not necessary to read in detail*/
 	else {
 	    flag_metaeot = 0;
@@ -1423,19 +1439,27 @@ float tick_to_seconds (int tick)
 int i,ind;
 float seconds;
 float delta;
+long tempo;
 for (i = 0; i < temposize; i++) {
     ind = i;
     if (tick < tempo_array[ind].tick) break;
     }
+if (tick < tempo_array[ind].tick && ind == 0) return 0.0;
 if (tick < tempo_array[ind].tick) {
+   tempo = tempo_array[ind-1].tempo; /* [SS] 2013-09-08 and etc. */
+   if (newtempo)  tempo = newtempo; 
+   if (newspeed) tempo = (int) ((float) tempo / speedfactor);
    delta =  (float) (tick -tempo_array[ind-1].tick) *
-            (float)  tempo_array[ind-1].tempo /
+            (float)  tempo /
              ((float) (division * 1000000.0));
    seconds = tempo_array[ind-1].seconds + delta;
    return seconds;
    }
+   tempo = tempo_array[ind].tempo; /* [SS] 2013-09-08 and etc. */
+   if (newtempo) tempo = newtempo;  
+   if (newspeed) tempo = (int) ((float) tempo / speedfactor);
    delta =   (float) (tick -tempo_array[ind].tick) *
-             (float)  tempo_array[ind].tempo /
+             (float)  tempo /
              ((float) (division * 1000000.0));
    seconds = tempo_array[ind].seconds + delta;
    return seconds;
@@ -1486,6 +1510,7 @@ int main(int argc, char *argv[])
     char val;
     float start_beat,end_beat;
     int use_beats;
+    int beats_per_minute = 0;	/* [SS] 2013-09-04 */
 
     for (i = 0; i < 32; i++)
 	tocopy[i] = 1;
@@ -1522,6 +1547,9 @@ int main(int argc, char *argv[])
         printf("-frombeat %%f\n");
         printf("-tobeat %%f\n");
         printf("-replace trk,loc,val\n");
+        printf("-tempo n (in quarter notes/min)\n");	/* [SS] 2013-09-04 */
+        printf("-speed %%f (between 0.1 and 10.0)\n");  /* [SS] 2013-09-06 */
+        printf("-drumfocus n (35 - 81) m (0 - 127)\n"); /* [SS] 2013-09-07 */
 	exit(1);
     }
 
@@ -1590,6 +1618,39 @@ int main(int argc, char *argv[])
         use_beats = 1;
        }
 
+/* [SS] 2013-09-04 */
+    arg = getarg("-tempo",argc,argv);
+    if (arg >=0)
+       {sscanf(argv[arg], "%d", &beats_per_minute);
+        if (beats_per_minute > 0) {
+          newtempo = 60*1000000/beats_per_minute;
+          }
+       }
+
+/* [SS] 2013-09-06 */
+    arg = getarg("-speed",argc,argv);
+    if (arg >=0)
+       {sscanf(argv[arg], "%f", &speedfactor);
+        if (speedfactor > 10.0) speedfactor = 10.0; 
+        if (speedfactor < 0.05) speedfactor = 0.05;
+        newspeed = 1;
+          }
+
+/* [SS] 2013-09-07 */
+    arg = getarg("-drumfocus",argc,argv);
+    if (arg >=0)
+       {sscanf(argv[arg], "%d", &selected_drum);
+        if (selected_drum < 35 || selected_drum > 81) 
+          {printf("drumfocus selected_drum must be between 35 and 81\n");
+           selected_drum = 0;
+          } 
+        sscanf(argv[arg+1], "%d",&drumlevel);
+        if (drumlevel < 0 || drumlevel > 127) 
+         {printf("drumfocus drumlevel (2nd arg) must be between 0 and 127\n");
+          drumlevel = 20;
+         }
+      }
+           
     repflag = getarg("-replace", argc, argv);
     if (repflag >= 0)
 	sscanf(argv[repflag], "%d,%d,%c", &trknum, &byteloc, &val);
@@ -1604,6 +1665,13 @@ int main(int argc, char *argv[])
 	printf("cannot open out file %s\n", argv[argc - 1]);
 	exit(2);
     }
+
+
+
+   if (newspeed) newtempo = 0; /* [SS] 2013-09-06 */
+
+
+
     readheader();
     if (use_beats) {
       if (start_beat < 0.0) start_tick = -1;
