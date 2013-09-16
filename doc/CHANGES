@@ -9857,3 +9857,34 @@ Midicopy: fixed function tick_to_seconds so it returns the correct
 time when the tempo is changed by -tempo or -speed.
 
 
+September 10 2013
+
+Midi2abc, midicopy: bug fix. Midi2abc or midicopy may fail for some
+midi files which use the running status. A few midi files attempt
+to save a few bytes by not transmitting the status byte for a channel
+message when status byte has not changed. For clarification, the
+status byte contains the channel message like "note on channel 10".
+The status byte is followed by one or two data bytes specifying the
+particular note it applies to and the velocity value. Since
+data bytes are restricted to 6 bits and status bytes always
+contain a value exceeding 6 bits, it is easy to tell when a status
+byte is missing. The running status, saves a few bytes when
+several notes in a chord are turned on (or off) at the same time.
+The bug occurred when a metatext message is inserted inside
+a running status complex (eg. note on channel 10, metatext, note on
+channel 10). Midi2abc and midicopy abort with the message
+"unexpected byte 0x..".
+
+Analysis: the bug was traced to the code writetrack() in midifile.c
+and also midicopy.c. It is necessary to store the last status byte
+that occurred in the last channel message. Note a metatext message
+is not a channel message. A new local variable, laststatus, was introduced
+in the code.
+
+
+September 15 2013
+
+Midicopy: new feature. Added an option -mutenodrum [level] to mute
+all channels to velocity level if the channel is not 9 (drum channel).
+If level is not provided, it is set to zero.
+
