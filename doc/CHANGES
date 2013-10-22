@@ -9896,3 +9896,9 @@ where n is the drum number between 35 and 81 inclusive and m
 is the new velocity between 0 and 127, All instances of the
 selected drum are assigned the given loudness (velocity).
 
+October 15 2013
+Abcmatch: new feature. Added options -interval_hist and
+-interval_table to analyze the pitch intervals between
+adjacent notes. The program produces a histogram of the
+note intervals in MIDI (semitone) units.
+
