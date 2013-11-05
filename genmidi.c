@@ -1565,6 +1565,7 @@ static void noteon(n)
 int n;
 {
   int  vel;
+  vel = 0; /* [SS] 2013-11-04 */
   if (beatmodel != 0)  /* [SS] 2011-08-17 */
      stress_factors (n,   &vel);
   else note_beat(n,&vel);
