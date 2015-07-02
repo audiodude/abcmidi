@@ -32,6 +32,12 @@ struct voice_params {
         char other[V_STRLEN+1]; /* [SS] 2011-04-18 */
 	};
 
+/* holds a fraction */
+struct fraction {
+  int num;
+  int denom;
+};
+
 
 #ifndef KANDR
 extern int readnump(char **p);
@@ -43,6 +49,7 @@ extern void readstr(char out[], char **in, int limit);
 extern int getarg(char *option, int argc, char *argv[]);
 extern int *checkmalloc(int size);
 extern char *addstring(char *s);
+extern char *concatenatestring(char *s1, char *s2);
 extern char *lookup_abbreviation(char symbol);
 extern int ismicrotone(char **p, int dir);
 extern void event_normal_tone(void);
@@ -58,6 +65,7 @@ extern void readstr();
 extern int getarg();
 extern int *checkmalloc();
 extern char *addstring();
+extern char *concatenatestring();
 extern char *lookup_abbreviation();
 extern int ismicrotone();
 extern void event_normal_tone();
@@ -99,7 +107,7 @@ extern void event_octave(int num, int local);
 extern void event_info_key(char *key, char *value);
 extern void event_info(char *s);
 extern void event_key(int sharps, char *s, int modeindex, 
-               char modmap[7], int modmul[7],
+               char modmap[7], int modmul[7], struct fraction modmicro[7],
                int gotkey, int gotclef, char *clefname,
                int octave, int transpose, int gotoctave, int gottranspose,
                int explict);
@@ -130,6 +138,8 @@ extern void event_note(int decorators[DECSIZE], char accidental, int mult,
                        char note, int xoctave, int n, int m);
 extern void event_abbreviation(char symbol, char *string, char container);
 extern void event_acciaccatura();
+extern void event_start_extended_overlay();
+extern void event_stop_extended_overlay();
 extern void event_split_voice();
 extern void print_voicecodes(void);
 extern void init_abbreviations();
@@ -189,6 +199,8 @@ extern void event_gchord();
 extern void event_note();
 extern void event_abbreviation();
 extern void event_acciaccatura();
+extern void event_start_extended_overlay();
+extern void event_stop_extended_overlay();
 extern void event_split_voice();
 extern void print_voicecodes();
 extern void init_abbreviations();

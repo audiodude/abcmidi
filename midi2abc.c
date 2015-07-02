@@ -46,7 +46,7 @@
  * based on public domain 'midifilelib' package.
  */
 
-#define VERSION "2.93 September 10 2013"
+#define VERSION "2.95 February 22 2015"
 #define SPLITCODE
 
 /* Microsoft Visual C++ Version 6.0 or higher */
@@ -532,7 +532,7 @@ int chan, control, value;
 {
 }
 
-void txt_pitchbend(chan,msb,lsb)
+void txt_pitchbend(chan,lsb,msb)
 int chan, msb, lsb;
 {
 }
@@ -951,13 +951,17 @@ void mftxt_pressure(chan,pitch,press)
 }
 
 
-void mftxt_pitchbend(chan,msb,lsb)
+void mftxt_pitchbend(chan,lsb,msb)
 {
+ float bend;
 /*
   if (onlychan >=0 && chan != onlychan) return;
 */
   if (prtime()) return;
-  printf("Pitchbnd %2d msb=%d lsb=%d\n",chan+1,msb,lsb);
+  /* [SS] 2014-01-05 */
+  bend =  (float) ((msb*128 + lsb) - 8192);
+  bend = bend/4096.0;
+  printf("Pitchbnd %2d msb=%d lsb=%d  bend = %6.4f\n",chan+1,msb,lsb,bend);
 }
 
 
@@ -3144,7 +3148,7 @@ int argc;
     tsig_set = 0;
   };
   arg = getarg("-Q", argc, argv);
-  if (arg != -1) {
+  if (arg != -1 && arg >= argc+1) { /* [SS] 2015-02-22 */
     Qval = readnum(argv[arg]);
   }
   else {

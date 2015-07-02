@@ -21,7 +21,7 @@
 
 /* back-end for outputting (possibly modified) abc */
 
-#define VERSION "1.74 April 21 2013"
+#define VERSION "1.81 July 02 2015 abc2abc"
 
 /* for Microsoft Visual C++ 6.0 or higher */
 #ifdef _MSC_VER
@@ -51,10 +51,12 @@ extern char* strchr();
 programname fileprogram = ABC2ABC;
 extern int oldchordconvention; /* for handling +..+ chords */
 
+/* holds a fraction */
 struct fract {
   int num;
   int denom;
 };
+
 struct fract barlen; /* length of a bar as given by the time signature */
 struct fract unitlen; /* unit length as given by the L: field */
 struct fract count; /* length of bar so far */
@@ -132,6 +134,7 @@ struct abctext{ /* linked list used to store output before re-formatting */
 };
 struct abctext* head;
 struct abctext* tail;
+
 
 extern char *mode[];
 extern int modekeyshift[];
@@ -482,6 +485,7 @@ char *voices_string;
   char *s = voices_string;
 
   selected_voices = 0;
+  if (voices_string == 0x0) return; /* [SS] 2015-02-22 */
   do {
     int v = readnump(&s);
 
@@ -1117,6 +1121,15 @@ int continuation;
   };
 }
 
+/* [SS] 2014-09-07 */
+void appendfield (morewords)
+char *morewords;
+{
+emit_string("+: ");
+emit_string(morewords);
+}
+
+
 void event_part(s)
 char* s;
 {
@@ -1559,13 +1572,14 @@ char *transpose_modmap(int oldkeysigsf, int semitranspose, char* modmap, int exp
 
 /* end of [SS] 2011-02-15 */
 
-void event_key(sharps, s, modeindex, modmap, modmul, gotkey, gotclef, clefname,
+void event_key(sharps, s, modeindex, modmap, modmul, modmicrotone,  gotkey, gotclef, clefname,
           octave, xtranspose, gotoctave, gottranspose, explict)
 int sharps;
 char *s;
 int modeindex;
 char modmap[7];
 int modmul[7];
+struct fraction modmicrotone[7]; /* [SS[ 2014-01-06 */
 int gotkey, gotclef;
 char* clefname;
 int octave, xtranspose, gotoctave, gottranspose;
@@ -2443,6 +2457,19 @@ void event_acciaccatura()
 /* abcm2ps compatability feature [SS] 2005-03-28 */
 emit_string("/");
 }
+
+/* [SS] 2015-03-23 */
+void event_start_extended_overlay()
+{
+event_error("extended overlay not implemented in abc2abc");
+}
+
+void event_stop_extended_overlay()
+{
+event_error("extended overlay not implemented in abc2abc");
+}
+
+
 
 void event_split_voice ()
 {
