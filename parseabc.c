@@ -340,7 +340,7 @@ readnumf (num)
   p = num;
   if (!isdigit (*p))
     {
-      event_error ("Missing Number");
+      if (!silent) { if (!silent) { event_error ("Missing Number"); } }
     };
   t = 0;
   while (((int) *p >= '0') && ((int) *p <= '9'))
@@ -429,7 +429,7 @@ readsig (a, b, sig)
   *a = readnump (sig);
   if ((int) **sig != '/')
     {
-      event_error ("Missing / ");
+      if (!silent) { event_error ("Missing / "); }
     }
   else
     {
@@ -438,7 +438,7 @@ readsig (a, b, sig)
   *b = readnump (sig);
   if ((*a == 0) || (*b == 0))
     {
-      event_error ("Expecting fraction in form A/B");
+      if (!silent) { event_error ("Expecting fraction in form A/B"); }
     }
   else
     {
@@ -447,7 +447,7 @@ readsig (a, b, sig)
 	{
 	  if (t % 2 != 0)
 	    {
-	      event_error ("divisor must be a power of 2");
+	      if (!silent) { event_error ("divisor must be a power of 2"); }
 	      t = 1;
 	      *b = 0;
 	    }
@@ -776,7 +776,7 @@ interpret_voicestring (char *s)
   if (*c != '\0' && *c != ' ' && *c != ']')
     {
       sprintf (msg, "invalid character `%c' in Voice ID", *c);
-      event_error (msg);
+      if (!silent) { event_error (msg); }
     }
 /* [PHDM] 2012-11-22 */
 
@@ -827,7 +827,7 @@ parseclef (s, word, gotclef, clefstr, gotoctave, octave)
       skipspace (s);
       if (**s != '=')
 	{
-	  event_error ("clef must be followed by '='");
+	  if (!silent) { event_error ("clef must be followed by '='"); }
 	}
       else
 	{
@@ -864,7 +864,7 @@ parsetranspose (s, word, gottranspose, transpose)
   skipspace (s);
   if (**s != '=')
     {
-      event_error ("transpose must be followed by '='");
+      if (!silent) { event_error ("transpose must be followed by '='"); }
     }
   else
     {
@@ -890,7 +890,7 @@ parseoctave (s, word, gotoctave, octave)
   skipspace (s);
   if (**s != '=')
     {
-      event_error ("octave must be followed by '='");
+      if (!silent) { event_error ("octave must be followed by '='"); }
     }
   else
     {
@@ -921,7 +921,7 @@ parsename (s, word, gotname, namestring, maxsize)
   skipspace (s);
   if (**s != '=')
     {
-      event_error ("name must be followed by '='");
+      if (!silent) { event_error ("name must be followed by '='"); }
     }
   else
     {
@@ -975,7 +975,7 @@ parsesname (s, word, gotname, namestring, maxsize)
   skipspace (s);
   if (**s != '=')
     {
-      event_error ("name must be followed by '='");
+      if (!silent) { event_error ("name must be followed by '='"); }
     }
   else
     {
@@ -1029,7 +1029,7 @@ parsemiddle (s, word, gotmiddle, middlestring, maxsize)
   skipspace (s);
   if (**s != '=')
     {
-      event_error ("middle must be followed by '='");
+      if (!silent) { event_error ("middle must be followed by '='"); }
     }
   else
     {
@@ -1221,7 +1221,7 @@ parsekey (str)
 	      if (!foundmode)
 		{
 		  sprintf (msg, "Unknown mode '%s'", &word[j]);
-		  event_error (msg);
+		  if (!silent) { event_error (msg); }
 		  modeindex = 0;
 		};
 	    };
@@ -1359,10 +1359,10 @@ parsevoice (s)
     {
       num = interpret_voicestring (s);
       if (num == 0)
-	event_error ("No voice number or string in V: field");
+	if (!silent) { event_error ("No voice number or string in V: field"); }
       if (num == -1)
 	{
-	  event_error ("More than 16 voices encountered in V: fields");
+	  if (!silent) { event_error ("More than 16 voices encountered in V: fields"); }
 	  num = 0;
 	}
       skiptospace (&s);
@@ -1566,7 +1566,7 @@ parsenote (s)
 	  if (**s == ',')
 	    {
 	      sprintf (msg, "Bad pitch specifier , after note %c", note);
-	      event_error (msg);
+	      if (!silent) { event_error (msg); }
 	      octave = octave - 1;
 	      *s = *s + 1;
 	    };
@@ -1590,7 +1590,7 @@ parsenote (s)
 		{
 		  sprintf (msg, "Bad pitch specifier ' after note %c",
 			   note + 'A' - 'a');
-		  event_error (msg);
+		  if (!silent) { event_error (msg); }
 		  octave = octave + 1;
 		  *s = *s + 1;
 		};
@@ -1599,7 +1599,7 @@ parsenote (s)
     };
   if (note == ' ')
     {
-      event_error ("Malformed note : expecting a-g or A-G");
+      if (!silent) { event_error ("Malformed note : expecting a-g or A-G"); }
     }
   else
     {
@@ -1636,7 +1636,7 @@ getrep (p, out)
 	  /* [SS] 2013-04-21 */
 	  if (count > 50)
 	    {
-	      event_error ("malformed repeat");
+	      if (!silent) { event_error ("malformed repeat"); }
 	      break;
 	    }
 	}
@@ -1652,7 +1652,7 @@ getrep (p, out)
 	      /* [SS] 2013-04-21 */
 	      if (count > 50)
 		{
-		  event_error ("malformed repeat");
+		  if (!silent) { event_error ("malformed repeat"); }
 		  break;
 		}
 	    }
@@ -1775,7 +1775,7 @@ parse_tempo (place)
 	};
       if (*p == '\0')
 	{
-	  event_error ("Missing closing double quote");
+	  if (!silent) { event_error ("Missing closing double quote"); }
 	}
       else
 	{
@@ -1799,7 +1799,7 @@ parse_tempo (place)
       skipspace (&p);
       if (*p != '=')
 	{
-	  event_error ("Expecting = in tempo");
+	  if (!silent) { event_error ("Expecting = in tempo"); }
 	};
       p = p + 1;
     }
@@ -1823,7 +1823,7 @@ parse_tempo (place)
 	};
       if (*p == '\0')
 	{
-	  event_error ("Missing closing double quote");
+	  if (!silent) { event_error ("Missing closing double quote"); }
 	}
       else
 	{
@@ -1960,7 +1960,7 @@ parsefield (key, field)
       x = readnumf (xplace);
       if (inhead)
 	{
-	  event_error ("second X: field in header");
+	  if (!silent) { event_error ("second X: field in header"); }
 	};
       event_refno (x);
       init_voicecode ();	/* [SS] 2011-01-01 */
@@ -1976,7 +1976,7 @@ parsefield (key, field)
   /*if ((inbody) && (strchr ("EIKLMPQTVdswW", key) == NULL)) [SS] 2014-08-15 */
   if ((inbody) && (strchr ("EIKLMPQTVdrswW+", key) == NULL)) /* [SS] 2015-05-11 */
     {
-      event_error ("Field not allowed in tune body");
+      if (!silent) { event_error ("Field not allowed in tune body"); }
     };
   comment = field;
   iscomment = 0;
@@ -2007,13 +2007,13 @@ parsefield (key, field)
 	    {
 	      if (inhead)
 		{
-		  event_error ("First K: field must specify key signature");
+		  if (!silent) { event_error ("First K: field must specify key signature"); }
 		};
 	    };
 	}
       else
 	{
-	  event_error ("No X: field preceding K:");
+	  if (!silent) { event_error ("No X: field preceding K:"); }
 	};
       break;
     case 'M':
@@ -2030,7 +2030,7 @@ parsefield (key, field)
 	    readsig (&num, &denom, &place);
 	    if ((*place == 's') || (*place == 'l'))
 	      {
-		event_error ("s and l in M: field not supported");
+		if (!silent) { event_error ("s and l in M: field not supported"); }
 	      };
 	    if ((num != 0) && (denom != 0))
 	      {
@@ -2046,7 +2046,7 @@ parsefield (key, field)
 	readsig (&num, &denom, &place);
 	if (num != 1)
 	  {
-	    event_error ("Default length must be 1/X");
+	    if (!silent) { event_error ("Default length must be 1/X"); }
 	  }
 	else
 	  {
@@ -2056,7 +2056,7 @@ parsefield (key, field)
 	      }
 	    else
 	      {
-		event_error ("invalid denominator");
+		if (!silent) { event_error ("invalid denominator"); }
 	      };
 	  };
 	break;
@@ -2100,7 +2100,7 @@ parsefield (key, field)
 		      };
 		    if (*place != '!')
 		      {
-			event_error ("No closing ! in U: field");
+			if (!silent) { event_error ("No closing ! in U: field"); }
 		      };
 		    *place = '\0';
 		  }
@@ -2121,12 +2121,12 @@ parsefield (key, field)
 		  }
 		else
 		  {
-		    event_error ("Missing term in U: field");
+		    if (!silent) { event_error ("Missing term in U: field"); }
 		  };
 	      }
 	    else
 	      {
-		event_error ("Missing '=' U: field ignored");
+		if (!silent) { event_error ("Missing '=' U: field ignored"); }
 	      };
 	  }
 	else
@@ -2181,7 +2181,7 @@ parseinlinefield (p)
     }
   else
     {
-      event_error ("missing closing ]");
+      if (!silent) { event_error ("missing closing ]"); }
       parsefield (*p, p + 2);
     };
   event_closeinline ();
@@ -2279,7 +2279,7 @@ parsemusic (field)
 		  };
 		if (*p == '\0')
 		  {
-		    event_error ("Guitar chord name not properly closed");
+		    if (!silent) { event_error ("Guitar chord name not properly closed"); }
 		  }
 		else
 		  {
@@ -2326,7 +2326,7 @@ parsemusic (field)
 		    p = p + 1;	/* [SS] 2013-10-31 */
 		  break;
 		default:
-		  event_error ("Single colon in bar");
+		  if (!silent) { event_error ("Single colon in bar"); }
 		};
 	      break;
 	    case ' ':
@@ -2514,7 +2514,7 @@ parsemusic (field)
 		  };
 		if (n > 3)
 		  {
-		    event_error ("Too many >'s");
+		    if (!silent) { event_error ("Too many >'s"); }
 		  }
 		else
 		  {
@@ -2534,7 +2534,7 @@ parsemusic (field)
 		  };
 		if (n > 3)
 		  {
-		    event_error ("Too many <'s");
+		    if (!silent) { event_error ("Too many <'s"); }
 		  }
 		else
 		  {
@@ -2567,7 +2567,7 @@ parsemusic (field)
 		}
 	      else
 		{
-		  event_error ("'\\' in middle of line ignored");
+		  if (!silent) { event_error ("'\\' in middle of line ignored"); }
 		};
 	      break;
 	    case '+':
@@ -2610,7 +2610,7 @@ parsemusic (field)
 		      }
 		    else
 		      {
-			event_error ("'!' or '+' in middle of line ignored");
+			if (!silent) { event_error ("'!' or '+' in middle of line ignored"); }
 		      };
 		  }
 		else
@@ -2636,7 +2636,7 @@ parsemusic (field)
 		}
 	      else
 		{
-		  event_error ("*'s in middle of line ignored");
+		  if (!silent) { event_error ("*'s in middle of line ignored"); }
 		};
 	      break;
 	    case '/':
@@ -2644,7 +2644,7 @@ parsemusic (field)
 	      if (ingrace)
 		event_acciaccatura ();
 	      else
-		event_error ("stray / not in grace sequence");
+		if (!silent) { event_error ("stray / not in grace sequence"); }
 	      break;
 	    case '&':
 	      p = p + 1;
@@ -2667,7 +2667,7 @@ parsemusic (field)
 		else
 		  {
 		    sprintf (msg, "Unrecognized character: %c", *p);
-		    event_error (msg);
+		    if (!silent) { event_error (msg); }
 		  };
 	      };
 	      p = p + 1;
@@ -2870,7 +2870,7 @@ parsefile (name)
   event_eof ();
   freevstring (&line);
   if (parsing_started == 0)
-    event_error ("No tune processed. Possible missing X: field");
+    if (!silent) { event_error ("No tune processed. Possible missing X: field"); }
 }
 
 

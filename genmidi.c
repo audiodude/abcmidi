@@ -397,14 +397,14 @@ char* s;
     j = j + 1;
   };
   if (seq_len == 0) {
-    event_error("Bad gchord");
+    if (!silent) { event_error("Bad gchord"); }
     gchord_seq[0] = 'z';
     gchord_len[0] = 1;
     seq_len = 1;
   };
   gchord_seq[j] = '\0';
   if (j == 39) {
-    event_error("Sequence string too long");
+    if (!silent) { event_error("Sequence string too long"); }
   };
   /* work out unit delay in 1/4 notes*/
   g_num = mtime_num * 4*gchordbars;
@@ -442,13 +442,13 @@ char* s;
   };
   drum_seq[count] = '\0';
   if (seq_len == 0) {
-    event_error("Bad drum sequence");
+    if (!silent) { event_error("Bad drum sequence"); }
     drum_seq[0] = 'z';
     drum_len[0] = 1;
     seq_len = 1;
   };
   if (count == 39) {
-    event_error("Drum sequence string too long");
+    if (!silent) { event_error("Drum sequence string too long"); }
   };
   /* look for program and velocity specifiers */
   for (i = 0; i<count; i++) {
@@ -465,7 +465,7 @@ char* s;
         place = place + 1;
       };
       if (j > 127) {
-        event_error("Drum program must be in the range 0-127");
+        if (!silent) { event_error("Drum program must be in the range 0-127"); }
       } else {
         drum_program[place] = j;
       };
@@ -479,7 +479,7 @@ char* s;
           place = place + 1;
         };
         if ((j < 1) || (j > 127)) {
-          event_error("Drum velocity must be in the range 1-127");
+          if (!silent) { event_error("Drum velocity must be in the range 1-127"); }
         } else {
           drum_velocity[place] = j;
         };
@@ -490,7 +490,7 @@ char* s;
     skipspace(&p);
   };
   if (i > 2*drum_hits) {
-    event_error("Too many data items for drum sequence");
+    if (!silent) { event_error("Too many data items for drum sequence"); }
   };
   /* work out unit delay in 1/4 notes*/
   drum_num = mtime_num * 4*drumbars;
@@ -519,7 +519,7 @@ int pass;
         if (pass == 2) {
           strcat(msg, " in repeat");
         };
-        if (quiet == -1) event_warning(msg);
+        if (quiet == -1) if (!silent) { event_warning(msg); }
       };
     };
   };
@@ -595,7 +595,7 @@ static int findchannel()
     j = j + 1;
   };
   if (j >= MAXCHANS && !no_more_free_channels) {
-    event_error("All 16 MIDI channels used up.");
+    if (!silent) { event_error("All 16 MIDI channels used up."); }
     no_more_free_channels = 1;
     j = 0;
   };
@@ -629,7 +629,7 @@ int partno, xtrack, voice;
         if (now != introlen) {
           sprintf(msg, "Time 0-%ld voice %d, has length %ld", 
                   introlen, voice, now);
-          event_error(msg);
+          if (!silent) { event_error(msg); }
         };
       };
     };
@@ -646,7 +646,7 @@ int partno, xtrack, voice;
                   lastlen, lastlen+partlen[partlabel], voice, 
                   (char) (partlabel + (int) 'A'), 
                   now-lastlen);
-          event_error(msg);
+          if (!silent) { event_error(msg); }
         };
       };
     };
@@ -667,7 +667,7 @@ int j;
   }
   while ((partno < parts) &&
          (part_start[partlabel] == -1)) {
-    if (!silent) event_error("Part not defined");
+    if (!silent) if (!silent) { event_error("Part not defined"); }
     partno = partno + 1;
     if (partno < parts) {
       partlabel = (int)part.st[partno] - (int)'A';
@@ -835,7 +835,7 @@ int startline;
     extending = 1;
   };
   if (thismline == -1) {
-    event_error("First lyrics line must come after first music line");
+    if (!silent) { event_error("First lyrics line must come after first music line"); }
   } else {
     place = startline + 1;
     /* search for corresponding word line */
@@ -887,7 +887,7 @@ int startline;
       /* remember that we couldn't find lyrics */
       nowordline = 1;
       if (lyricsyllables == 0) {
-        event_warning("Line of music without lyrics");
+        if (!silent) { event_warning("Line of music without lyrics"); }
       };
     };  
   };
@@ -1199,7 +1199,7 @@ static void checksyllables()
   if (lyricsyllables != musicsyllables) {
     sprintf(msg, "Verse %d mismatch;  %d syllables in music %d in lyrics",
                 partrepno+1, musicsyllables, lyricsyllables);
-    if (verbose) event_error(msg); /* [SS] 2012-04-15 */
+    if (verbose) if (!silent) { event_error(msg); } /* [SS] 2012-04-15 */
   };
   if (onemorenote == 1){  /* [Bas Schoutsen] 2010-04-08 */
 	onemorenote = 0;
@@ -1236,7 +1236,7 @@ int passno;
     while ((found == 0) && (*p != '\0')) {
       if (!isdigit(*p)) {
         sprintf(msg, "Bad variant list : %s", atext[pitch[place]]);
-        event_error(msg);
+        if (!silent) { event_error(msg); }
         found = 1;
       };
       a = readnump(&p);
@@ -1339,10 +1339,10 @@ int pitch, chan, vel, pitchbend;
   extern int nullpass;
 #endif
   if (channel >= MAXCHANS) {
-    event_error("Channel limit exceeded");
+    if (!silent) { event_error("Channel limit exceeded"); }
   } else {
   if(pitchbend < 0 || pitchbend > 16383) {
-      event_error("Internal error concerning pitch bend on note on.");
+      if (!silent) { event_error("Internal error concerning pitch bend on note on."); }
     }
 
    if(pitchbend != current_pitchbend[channel] && chan != 9) {
@@ -1374,7 +1374,7 @@ int pitch, chan;
   else           data[0] = (char) pitch;
   data[1] = (char) 0;
   if (channel >= MAXCHANS) {
-    event_error("Channel limit exceeded\n");
+    if (!silent) { event_error("Channel limit exceeded\n"); }
   } else {
     mf_write_midi_event(delta_time, note_off, chan, data, 2);
   };
@@ -1607,7 +1607,7 @@ int p, channel;
 
   data[0] = p;
   if (channel >= MAXCHANS) {
-    event_error("Channel limit exceeded\n");
+    if (!silent) { event_error("Channel limit exceeded\n"); }
   } else {
     mf_write_midi_event(delta_time, program_chng, channel, data, 1);
   };
@@ -1622,7 +1622,7 @@ int channel, n;
 char data[];
 {
   if (channel >= MAXCHANS) {
-    event_error("Channel limit exceeded\n");
+    if (!silent) { event_error("Channel limit exceeded\n"); }
   } else {
     /*mf_write_midi_event(delta_time, event_type, channel, data, n);  [SS] 2011-10-21 */
     mf_write_midi_event(0, event_type, channel, data, n);
@@ -1975,11 +1975,11 @@ int noteson;
     skipspace(&p);
     val = readnump(&p);
     if (val >0) drone.vel2 = val;
-    if (drone.prog > 127) event_error("drone prog must be in the range 0-127");
-    if (drone.pitch1 >127) event_error("drone pitch1 must be in the range 0-127");
-    if (drone.vel1 >127) event_error("drone vel1 must be in the range 0-127");
-    if (drone.pitch2 >127) event_error("drone pitch1 must be in the range 0-127");
-    if (drone.vel2 >127) event_error("drone vel1 must be in the range 0-127");
+    if (drone.prog > 127) if (!silent) { event_error("drone prog must be in the range 0-127"); }
+    if (drone.pitch1 >127) if (!silent) { event_error("drone pitch1 must be in the range 0-127"); }
+    if (drone.vel1 >127) if (!silent) { event_error("drone vel1 must be in the range 0-127"); }
+    if (drone.pitch2 >127) if (!silent) { event_error("drone pitch1 must be in the range 0-127"); }
+    if (drone.vel2 >127) if (!silent) { event_error("drone vel1 must be in the range 0-127"); }
     done = 1;
   }
 
@@ -2025,7 +2025,7 @@ int noteson;
     };
     beatstring[count] = '\0';
     if (strlen(beatstring) == 0) {
-      event_error("beatstring expecting string of 'f', 'm' and 'p'");
+      if (!silent) { event_error("beatstring expecting string of 'f', 'm' and 'p'"); }
     }
     nbeats = strlen(beatstring);
     done = 1;
@@ -2039,7 +2039,7 @@ int noteson;
     while ((n<20) && (*p >= '0') && (*p <= '9')) {
       datum = readnump(&p);
       if (datum > 127) {
-        event_error("data must be in the range 0 - 127");
+        if (!silent) { event_error("data must be in the range 0 - 127"); }
         datum = 0;
       };
       data[n] = (char) datum;
@@ -2071,7 +2071,7 @@ int noteson;
    data[0] = 5; /* coarse portamento */
    datum = readnump(&p);
    if (datum > 63) {
-        event_error("data must be in the range 0 - 63");
+        if (!silent) { event_error("data must be in the range 0 - 63"); }
         datum = 0;
       };
    data[1] =(char) datum;
@@ -2101,7 +2101,7 @@ int noteson;
     while ((n<2) && (*p >= '0') && (*p <= '9')) {
       datum = readnump(&p);
       if (datum > 255) {
-        event_error("data must be in the range 0 - 255");
+        if (!silent) { event_error("data must be in the range 0 - 255"); }
         datum = 0;
       };
       data[n] = (char) datum;
@@ -2161,7 +2161,7 @@ int noteson;
   if (done == 0) {
     char errmsg[80];
     sprintf(errmsg, "%%%%MIDI command \"%s\" not recognized",command);
-    event_error(errmsg);
+    if (!silent) { event_error(errmsg); }
   };
  if(wordson+noteson+gchordson+drumson+droneon == 0) delta_time = 0L;
   
@@ -2289,7 +2289,7 @@ int j;
     case 'x':
       if(!gchord_error) {
          gchord_error++;
-         event_warning("no default gchord string for this meter");
+         if (!silent) { event_warning("no default gchord string for this meter"); }
         }
       break;
 
@@ -2432,7 +2432,7 @@ static void parse_drummap(char **s)
       };
       if (**s == ',') {
         sprintf(msg, "Bad pitch specifier , after note %c", note);
-        event_error(msg);
+        if (!silent) { event_error(msg); }
         octave = octave - 1;
         *s = *s + 1;
       };
@@ -2449,7 +2449,7 @@ static void parse_drummap(char **s)
         };
         if (**s == '\'') {
           sprintf(msg, "Bad pitch specifier ' after note %c", note + 'A' - 'a');
-          event_error(msg);
+          if (!silent) { event_error(msg); }
           octave = octave + 1;
           *s = *s + 1;
         };
@@ -2459,7 +2459,7 @@ static void parse_drummap(char **s)
   /*printf("note = %d octave = %d accidental = %d\n",note,octave,accidental);*/
   midipitch = (int) ((long) strchr(anoctave, note) - (long) anoctave);
   if (midipitch <0 || midipitch > 6) {
-    event_error("Malformed note in drummap : expecting a-g or A-G");
+    if (!silent) { event_error("Malformed note in drummap : expecting a-g or A-G"); }
     return;
     } 
   midipitch = scale[midipitch];
@@ -2469,7 +2469,7 @@ static void parse_drummap(char **s)
   skipspace(s);
   mapto = readnump(s);
   if (mapto == 0) {
-      event_error("Bad drummap: expecting note followed by space and number");
+      if (!silent) { event_error("Bad drummap: expecting note followed by space and number"); }
        return;
       }
   if (mapto < 35 || mapto > 81) event_warning ("drummap destination should be between 35 and 81 inclusive");
@@ -2832,7 +2832,7 @@ int xtrack;
                char msg[100];
                sprintf(msg,"unequal notes in chord %d/%d versus %d/%d",
                   note_num,note_denom,num[j],denom[j]);
-               if (!silent) event_warning(msg);
+               if (!silent) if (!silent) { event_warning(msg); }
 	       num[j] = note_num;
                denom[j] = note_denom;
                }
@@ -2990,7 +2990,7 @@ int xtrack;
       waitforbar = 0;
       softcheckbar(pass);
       if ((pass==1)&&(expect_repeat)) {
-        event_error("Expected end repeat not found at |:");
+        if (!silent) { event_error("Expected end repeat not found at |:"); }
       };
       save_state(state, j, barno, div_factor, transpose, channel, lineno);
       expect_repeat = 1;
@@ -3006,7 +3006,7 @@ int xtrack;
       softcheckbar(pass);
       if (pass == 1) {
          if (!expect_repeat) {
-            event_error("Found unexpected :|");
+            if (!silent) { event_error("Found unexpected :|"); }
           } else {
           /*  pass = 2;  [SS] 2004-10-14 */
             pass++;   /* we may have multiple repeats */
@@ -3045,7 +3045,7 @@ int xtrack;
         char errmsg[80];
  
         if (in_varend != 0) {
-          event_error("Need || |: :| or ::  to mark end of variant ending");
+          if (!silent) { event_error("Need || |: :| or ::  to mark end of variant ending"); }
         };
         passnum = -1;
         if (((expect_repeat)||(pass>1))) {
@@ -3053,7 +3053,7 @@ int xtrack;
         }
 
         if (passnum == -1) {
-          event_error("multiple endings do not follow |: or ::");
+          if (!silent) { event_error("multiple endings do not follow |: or ::"); }
           passnum = 1;
         };
        if (inlist(j, passnum) != 1) {
@@ -3080,7 +3080,7 @@ int xtrack;
           /* variant ending.  */
             sprintf(errmsg, 
               "Cannot find :| || [| or |] to close variant ending");
-            event_error(errmsg);
+            if (!silent) { event_error(errmsg); }
           } else {
             if (feature[j] == PART) {
               j = j - 1; 
@@ -3110,7 +3110,7 @@ int xtrack;
           if (!expect_repeat) {
             /* missing |: don't repeat but set up for next repeat */
             /* section.                                           */
-            event_error("Found unexpected ::");
+            if (!silent) { event_error("Found unexpected ::"); }
             expect_repeat = 1;
             save_state(state, j, barno, div_factor, transpose, channel, lineno);
             pass = 1;
@@ -3223,7 +3223,7 @@ int xtrack;
     case SLUR_ON:
       /*
       if (slurring) {
-        event_error("Unexpected start of slur found");
+        if (!silent) { event_error("Unexpected start of slur found"); }
       }; [SS] 2014-04-24
       */
       slurring = 1;
@@ -3232,7 +3232,7 @@ int xtrack;
     case SLUR_OFF:
       /*
       if (!slurring && !was_slurring) { 
-        event_error("Unexpected end of slur found");
+        if (!silent) { event_error("Unexpected end of slur found"); }
       };
       [SS] 2014-04-24 */
       slurring = 0;
@@ -3281,7 +3281,7 @@ int xtrack;
     j = j + 1;
   };
   if ((expect_repeat)&&(pass==1) && !silent) {
-    event_error("Missing :| at end of tune");
+    if (!silent) { event_error("Missing :| at end of tune"); }
   };
   clearQ();
   tracklen = tracklen + delta_time;
@@ -3296,7 +3296,7 @@ int xtrack;
 
       sprintf(msg, "Track %d is %f quarter notes long not %f",
               xtrack, fbeats, fbeats1);
-      event_warning(msg);
+      if (!silent) { event_warning(msg); }
     };
   };
   return (delta_time);

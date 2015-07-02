@@ -134,6 +134,7 @@ int wpintv = 0;			/* flag for computing interval pdf */
 int wpipdf  = 0;		/* flag for computing interval pdf for each tune*/
 int norhythm = 0;		/* ignore note lengths */
 int levdist = 0;		/* levenshtein distance */
+int silent = 0; /* parse library expects this flag */
 
 char *templatefile;
 
@@ -1216,6 +1217,10 @@ event_init (argc, argv, filename)
     {
       check = 0;
     };
+  if (getarg ("-silent", argc, argv) != -1)
+    {
+      silent = 1;
+    }
   if (getarg ("-ver", argc, argv) != -1)
     {
       printf ("%s\n", VERSION);
@@ -1354,6 +1359,7 @@ event_init (argc, argv, filename)
       printf ("Usage : abcmatch <abc file> [-options] \n");
       printf ("        [reference number] selects a tune\n");
       printf ("        -c returns error and warning messages\n");
+      printf ("        -silent silences message from the parser\n");
       printf ("        -v selects verbose option\n");
       printf ("        -r resolution for matching\n");
       printf ("        -fixed <n> fixed number of notes\n");

@@ -101,6 +101,7 @@ int adapt_useflats_to_gchords = 1; /* experimental flag */
 int usekey = 0;
 int drumchan=0; /* flag to suppress transposition */
 int noplus; /* flag for outputting !..! instructions instead of +...+ */
+int silent = 0; /* Parse library expects this flag */
 
 extern int nokey; /* signals no key signature assumed */
 extern int voicecodes ;  /* from parseabc.c */

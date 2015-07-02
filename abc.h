@@ -140,3 +140,7 @@ extern void event_fatal_error();
 extern void event_warning();
 #endif
 
+/* Whether or not programs should be silent. This is either passed as a command
+   line arg for some binaries this package provides, or otherwise hardcoded as
+   zero. */
+extern int silent;  
