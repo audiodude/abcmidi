@@ -77,6 +77,7 @@ extern int gchords_above;
 extern int decorators_passback[DECSIZE]; /* a kludge for passing
 information from the event_handle_instruction to parsenote
 in parseabc.c */
+int silent = 0; /* Parse library expects this flag */
 
 enum linestattype {fresh, midmusic, endmusicline, postfield};
 enum linestattype linestat;
